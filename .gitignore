@@ -1,0 +1,7 @@
+target
+.*.swp
+.*.swo
+.classpath
+.externalToolBuilders/org.devzuz.q.maven.jdt.core.mavenIncrementalBuilder.launch
+.project
+.settings/org.eclipse.jdt.core.prefs
