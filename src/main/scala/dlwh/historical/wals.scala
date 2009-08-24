@@ -2,11 +2,12 @@ package dlwh.historical;
 
 import scala.io._;
 import scala.collection.mutable.ArrayBuffer;
+import scala.collection.immutable.IntMap;
 
 object WALS {
 
   case class Language(shortName: String, name: String, altLang: String, coords: (Double,Double), 
-    family: String, genus: String, features: Seq[Int], eths: Map[String,String]);
+    family: String, genus: String, features: Map[Int,Int], eths: Map[String,String]);
 
   def load(): Seq[Language] = {
     val stream = this.getClass.getClassLoader().getResourceAsStream("wals_new");
@@ -21,7 +22,7 @@ object WALS {
         val Array(lat,long) = coordString.split(" ").map(_.toDouble);
         (lat,long);
       }
-      val _features = featureLine.split(" ").map { case "?" => -1 case x => x.toInt};
+      val _features = IntMap.empty ++ featureLine.split(" ").zipWithIndex.filter( _._1 !=  "?").map( x => (x._2,x._1.toInt) )
       
       var ethLines = lines.takeWhile(_ != "");
       val _eths = Map.empty ++ ( for(e <- ethLines) yield {
