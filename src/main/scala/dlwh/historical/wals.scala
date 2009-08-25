@@ -4,6 +4,8 @@ import scala.io._;
 import scala.collection.mutable.ArrayBuffer;
 import scala.collection.immutable.IntMap;
 
+import scalanlp.counters.Counters._;
+
 object WALS {
 
   case class Language(shortName: String, name: String, altLang: String, coords: (Double,Double), 
@@ -39,6 +41,19 @@ object WALS {
 
     stream.close();
     buf
+  }
+
+  lazy val daumeIE = {
+    val langs = all.filter(_.family == "Indo-European").filter(_.features.size > 10);
+    val counts = count(langs.iterator.flatMap(_.features.keysIterator));
+    val min = langs.size / 4;
+
+    // result:
+    for (lang <- langs) yield {
+      val newFeatures = lang.features.filter { case (k,v)  => counts(k) >= min }
+      lang.copy(features=newFeatures);
+    }
+
   }
 
 }
