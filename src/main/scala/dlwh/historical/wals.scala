@@ -56,4 +56,17 @@ object WALS {
 
   }
 
+  lazy val daumeAll = {
+    val langs = all.filter(_.features.size > 25);
+    val counts = count(langs.iterator.flatMap(_.features.keysIterator));
+    val min = langs.size / 10;
+
+    // result:
+    for (lang <- langs) yield {
+      val newFeatures = lang.features.filter { case (k,v)  => counts(k) >= min }
+      lang.copy(features=newFeatures);
+    }
+
+  }
+
 }
