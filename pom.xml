@@ -89,6 +89,6 @@
     </plugins>
   </reporting>
   <properties>
-    <scala.version>2.8.0-SNAPSHOT</scala.version>
+    <scala.version>2.8.0.r18462-b20090811081019</scala.version>
   </properties>
 </project>
