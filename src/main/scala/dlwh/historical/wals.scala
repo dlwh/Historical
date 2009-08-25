@@ -9,7 +9,7 @@ object WALS {
   case class Language(shortName: String, name: String, altLang: String, coords: (Double,Double), 
     family: String, genus: String, features: Map[Int,Int], eths: Map[String,String]);
 
-  def load(): Seq[Language] = {
+  lazy val all: Seq[Language] = {
     val stream = this.getClass.getClassLoader().getResourceAsStream("wals_new");
     // read until we get to a blank line.
     val lines = Source.fromInputStream(stream).getLines().dropWhile(_ != "").drop(1);
@@ -32,7 +32,7 @@ object WALS {
 
       buf += Language ( shortName = _shortName, name = _name, 
         altLang = _altLang, coords = _coords,
-        family = _family, genus = _genus,
+        family = _family.intern, genus = _genus.intern,
         features = _features, eths = _eths
       )
     }
