@@ -2,51 +2,54 @@ package dlwh.historical;
 
 import Math._;
 
-import scalala.Scalala.{log => _, exp => _, _};
+import scalala.Scalala.{log => _, exp => _, sqrt=> _,_};
 import scalanlp.counters._;
 import scalanlp.math.Numerics._;
 import scalanlp.stats.sampling._; 
 import Counters._;
 import WALS.Language;
 
-class EM(val numWaves: Int, waveVariance: Double = 1.0) {
+class EM(val numWaves: Int, waveVariance: Double = 100.0) {
   def estimate(langs: Seq[Language]) = {
+    val logPrior = 1.0/numWaves; // Meh.
+
     val iterations  = MarkovChain(initialState(langs)){ state => Rand.always {
       
-      var count = 0;
+      var waveCounts = new Array[Double](numWaves);
       var ll = 0.0;
       val langMeanX = new Array[Double](numWaves);
       val langMeanY = new Array[Double](numWaves);
       val featureCounts = Seq.fill(numWaves)(PairedDoubleCounter[Int,Int]());
 
       // estep:
-      for { 
+      for {
         lang <- langs.iterator;
         (f,v) <- lang.features.iterator
       } {
         val posterior = DoubleCounter[Int]();
-        var logTotal = 0.0;
+        var logTotal = NEG_INF_DOUBLE;
 
         for {
           (Wave(wloc,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
-          logPLgW = -distSquared(lang.coords,wloc)/waveVariance;
+          logPLgW = -distSquared(lang.coords,wloc)/waveVariance - log(sqrt(waveVariance * 2 * Pi));
           logPFgW = waveFeatures(f)(v)
         } {
-          val likelihood = logPLgW + logPFgW; // TODO: prior prob of a wave?
+          val likelihood = logPLgW + logPFgW + logPrior;
           posterior(w) = likelihood;
           logTotal = logSum(logTotal,likelihood);
-          count += 1;
         }
 
-        // logtotal is also datalikelihood:
         ll += logTotal;
 
         // accumulate suff stats
-        for( (w,logProb) <- posterior ) {
-          val prob = exp(logProb - logTotal);
+        for( (w,score) <- posterior ) {
+          val prob = Math.exp(score - logTotal);
+          assert( !prob.isNaN);
+          assert(prob >= 0, (prob, posterior,w));
           featureCounts(w)(f,v) += prob;
           langMeanX(w) +=  prob * lang.coords._1;
           langMeanY(w) +=  prob * lang.coords._2;
+          waveCounts(w) += prob;
         }
 
       }
@@ -56,11 +59,16 @@ class EM(val numWaves: Int, waveVariance: Double = 1.0) {
         counts <- pairCounter.counters) {
         val logTotal = log(counts.total);
         // log normalize:
-        counts.transform { (f,v) => log(v) - logTotal }
+        counts.transform { (f,v) =>
+          assert(v >= 0);
+          val r = log(v) - logTotal
+          assert(!r.isNaN);
+          r;
+        }
       }
 
-      langMeanX /= count;
-      langMeanY /= count;
+      langMeanX :/= waveCounts;
+      langMeanY :/= waveCounts;
       val waves = (for(w <- 0 until numWaves) 
         yield {
         Wave( (langMeanX(w),langMeanY(w)), featureCounts(w));
@@ -69,7 +77,7 @@ class EM(val numWaves: Int, waveVariance: Double = 1.0) {
       State(waves,ll,state.newLL);
     }} 
 
-    iterations.samples.takeWhile { x => !converged(x) }
+    iterations.steps.takeWhile { x => !converged(x) }
   }
 
   private def distSquared( x: (Double,Double), y: (Double,Double)) = {
@@ -80,27 +88,37 @@ class EM(val numWaves: Int, waveVariance: Double = 1.0) {
   }
 
   private def converged(s: State) = {
-    (s.newLL - s.oldLL) / s.oldLL  < 1E-4 && s.oldLL != NEG_INF_DOUBLE;
+    println((s.newLL,s.oldLL,(s.oldLL - s.newLL) / s.oldLL));
+    (s.oldLL - s.newLL) / s.oldLL  < 1E-8 && s.oldLL != NEG_INF_DOUBLE;
   }
 
   case class Wave(loc: (Double,Double), features: PairedDoubleCounter[Int,Int]);
   case class State(waves: Seq[Wave], newLL: Double, oldLL: Double);
 
   private def initialState(langs: Seq[Language]) = {
-    val locs = Array.tabulate(numWaves)(i => langs(i).coords)
+    val locMeanX = langs.foldLeft(0.0)( _ + _.coords._1) / langs.length;
+    val locMeanY = langs.foldLeft(0.0)( _ + _.coords._2) / langs.length;
+    val locs = Array.tabulate(numWaves){i => 
+        val (x,y) = langs(i).coords;
+        ( (x+locMeanX)/2, (y + locMeanY)/2);
+    }
 
     // # values for each feature
     val featureSizes = langs.foldLeft(collection.mutable.Map[Int,Int]()) { (map,lang) =>
       for( (f,v) <- lang.features) {
-        map(f) = map(f) max v
+        map.get(f) match {
+          case Some(i) => map(f) = v max i
+          case None => map(f) = v
+        }
       }
       map;
     }
+
     def mapFiller = {
       val ret = PairedDoubleCounter[Int,Int]();
       for( (f,max) <- featureSizes) {
         val logProb = log(1.0 / max);
-        for(i <- 1 to max) {
+        for(i <- 0 until max) {
            ret(f,i) = logProb;
         }
       }
@@ -108,6 +126,32 @@ class EM(val numWaves: Int, waveVariance: Double = 1.0) {
     }
     val features = Array.fill(numWaves)(mapFiller);
     val waves = for( (l,f) <- locs zip features) yield Wave(l,f);
-    State(waves, NEG_INF_DOUBLE, NEG_INF_DOUBLE);
+    val initState = State(waves, NEG_INF_DOUBLE, NEG_INF_DOUBLE);
+
+    initState;
+  }
+}
+
+object RunAll {
+  def main(args: Array[String]) {
+    val em = new EM(50);
+    val data = WALS.daumeAll;
+    em.estimate(data).foreach { i =>
+      i.waves.map(_.loc) foreach println
+      println("old LL: " + i.oldLL);
+      println("LL: " + i.newLL);
+    }
+  }
+}
+
+object RunIE {
+  def main(args: Array[String]) {
+    val em = new EM(20);
+    val data = WALS.daumeIE;
+    em.estimate(data).foreach { i =>
+      i.waves.map(_.loc) foreach println
+      println("old LL: " + i.oldLL);
+      println("LL: " + i.newLL);
+    }
   }
 }
