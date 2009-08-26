@@ -14,7 +14,7 @@ object WALS {
   lazy val all: Seq[Language] = {
     val stream = this.getClass.getClassLoader().getResourceAsStream("wals_new");
     // read until we get to a blank line.
-    val lines = Source.fromInputStream(stream).getLines().dropWhile(_ != "").drop(1);
+    val lines = Source.fromInputStream(stream).getLines.dropWhile(_.trim != "").drop(1);
 
     val buf = new ArrayBuffer[Language];
     for (descripLine <- lines) {
@@ -24,9 +24,9 @@ object WALS {
         val Array(lat,long) = coordString.split(" ").map(_.toDouble);
         (lat,long);
       }
-      val _features = IntMap.empty ++ featureLine.split(" ").zipWithIndex.filter( _._1 !=  "?").map( x => (x._2,x._1.toInt) )
+      val _features = Map.empty ++ featureLine.split(" ").zipWithIndex.filter( _._1 !=  "?").map( x => (x._2,x._1.toInt) )
       
-      var ethLines = lines.takeWhile(_ != "");
+      var ethLines = lines.takeWhile(_.trim != "");
       val _eths = Map.empty ++ ( for(e <- ethLines) yield {
         val Array("eth",key,value) = e.trim.split("\t");
         (key,value);
