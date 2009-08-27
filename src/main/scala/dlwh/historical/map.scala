@@ -4,7 +4,12 @@ import scalala.Scalala._;
 import WALS.Language;
 
 object Plot {
+  def setBounds() = {
+    xlim(-90,90)
+    ylim(-90,90)
+  }
   def wals(langs: Seq[Language]) = {
+    setBounds();
     val lats = langs.map(_.coords._1).toArray;
     val longs = langs.map(_.coords._2).toArray;
     scatter(longs,lats,ones(longs.length),ones(longs.length));
