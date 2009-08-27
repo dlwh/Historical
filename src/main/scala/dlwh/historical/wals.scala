@@ -4,11 +4,14 @@ import scala.io._;
 import scala.collection.mutable.ArrayBuffer;
 import scala.collection.immutable.IntMap;
 
+import scalala.tensor._;
+import scalala.tensor.fixed._;
+
 import scalanlp.counters.Counters._;
 
 object WALS {
 
-  case class Language(shortName: String, name: String, altLang: String, coords: (Double,Double), 
+  case class Language(shortName: String, name: String, altLang: String, coords: Vector, 
     family: String, genus: String, features: Map[Int,Int], eths: Map[String,String]);
 
   lazy val all: Seq[Language] = {
@@ -22,7 +25,7 @@ object WALS {
       val Array(_, _shortName, _name, _altLang, "?", coordString, _family, _genus) = descripLine.split("\t");
       val _coords = {
         val Array(lat,long) = coordString.split(" ").map(_.toDouble);
-        (lat,long);
+        Vector2(lat,long);
       }
       val _features = Map.empty ++ featureLine.split(" ").zipWithIndex.filter( _._1 !=  "?").map( x => (x._2,x._1.toInt) )
       
