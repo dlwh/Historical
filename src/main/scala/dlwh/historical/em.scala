@@ -9,12 +9,10 @@ import scalanlp.stats.sampling._;
 import Counters._;
 import WALS.Language;
 
-class EM(val numWaves: Int, val waveVariance: Double = 100.0) {
+class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
   def estimate(langs: Seq[Language]) = {
-    val logPrior = 1.0/numWaves; // Meh.
 
     val iterations  = MarkovChain(initialState(langs)){ state => Rand.always {
-      
       var waveCounts = new Array[Double](numWaves);
       var ll = 0.0;
       val langMeanX = new Array[Double](numWaves);
@@ -23,7 +21,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 100.0) {
 
       // estep:
       for {
-        lang <- langs.iterator;
+        lang <- langs.iterator
         (f,v) <- lang.features.iterator
       } {
         val posterior = DoubleCounter[Int]();
@@ -31,12 +29,13 @@ class EM(val numWaves: Int, val waveVariance: Double = 100.0) {
 
         for {
           (Wave(wloc,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
-          logPLgW = -distSquared(lang.coords,wloc)/waveVariance - log(sqrt(waveVariance * 2 * Pi));
+          logPLgW = -distSquared(lang.coords,wloc)/waveVariance - log(sqrt(waveVariance * 2 * Pi))
           logPFgW = waveFeatures(f)(v)
         } {
-          val likelihood = logPLgW + logPFgW + logPrior;
-          posterior(w) = likelihood;
-          logTotal = logSum(logTotal,likelihood);
+          val joint = logPLgW + logPFgW + state.priors(w);
+          posterior(w) = joint;
+          assert(!joint.isNaN,(logPLgW,state.priors(w)));
+          logTotal = logSum(logTotal,joint);
         }
 
         ll += logTotal;
@@ -44,7 +43,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 100.0) {
         // accumulate suff stats
         for( (w,score) <- posterior ) {
           val prob = Math.exp(score - logTotal);
-          assert( !prob.isNaN);
+          assert(!prob.isNaN);
           assert(prob >= 0, (prob, posterior,w));
           featureCounts(w)(f,v) += prob;
           langMeanX(w) +=  prob * lang.coords._1;
@@ -69,12 +68,15 @@ class EM(val numWaves: Int, val waveVariance: Double = 100.0) {
 
       langMeanX :/= waveCounts;
       langMeanY :/= waveCounts;
+      val newPrior = waveCounts.map(x => log(x) - log(numWaves));
+      newPrior foreach { x => assert(!x.isNaN) };
+      
       val waves = (for(w <- 0 until numWaves) 
         yield {
         Wave( (langMeanX(w),langMeanY(w)), featureCounts(w));
       }) toSequence;
 
-      State(waves,ll,state.newLL);
+      State(waves,newPrior,ll,state.newLL);
     }} 
 
     iterations.steps.takeWhile { x => !converged(x) }
@@ -88,18 +90,17 @@ class EM(val numWaves: Int, val waveVariance: Double = 100.0) {
   }
 
   private def converged(s: State) = {
-    println((s.newLL,s.oldLL,(s.oldLL - s.newLL) / s.oldLL));
-    (s.oldLL - s.newLL) / s.oldLL  < 1E-8 && s.oldLL != NEG_INF_DOUBLE;
+    (s.oldLL - s.newLL) / s.oldLL  < 1E-5 && s.oldLL != NEG_INF_DOUBLE;
   }
 
   case class Wave(loc: (Double,Double), features: PairedDoubleCounter[Int,Int]);
-  case class State(waves: Seq[Wave], newLL: Double, oldLL: Double);
+  case class State(waves: Seq[Wave], priors: Seq[Double], newLL: Double, oldLL: Double);
 
   private def initialState(langs: Seq[Language]) = {
     val locMeanX = langs.foldLeft(0.0)( _ + _.coords._1) / langs.length;
     val locMeanY = langs.foldLeft(0.0)( _ + _.coords._2) / langs.length;
     val locs = Array.tabulate(numWaves){i => 
-        val (x,y) = langs(i).coords;
+        val (x,y) = langs(langs.length - i - 1).coords;
         ( (x+locMeanX)/2, (y + locMeanY)/2);
     }
 
@@ -126,8 +127,9 @@ class EM(val numWaves: Int, val waveVariance: Double = 100.0) {
     }
     val features = Array.fill(numWaves)(mapFiller);
     val waves = for( (l,f) <- locs zip features) yield Wave(l,f);
-    val initState = State(waves, NEG_INF_DOUBLE, NEG_INF_DOUBLE);
+    val initState = State(waves, Array.fill(numWaves)(log(1.0/numWaves)), NEG_INF_DOUBLE, NEG_INF_DOUBLE);
 
+    println(initState);
     initState;
   }
 }
@@ -138,6 +140,16 @@ object RunAll {
     val data = WALS.daumeAll;
     em.estimate(data).foreach { i =>
       i.waves.map(_.loc) foreach println
+
+
+        hold(false);
+        Plot.wals(data);
+        hold(true);
+        for( w <- i.waves;
+          loc = w.loc) {
+          Plot.circle(loc,sqrt(em.waveVariance));
+        }
+
       println("old LL: " + i.oldLL);
       println("LL: " + i.newLL);
     }
@@ -146,12 +158,12 @@ object RunAll {
 
 object RunIE {
   def main(args: Array[String]) {
-    val em = new EM(20);
+    val em = new EM(25);
     val data = WALS.daumeIE;
     em.estimate(data).zipWithIndex.foreach { case(i,num) =>
       i.waves.map(_.loc) foreach println
 
-      if(num % 10 == 0) { 
+      if(num % 2 == 0) { 
         hold(false);
         Plot.wals(data);
         hold(true);
