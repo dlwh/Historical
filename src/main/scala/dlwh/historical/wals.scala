@@ -44,7 +44,7 @@ object WALS {
   }
 
   lazy val daumeIE = {
-    val langs = all.filter(_.family == "Indo-European").filter(_.features.size > 10);
+    val langs = all.filter(_.family == "Indo-European").filter(_.name != "Afrikaans").filter(_.features.size > 10);
     val counts = count(langs.iterator.flatMap(_.features.keysIterator));
     val min = langs.size / 4;
 
