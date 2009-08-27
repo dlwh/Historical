@@ -9,7 +9,7 @@ import scalanlp.stats.sampling._;
 import Counters._;
 import WALS.Language;
 
-class EM(val numWaves: Int, waveVariance: Double = 100.0) {
+class EM(val numWaves: Int, val waveVariance: Double = 100.0) {
   def estimate(langs: Seq[Language]) = {
     val logPrior = 1.0/numWaves; // Meh.
 
@@ -148,8 +148,19 @@ object RunIE {
   def main(args: Array[String]) {
     val em = new EM(20);
     val data = WALS.daumeIE;
-    em.estimate(data).foreach { i =>
+    em.estimate(data).zipWithIndex.foreach { case(i,num) =>
       i.waves.map(_.loc) foreach println
+
+      if(num % 10 == 0) { 
+        hold(false);
+        Plot.wals(data);
+        hold(true);
+        for( w <- i.waves;
+          loc = w.loc) {
+          Plot.circle(loc,sqrt(em.waveVariance));
+        }
+      }
+
       println("old LL: " + i.oldLL);
       println("LL: " + i.newLL);
     }
