@@ -15,12 +15,12 @@ object Plot {
     val x = t.like;
     x := cos(t);
     x *= radius;
-    x += center._1;
+    x += center._2;
 
     val y = t.like;
     y := sin(t);
     y *= radius;
-    y += center._2;
+    y += center._1;
     plot(x,y);
   }
 }
