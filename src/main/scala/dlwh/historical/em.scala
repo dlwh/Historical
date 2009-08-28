@@ -8,7 +8,7 @@ import scalala.tensor.fixed._;
 import scalala.tensor.dense._;
 import scalanlp.counters._;
 import scalanlp.math.Numerics._;
-import scalanlp.stats.sampling._; 
+import scalanlp.stats.sampling._;
 import Counters._;
 import WALS.Language;
 
@@ -28,7 +28,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
         (f,v) <- lang.features.iterator
       } {
         val (posterior,logTotal) = posteriorForFeature(state,lang,f,v);
-        
+
         ll += logTotal;
 
         // accumulate suff stats
@@ -60,7 +60,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
       println(waveCounts.mkString(","));
 
       val actualWaveMean = Array.tabulate(numWaves){ i => waveMean(i)/waveCounts(i) value };
-      val actualWaveCov = Array.tabulate(numWaves){ i => 
+      val actualWaveCov = Array.tabulate(numWaves){ i =>
          (waveCovariances(i) + eye(2) * 300) / (10.0 + waveCounts(i)) value
       }
       val actualWaveICov = actualWaveCov map { cov =>
@@ -71,14 +71,14 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
 
       val newPrior = waveCounts.map(x => log(x + 10.0) - log(10.0 * numWaves + waveCounts.foldLeft(0.0)(_+_)));
       newPrior foreach { x => assert(!x.isNaN) };
-      
-      val waves = (for(w <- 0 until numWaves) 
+
+      val waves = (for(w <- 0 until numWaves)
         yield {
         Wave( actualWaveMean(w), actualWaveCov(w), actualWaveICov(w), featureCounts(w));
       }) toSequence;
 
       State(waves,newPrior,ll,state.newLL);
-    }} 
+    }}
 
     iterations.steps.takeWhile { x => !converged(x) }
   }
@@ -125,7 +125,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
 
   private def initialState(langs: Seq[Language]) = {
     val locMean = mean(langs.map(_.coords));
-    val locs = Array.tabulate(numWaves){i => 
+    val locs = Array.tabulate(numWaves){i =>
       val coord = langs(langs.length - i - 1).coords;
       (coord + locMean) / 2 value
     }
@@ -167,11 +167,11 @@ trait MainEM {
 
   def main(args: Array[String]) {
     val em = new EM(25);
-    var last :em.State = null;
+    var last : em.State = null;
     em.estimate(data).zipWithIndex.foreach { case(i,num) =>
       i.waves.map(_.loc) foreach println
 
-      if(num % 4 == 0) { 
+      if(num % 4 == 0) {
         hold(false);
         Plot.wals(data);
         hold(true);
@@ -197,7 +197,6 @@ trait MainEM {
 
 object RunAll extends MainEM {
   val data = WALS.daumeAll;
-  
 }
 
 object RunIE extends MainEM {
