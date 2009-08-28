@@ -27,29 +27,15 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
         lang <- langs.iterator
         (f,v) <- lang.features.iterator
       } {
-        val posterior = DoubleCounter[Int]();
-        var logTotal = NEG_INF_DOUBLE;
-
-        for {
-          (Wave(wloc,_,wicov,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
-          logPLgW = logGaussianProb(lang.coords,wloc,wicov)
-          logPFgW = waveFeatures(f)(v)
-        } {
-          val joint = logPLgW + logPFgW + state.priors(w);
-          posterior(w) = joint;
-          assert(!joint.isNaN,(logPLgW,state.priors(w)));
-          logTotal = logSum(logTotal,joint);
-        }
-
+        val (posterior,logTotal) = posteriorForFeature(state,lang,f,v);
+        
         ll += logTotal;
 
         // accumulate suff stats
         for( (w,score) <- posterior ) {
           val prob = Math.exp(score - logTotal);
-          assert(!prob.isNaN);
           assert(prob >= 0, (prob, posterior,w));
           featureCounts(w)(f,v) += prob;
-          assert(lang != null)
           waveMean(w) += lang.coords * prob;
           // Should actually do wave Covariances posthoc. Oh well.
           val dist = wrapDist(lang.coords,state.waves(w).loc);
@@ -96,6 +82,25 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
 
     iterations.steps.takeWhile { x => !converged(x) }
   }
+
+  def posteriorForFeature(state: State, lang: Language, f: Int, v: Int) = {
+    val posterior = DoubleCounter[Int]();
+    var logTotal = NEG_INF_DOUBLE;
+
+    for {
+      (Wave(wloc,_,wicov,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
+      logPLgW = logGaussianProb(lang.coords,wloc,wicov)
+      logPFgW = waveFeatures(f)(v)
+    } {
+      val joint = logPLgW + logPFgW + state.priors(w);
+      posterior(w) = joint;
+      assert(!joint.isNaN,(logPLgW,state.priors(w)));
+      logTotal = logSum(logTotal,joint);
+    }
+
+    (posterior,logTotal);
+  }
+
 
   // horizontal wrap
   private def wrapDist(x: Vector, y: Vector) = {
