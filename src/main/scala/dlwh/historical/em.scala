@@ -31,7 +31,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
         var logTotal = NEG_INF_DOUBLE;
 
         for {
-          (Wave(wloc,wicov,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
+          (Wave(wloc,_,wicov,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
           logPLgW = logGaussianProb(lang.coords,wloc,wicov)
           logPFgW = waveFeatures(f)(v)
         } {
@@ -74,7 +74,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
 
       val actualWaveMean = Array.tabulate(numWaves){ i => waveMean(i)/waveCounts(i) value };
       val actualWaveCov = Array.tabulate(numWaves){ i => 
-         (waveCovariances(i)/waveCounts(i) + eye(2)) value
+         (waveCovariances(i)/waveCounts(i) + eye(2) * 3) value
       }
       val actualWaveICov = actualWaveCov map { cov =>
          val I : DenseMatrix= eye(2)
@@ -87,7 +87,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
       
       val waves = (for(w <- 0 until numWaves) 
         yield {
-        Wave( actualWaveMean(w), actualWaveICov(w), featureCounts(w));
+        Wave( actualWaveMean(w), actualWaveCov(w), actualWaveICov(w), featureCounts(w));
       }) toSequence;
 
       State(waves,newPrior,ll,state.newLL);
@@ -114,7 +114,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
   }
 
   // icov is inverse covariance
-  case class Wave(loc: Vector, icov: Matrix, features: PairedDoubleCounter[Int,Int]);
+  case class Wave(loc: Vector, cov: Matrix, icov: Matrix, features: PairedDoubleCounter[Int,Int]);
   case class State(waves: Seq[Wave], priors: Seq[Double], newLL: Double, oldLL: Double);
 
   private def initialState(langs: Seq[Language]) = {
@@ -149,7 +149,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
       ret;
     }
     val features = Array.fill(numWaves)(mapFiller);
-    val waves = for( ((l,f),ic) <- locs zip features zip icovs) yield Wave(l,ic,f);
+    val waves = for( (((l,f),ic),c) <- locs zip features zip icovs zip covs) yield Wave(l,c,ic,f);
     val initState = State(waves, Array.fill(numWaves)(log(1.0/numWaves)), NEG_INF_DOUBLE, NEG_INF_DOUBLE);
 
     initState;
@@ -192,7 +192,7 @@ object RunIE {
         hold(true);
         for( w <- i.waves;
           loc = w.loc) {
-          Plot.circle(loc,sqrt(em.waveVariance));
+          Plot.gaussian(loc,w.cov);
         }
       }
 
