@@ -217,8 +217,8 @@ trait MainEM {
       last = i;
     }
 
-    val homes = new collection.mutable.HashMap[Int,ArrayBuffer[(Language,Int,Int)]] {
-      override def default(k: Int) = new ArrayBuffer[(Language,Int,Int)];
+    val homes = new collection.mutable.HashMap[Int,ArrayBuffer[(String,String,String,Int,Int)]] {
+      override def default(k: Int) = getOrElseUpdate(k,new ArrayBuffer[(String,String,String,Int,Int)]);
     }
 
     val output = new PrintWriter(new BufferedWriter(new FileWriter(new java.io.File("origins.txt"))));
@@ -229,15 +229,15 @@ trait MainEM {
       val w = posterior.argmax;
       output.println("Feature " + f + " is " + v + " from: ");
       output.println(w +" " + last.waves(w).loc);
-      homes(w) += ((l,f,v));
+      homes(w) += ((l.family,l.genus,l.name,f,v));
     }
-    output.close();
 
     for(w <- 0 until em.numWaves) {
-      println("==========");
-      println("Home Wave " + w + " " + last.waves(w).loc);
-      println(homes(w));
+      output.println("==========");
+      output.println("Home Wave " + w + " " + last.waves(w).loc);
+      output.println(homes(w));
     }
+    output.close();
 
   }
 
