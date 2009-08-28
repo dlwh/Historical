@@ -4,6 +4,8 @@ import Math._;
 
 import java.io._;
 
+import scala.collection.mutable.ArrayBuffer;
+
 import scalala.Scalala.{log => _, exp => _, sqrt=> _,_};
 import scalala.tensor._;
 import scalala.tensor.fixed._;
@@ -21,6 +23,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
       var waveCounts = new Array[Double](numWaves);
       var ll = 0.0;
       val waveMean = Array.fill(numWaves)(Vector2());
+      val typeCounts = Seq.fill(numWaves)(DoubleCounter[Int]());
       val featureCounts = Seq.fill(numWaves)(PairedDoubleCounter[Int,Int]());
       val waveCovariances = Array.fill(numWaves)(zeros(2,2));
 
@@ -38,6 +41,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
           val prob = Math.exp(score - logTotal);
           assert(prob >= 0, (prob, posterior,w));
           featureCounts(w)(f,v) += prob;
+          typeCounts(w)(f) += prob;
           waveMean(w) += lang.coords * prob;
           // Should actually do wave Covariances posthoc. Oh well.
           val dist = wrapDist(lang.coords,state.waves(w).loc);
@@ -53,15 +57,26 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
         val logTotal = log(counts.total + 0.0001 * counts.size);
         // log normalize:
         counts.transform { (f,v) =>
-        assert(v >= 0);
-        val r = log(v + 0.0001) - logTotal
-        assert(!r.isNaN,(logTotal,counts));
-        r;
+          assert(v >= 0);
+          val r = log(v + 0.0001) - logTotal
+          assert(!r.isNaN,(logTotal,counts));
+          r;
+        }
       }
+
+      for(counts <- typeCounts) {
+        val logTotal = log(counts.total + 0.0001 * counts.size);
+        counts.transform { (f,v) =>
+          assert(v >= 0);
+          val r = log(v + 0.0001) - logTotal
+          assert(!r.isNaN,(logTotal,counts));
+          r;
+        }
       }
-      println(waveCounts.mkString(","));
+
 
       val actualWaveMean = Array.tabulate(numWaves){ i => waveMean(i)/waveCounts(i) value };
+
       val actualWaveCov = Array.tabulate(numWaves){ i =>
          (waveCovariances(i) + eye(2) * 300) / (10.0 + waveCounts(i)) value
       }
@@ -76,7 +91,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
 
       val waves = (for(w <- 0 until numWaves)
         yield {
-        Wave( actualWaveMean(w), actualWaveCov(w), actualWaveICov(w), featureCounts(w));
+        Wave( actualWaveMean(w), actualWaveCov(w), actualWaveICov(w), typeCounts(w), featureCounts(w));
       }) toSequence;
 
       State(waves,newPrior,ll,state.newLL);
@@ -90,11 +105,12 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
     var logTotal = NEG_INF_DOUBLE;
 
     for {
-      (Wave(wloc,_,wicov,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
+      (Wave(wloc,_,wicov,waveTypes,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
       logPLgW = logGaussianProb(lang.coords,wloc,wicov)
-      logPFgW = waveFeatures(f)(v)
+      logPVgWF = waveFeatures(f)(v)
+      logPFgW = waveTypes(f)
     } {
-      val joint = logPLgW + logPFgW + state.priors(w);
+      val joint = logPLgW + logPFgW + logPVgWF + state.priors(w);
       posterior(w) = joint;
       assert(!joint.isNaN,(logPLgW,state.priors(w)));
       logTotal = logSum(logTotal,joint);
@@ -122,7 +138,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
   }
 
   // icov is inverse covariance
-  case class Wave(loc: Vector, cov: Matrix, icov: Matrix, features: PairedDoubleCounter[Int,Int]);
+  case class Wave(loc: Vector, cov: Matrix, icov: Matrix, featureTypes: DoubleCounter[Int], features: PairedDoubleCounter[Int,Int]);
   case class State(waves: Seq[Wave], priors: Seq[Double], newLL: Double, oldLL: Double);
 
   private def initialState(langs: Seq[Language]) = {
@@ -156,8 +172,20 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
       }
       ret;
     }
+
+    def typeFiller = {
+      val ret = DoubleCounter[Int]();
+      for(k <- featureSizes.keysIterator) {
+        ret(k) = Math.log(1.0/featureSizes.size);
+      }
+      ret
+    }
+
     val features = Array.fill(numWaves)(mapFiller);
-    val waves = for( (((l,f),ic),c) <- locs zip features zip icovs zip covs) yield Wave(l,c,ic,f);
+    val featureTypes = Array.fill(numWaves)(typeFiller);
+    val waves = Array.tabulate(numWaves) { i => 
+      Wave(locs(i),covs(i),icovs(i),featureTypes(i),features(i));
+    }
     val initState = State(waves, Array.fill(numWaves)(log(1.0/numWaves)), NEG_INF_DOUBLE, NEG_INF_DOUBLE);
 
     initState;
@@ -168,7 +196,7 @@ trait MainEM {
   def data: Seq[Language];
 
   def main(args: Array[String]) {
-    val em = new EM(50);
+    val em = new EM(30);
     var last : em.State = null;
     em.estimate(data).zipWithIndex.foreach { case(i,num) =>
       i.waves.map(_.loc) foreach println
@@ -189,6 +217,10 @@ trait MainEM {
       last = i;
     }
 
+    val homes = new collection.mutable.HashMap[Int,ArrayBuffer[(Language,Int,Int)]] {
+      override def default(k: Int) = new ArrayBuffer[(Language,Int,Int)];
+    }
+
     val output = new PrintWriter(new BufferedWriter(new FileWriter(new java.io.File("origins.txt"))));
     for(l <- data.elements;
         () = { output.println("====");output.println(l.name); output.println(l.coords); };
@@ -197,8 +229,15 @@ trait MainEM {
       val w = posterior.argmax;
       output.println("Feature " + f + " is " + v + " from: ");
       output.println(w +" " + last.waves(w).loc);
+      homes(w) += ((l,f,v));
     }
     output.close();
+
+    for(w <- 0 until em.numWaves) {
+      println("==========");
+      println("Home Wave " + w + " " + last.waves(w).loc);
+      println(homes(w));
+    }
 
   }
 
