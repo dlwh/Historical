@@ -2,6 +2,8 @@ package dlwh.historical;
 
 import Math._;
 
+import java.io._;
+
 import scalala.Scalala.{log => _, exp => _, sqrt=> _,_};
 import scalala.tensor._;
 import scalala.tensor.fixed._;
@@ -166,12 +168,12 @@ trait MainEM {
   def data: Seq[Language];
 
   def main(args: Array[String]) {
-    val em = new EM(25);
+    val em = new EM(50);
     var last : em.State = null;
     em.estimate(data).zipWithIndex.foreach { case(i,num) =>
       i.waves.map(_.loc) foreach println
 
-      if(num % 4 == 0) {
+      if(num % 2 == 0) {
         hold(false);
         Plot.wals(data);
         hold(true);
@@ -187,10 +189,17 @@ trait MainEM {
       last = i;
     }
 
-    last.waves foreach { w =>
-      println(w.loc);
-      println(w.features.filter{ case(k,v) => v > -2 });
+    val output = new PrintWriter(new BufferedWriter(new FileWriter(new java.io.File("origins.txt"))));
+    for(l <- data.elements;
+        () = { output.println("====");output.println(l.name); output.println(l.coords); };
+        (f,v) <- l.features.elements) {
+      val (posterior,_) = em.posteriorForFeature(last,l,f,v);
+      val w = posterior.argmax;
+      output.println("Feature " + f + " is " + v + " from: ");
+      output.println(w +" " + last.waves(w).loc);
     }
+    output.close();
+
   }
 
 }
