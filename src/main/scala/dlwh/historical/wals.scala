@@ -22,7 +22,7 @@ object WALS {
     val buf = new ArrayBuffer[Language];
     for (descripLine <- lines) {
       val featureLine = lines.next.trim;
-      val Array(_, _shortName, _name, _altLang, "?", coordString, _family, _genus) = descripLine.split("\t");
+      val Array(_, _shortName, _name, _altLang, "?", coordString, _family, _genus) = descripLine.trim.split("\t");
       val _coords = {
         val Array(lat,long) = coordString.split(" ").map(_.toDouble);
         Vector2(lat,long);
