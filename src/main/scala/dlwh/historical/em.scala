@@ -61,28 +61,29 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
 
       // m-step:
       for(pairCounter <- featureCounts;
-        counts <- pairCounter.counters) {
-        val logTotal = log(counts.total);
+          counts <- pairCounter.counters) {
+        val logTotal = log(counts.total + 0.0001 * counts.size);
         // log normalize:
         counts.transform { (f,v) =>
-          assert(v >= 0);
-          val r = log(v) - logTotal
-          assert(!r.isNaN);
-          r;
-        }
+        assert(v >= 0);
+        val r = log(v + 0.0001) - logTotal
+        assert(!r.isNaN,(logTotal,counts));
+        r;
       }
+      }
+      println(waveCounts.mkString(","));
 
       val actualWaveMean = Array.tabulate(numWaves){ i => waveMean(i)/waveCounts(i) value };
       val actualWaveCov = Array.tabulate(numWaves){ i => 
-         (waveCovariances(i)/waveCounts(i) + eye(2) * 3) value
+         (waveCovariances(i) + eye(2) * 300) / (10.0 + waveCounts(i)) value
       }
       val actualWaveICov = actualWaveCov map { cov =>
-         val I : DenseMatrix= eye(2)
+         val I : DenseMatrix = eye(2)
          val icov = cov \ I value;
          icov
       }
 
-      val newPrior = waveCounts.map(x => log(x) - log(numWaves));
+      val newPrior = waveCounts.map(x => log(x + 10.0) - log(10.0 * numWaves + waveCounts.foldLeft(0.0)(_+_)));
       newPrior foreach { x => assert(!x.isNaN) };
       
       val waves = (for(w <- 0 until numWaves) 
@@ -110,7 +111,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
   }
 
   private def converged(s: State) = {
-    (s.oldLL - s.newLL) / s.oldLL  < 1E-5 && s.oldLL != NEG_INF_DOUBLE;
+    (s.oldLL - s.newLL) / s.oldLL  < 1E-4 && s.oldLL != NEG_INF_DOUBLE;
   }
 
   // icov is inverse covariance
@@ -183,6 +184,7 @@ object RunIE {
   def main(args: Array[String]) {
     val em = new EM(25);
     val data = WALS.daumeIE;
+    var last :em.State = null;
     em.estimate(data).zipWithIndex.foreach { case(i,num) =>
       i.waves.map(_.loc) foreach println
 
@@ -199,6 +201,12 @@ object RunIE {
       println("old LL: " + i.oldLL);
       println("LL: " + i.newLL);
       println("Rel change: " + (i.oldLL - i.newLL)/i.oldLL);
+      last = i;
+    }
+
+    last.waves foreach { w =>
+      println(w.loc);
+      println(w.features.filter{ case(k,v) => v > -2 });
     }
   }
 }
