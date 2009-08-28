@@ -162,33 +162,11 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
   }
 }
 
-object RunAll {
-  def main(args: Array[String]) {
-    val em = new EM(50);
-    val data = WALS.daumeAll;
-    em.estimate(data).foreach { i =>
-      i.waves.map(_.loc) foreach println
+trait MainEM {
+  def data: Seq[Language];
 
-
-        hold(false);
-        Plot.wals(data);
-        hold(true);
-        for( w <- i.waves;
-          loc = w.loc) {
-          Plot.circle(loc,sqrt(em.waveVariance));
-        }
-
-      println("old LL: " + i.oldLL);
-      println("LL: " + i.newLL);
-      println("Rel change: " + (i.oldLL - i.newLL)/i.oldLL);
-    }
-  }
-}
-
-object RunIE {
   def main(args: Array[String]) {
     val em = new EM(25);
-    val data = WALS.daumeIE;
     var last :em.State = null;
     em.estimate(data).zipWithIndex.foreach { case(i,num) =>
       i.waves.map(_.loc) foreach println
@@ -214,4 +192,14 @@ object RunIE {
       println(w.features.filter{ case(k,v) => v > -2 });
     }
   }
+
+}
+
+object RunAll extends MainEM {
+  val data = WALS.daumeAll;
+  
+}
+
+object RunIE extends MainEM {
+  val data = WALS.daumeIE;
 }
