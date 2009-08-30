@@ -106,9 +106,9 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
 
     for {
       (Wave(wloc,_,wicov,waveTypes,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
-      logPLgW = logGaussianProb(lang.coords,wloc,wicov)
+      logPLgW = logGaussianProb(lang.coords,wloc,wicov) / 1.1
       logPVgWF = waveFeatures(f)(v)
-      logPFgW = waveTypes(f)
+      logPFgW = waveTypes(f) * 1.1
     } {
       val joint = logPLgW + logPFgW + logPVgWF + state.priors(w);
       posterior(w) = joint;
@@ -196,7 +196,7 @@ trait MainEM {
   def data: Seq[Language];
 
   def main(args: Array[String]) {
-    val em = new EM(30);
+    val em = new EM(15);
     var last : em.State = null;
     em.estimate(data).zipWithIndex.foreach { case(i,num) =>
       i.waves.map(_.loc) foreach println
@@ -222,14 +222,18 @@ trait MainEM {
     }
 
     val output = new PrintWriter(new BufferedWriter(new FileWriter(new java.io.File("origins.txt"))));
-    for(l <- data.elements;
-        () = { output.println("====");output.println(l.name); output.println(l.coords); };
-        (f,v) <- l.features.elements) {
-      val (posterior,_) = em.posteriorForFeature(last,l,f,v);
-      val w = posterior.argmax;
-      output.println("Feature " + f + " is " + v + " from: ");
-      output.println(w +" " + last.waves(w).loc);
-      homes(w) += ((l.family,l.genus,l.name,f,v));
+    for(l <- data.elements) {
+      output.println("====");
+      output.println(l.name);
+      output.println(l.coords); 
+      val ctr = DoubleCounter[Int];
+      for((f,v) <- l.features.elements) {
+        val (posterior,_) = em.posteriorForFeature(last,l,f,v);
+        val w = posterior.argmax;
+        ctr(w) += 1;
+        homes(w) += ((l.family,l.genus,l.name,f,v));
+      };
+      output.println(ctr / ctr.total value)
     }
 
     for(w <- 0 until em.numWaves) {
