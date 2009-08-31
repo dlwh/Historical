@@ -116,6 +116,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
       logTotal = logSum(logTotal,joint);
     }
 
+
     (posterior,logTotal);
   }
 
@@ -239,7 +240,20 @@ trait MainEM {
     for(w <- 0 until em.numWaves) {
       output.println("==========");
       output.println("Home Wave " + w + " " + last.waves(w).loc);
-      output.println(homes(w));
+      val famC = IntCounter[String]();
+      val genC = IntCounter[(String,String)]();
+      val nameC = IntCounter[(String)];
+      val tpes = new PairedIntCounter[Int,Int]();
+      for( (fam,gen,name,tpe,va) <- homes(w) ) {
+        famC(fam) += 1;
+        genC( (fam,gen) ) += 1;
+        nameC(name) += 1;
+        tpes(tpe,va) += 1;
+      }
+      output.println(famC);
+      output.println(genC);
+      output.println(nameC);
+      output.println(tpes);
     }
     output.close();
 
