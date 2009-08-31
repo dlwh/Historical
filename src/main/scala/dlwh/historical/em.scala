@@ -106,8 +106,8 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
 
     for {
       (Wave(wloc,_,wicov,waveTypes,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
-      logPLgW = logGaussianProb(lang.coords,wloc,wicov) / 1.1
-      logPVgWF = waveFeatures(f)(v)
+      logPLgW = logGaussianProb(lang.coords,wloc,wicov) / 1.01
+      logPVgWF = waveFeatures(f)(v) * 1.1
       logPFgW = waveTypes(f) * 1.1
     } {
       val joint = logPLgW + logPFgW + logPVgWF + state.priors(w);
