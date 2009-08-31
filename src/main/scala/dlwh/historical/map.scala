@@ -19,6 +19,7 @@ object Plot {
 
   def gaussian(center: Vector, cov: Matrix) {
     require(center.size == 2);
+    val chol = cholesky(zeros(2,2) + cov) value;
 
     val t = linspace(0,2*Math.Pi);
     val x = t.like;
@@ -29,7 +30,7 @@ object Plot {
 
     for { i <- 0 until x.size  } {
       val v = Vector2(x(i),y(i));
-      val newV = cov * v value;
+      val newV = chol * 1.5 * v value;
       x(i) = newV(0);
       y(i) = newV(1);
     }
