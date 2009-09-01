@@ -7,7 +7,7 @@ import WALS.Language;
 
 object Plot {
   def setBounds() = {
-    xlim(-90,90)
+    xlim(-180,180)
     ylim(-90,90)
   }
   def wals(langs: Seq[Language]) = {
