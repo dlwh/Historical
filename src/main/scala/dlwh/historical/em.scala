@@ -85,11 +85,10 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
         }
       }
 
-
       val actualWaveMean = Array.tabulate(numWaves){ i => waveMean(i)/waveCounts(i) value };
 
       val actualWaveCov = Array.tabulate(numWaves){ i =>
-         (waveCovariances(i) + eye(2) * 300) / (10.0 + waveCounts(i)) value
+         (waveCovariances(i) + eye(2) * 1000) / (10.0 + waveCounts(i)) value
       }
       val actualWaveICov = actualWaveCov map { cov =>
          val I : DenseMatrix = eye(2)
@@ -97,7 +96,8 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
          icov
       }
 
-      val newPrior = waveCounts.map(x => log(x + 10.0) - log(10.0 * numWaves + waveCounts.foldLeft(0.0)(_+_)));
+      //val newPrior = waveCounts.map(x => log(x + 100.0) - log(100.0 * numWaves + waveCounts.foldLeft(0.0)(_+_)));
+      val newPrior = waveCounts.map(x => log(1.0 / numWaves));
       newPrior foreach { x => assert(!x.isNaN) };
 
       val waves = (for(w <- 0 until numWaves)
