@@ -5,6 +5,7 @@ import Math._;
 import java.io._;
 
 import scala.collection.mutable.ArrayBuffer;
+import scala.collection.immutable.HashMap;
 
 import scalala.Scalala.{log => _, exp => _, sqrt=> _,_};
 import scalala.tensor._;
@@ -19,6 +20,11 @@ import WALS.Language;
 class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
   def estimate(langs: Seq[Language]) = {
 
+    val validValuesForFeature = langs.iterator.flatMap(_.features.iterator).foldLeft(Map.empty[Int,Set[Int]]) { (map,fv) =>
+      val newSet = map.get(fv._1).map{ _ + fv._2 }.getOrElse(Set(fv._2))
+      map + (fv._1 -> newSet)
+    };
+
     val iterations  = MarkovChain(initialState(langs)){ state => Rand.always {
       var waveCounts = new Array[Double](numWaves);
       var ll = 0.0;
@@ -30,30 +36,35 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
       // estep:
       for {
         lang <- langs.iterator
-        (f,v) <- lang.features.iterator
+        (f,vs) <- validValuesForFeature.iterator
       } {
-        val (posterior,logTotal) = posteriorForFeature(state,lang,f,v);
+        val featureSet = lang.features.get(f).map(x => Set(x)) getOrElse vs;
+        
+        val posterior = posteriorForFeature(state,lang,f,featureSet);
+        // LogPairedDoubleCounter[Wave,Value]
 
-        ll += logTotal;
+        ll += posterior.logTotal;
 
         // accumulate suff stats
-        for( (w,score) <- posterior ) {
-          val prob = Math.exp(score - logTotal);
-          assert(prob >= 0, (prob, posterior,w));
-          featureCounts(w)(f,v) += prob;
-          typeCounts(w)(f) += prob;
-          waveMean(w) += lang.coords * prob;
+        for( (w,ctr) <- posterior.rows ) {
+          for( (v,score) <- ctr) {
+            val probVgZ = Math.exp(score - ctr.logTotal);
+            assert(probVgZ >= 0, (probVgZ, posterior,w));
+            featureCounts(w)(f,v) += probVgZ;
+          }
+          val probZ = Math.exp(ctr.logTotal - posterior.logTotal);
+          typeCounts(w)(f) += probZ;
+          waveMean(w) += lang.coords * probZ;
           // Should actually do wave Covariances posthoc. Oh well.
           val dist = wrapDist(lang.coords,state.waves(w).loc);
-          waveCovariances(w) += dist * dist.t * prob;
-          waveCounts(w) += prob;
+          waveCovariances(w) += dist * dist.t * probZ;
+          waveCounts(w) += probZ;
         }
-
       }
 
       // m-step:
       for(pairCounter <- featureCounts;
-          counts <- pairCounter.counters) {
+          (_,counts) <- pairCounter.rows) {
         val logTotal = log(counts.total + 0.0001 * counts.size);
         // log normalize:
         counts.transform { (f,v) =>
@@ -101,24 +112,41 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
   }
 
   def posteriorForFeature(state: State, lang: Language, f: Int, v: Int) = {
-    val posterior = DoubleCounter[Int]();
-    var logTotal = NEG_INF_DOUBLE;
+    val posterior = LogCounters.LogDoubleCounter[Int]();
 
     for {
       (Wave(wloc,_,wicov,waveTypes,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
-      logPLgW = logGaussianProb(lang.coords,wloc,wicov) / 1.01
+      logPLgW = logGaussianProb(lang.coords,wloc,wicov) / 1.2
       logPVgWF = waveFeatures(f)(v) * 1.1
       logPFgW = waveTypes(f) * 1.1
     } {
       val joint = logPLgW + logPFgW + logPVgWF + state.priors(w);
       posterior(w) = joint;
       assert(!joint.isNaN,(logPLgW,state.priors(w)));
-      logTotal = logSum(logTotal,joint);
     }
 
-
-    (posterior,logTotal);
+    posterior;
   }
+
+
+  def posteriorForFeature(state: State, lang: Language, f: Int, values: Set[Int]) = {
+    val posterior = LogCounters.LogPairedDoubleCounter[Int,Int]();
+
+    for {
+      (Wave(wloc,_,wicov,waveTypes,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
+      logPLgW = logGaussianProb(lang.coords,wloc,wicov) / 1.2
+      v <- values;
+      logPVgWF = waveFeatures(f)(v) * 1.1
+      logPFgW = waveTypes(f) * 1.1
+    } {
+      val joint = logPLgW + logPFgW + logPVgWF + state.priors(w);
+      posterior(w,v) = joint;
+    }
+
+    posterior
+  }
+
+
 
 
   // horizontal wrap
@@ -195,9 +223,10 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
 
 trait MainEM {
   def data: Seq[Language];
+  val numWaves = 15;
 
   def main(args: Array[String]) {
-    val em = new EM(15);
+    val em = new EM(numWaves);
     var last : em.State = null;
     em.estimate(data).zipWithIndex.foreach { case(i,num) =>
       i.waves.map(_.loc) foreach println
