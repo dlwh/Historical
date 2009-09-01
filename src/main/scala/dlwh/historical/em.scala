@@ -247,42 +247,37 @@ trait MainEM {
       last = i;
     }
 
-    val homes = new collection.mutable.HashMap[Int,ArrayBuffer[(String,String,String,Int,Int)]] {
-      override def default(k: Int) = getOrElseUpdate(k,new ArrayBuffer[(String,String,String,Int,Int)]);
-    }
+    val families = Array.fill(numWaves)(DoubleCounter[String]());
+    val geni = Array.fill(numWaves)(DoubleCounter[(String,String)]());
+    val names = Array.fill(numWaves)(DoubleCounter[String]());
+    val tpes = Array.fill(numWaves)(PairedDoubleCounter[Int,Int]());
 
     val output = new PrintWriter(new BufferedWriter(new FileWriter(new java.io.File("origins.txt"))));
-    for(l <- data.elements) {
+    for(l <- data.iterator) {
       output.println("====");
       output.println(l.name);
       output.println(l.coords); 
       val ctr = DoubleCounter[Int];
-      for((f,v) <- l.features.elements) {
-        val (posterior,_) = em.posteriorForFeature(last,l,f,v);
-        val w = posterior.argmax;
-        ctr(w) += 1;
-        homes(w) += ((l.family,l.genus,l.name,f,v));
+      for((f,v) <- l.features.iterator) {
+        val posterior = LogCounters.normalize(em.posteriorForFeature(last,l,f,v));
+        ctr += posterior;
+        for( (w,score) <- posterior) {
+          families(w)(l.family) += score;
+          geni(w)((l.family,l.genus)) += score;
+          names(w)(l.name) += score;
+          tpes(w)(f,v) += score;
+        }
       };
-      output.println(ctr / ctr.total value)
+      output.println( (ctr / ctr.total value).filter{ case(k,v) => v > 0.05})
     }
 
     for(w <- 0 until em.numWaves) {
       output.println("==========");
       output.println("Home Wave " + w + " " + last.waves(w).loc);
-      val famC = IntCounter[String]();
-      val genC = IntCounter[(String,String)]();
-      val nameC = IntCounter[(String)];
-      val tpes = new PairedIntCounter[Int,Int]();
-      for( (fam,gen,name,tpe,va) <- homes(w) ) {
-        famC(fam) += 1;
-        genC( (fam,gen) ) += 1;
-        nameC(name) += 1;
-        tpes(tpe,va) += 1;
-      }
-      output.println(famC);
-      output.println(genC);
-      output.println(nameC);
-      output.println(tpes);
+      output.println(families(w));
+      output.println(geni(w));
+      output.println(names(w));
+      output.println(tpes(w));
     }
     output.close();
 
