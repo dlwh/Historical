@@ -15,7 +15,7 @@ import scalanlp.counters._;
 import scalanlp.math.Numerics._;
 import scalanlp.stats.sampling._;
 import Counters._;
-import WALS.Language;
+import WALS.Language; 
 
 class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
   def estimate(langs: Seq[Language]) = {
@@ -31,8 +31,6 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
       val waveMean = Array.fill(numWaves)(Vector2());
       val typeCounts = Seq.fill(numWaves)(DoubleCounter[Int]());
       val featureCounts = Seq.fill(numWaves)(PairedDoubleCounter[Int,Int]());
-      val waveCovariances = Array.fill(numWaves)(zeros(2,2));
-
       // estep:
       for {
         lang <- langs.iterator
@@ -55,9 +53,6 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
           val probZ = Math.exp(ctr.logTotal - posterior.logTotal);
           typeCounts(w)(f) += probZ;
           waveMean(w) += lang.coords * probZ;
-          // Should actually do wave Covariances posthoc. Oh well.
-          val dist = wrapDist(lang.coords,state.waves(w).loc);
-          waveCovariances(w) += dist * dist.t * probZ;
           waveCounts(w) += probZ;
         }
       }
@@ -87,22 +82,13 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
 
       val actualWaveMean = Array.tabulate(numWaves){ i => waveMean(i)/waveCounts(i) value };
 
-      val actualWaveCov = Array.tabulate(numWaves){ i =>
-         (waveCovariances(i) + eye(2) * 1000) / (10.0 + waveCounts(i)) value
-      }
-      val actualWaveICov = actualWaveCov map { cov =>
-         val I : DenseMatrix = eye(2)
-         val icov = cov \ I value;
-         icov
-      }
-
       //val newPrior = waveCounts.map(x => log(x + 100.0) - log(100.0 * numWaves + waveCounts.foldLeft(0.0)(_+_)));
       val newPrior = waveCounts.map(x => log(1.0 / numWaves));
       newPrior foreach { x => assert(!x.isNaN) };
 
       val waves = (for(w <- 0 until numWaves)
         yield {
-        Wave( actualWaveMean(w), actualWaveCov(w), actualWaveICov(w), typeCounts(w), featureCounts(w));
+        Wave( actualWaveMean(w), vm(w), typeCounts(w), featureCounts(w));
       }) toSequence;
 
       State(waves,newPrior,ll,state.newLL);
@@ -115,12 +101,15 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
     val posterior = LogCounters.LogDoubleCounter[Int]();
 
     for {
-      (Wave(wloc,_,wicov,waveTypes,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
-      logPLgW = logGaussianProb(lang.coords,wloc,wicov) / 1.2
+      (Wave(wloc, vm, waveTypes,  waveFeatures),w) <- state.waves.iterator.zipWithIndex;
+      logPLgW = logUniformGaussianProb(lang.coords,wloc,waveVariance) / 1.2
       logPVgWF = waveFeatures(f)(v) * 1.1
       logPFgW = waveTypes(f) * 1.1
+      xdist = lang.coords(0) - wloc(0);
+      ydist = lang.coords(1) - wloc(1);
+      logAngle = vm.logPdf(tan(xdist/ydist))
     } {
-      val joint = logPLgW + logPFgW + logPVgWF + state.priors(w);
+      val joint = logPLgW + logPFgW + logPVgWF + state.priors(w) + logAngle;
       posterior(w) = joint;
       assert(!joint.isNaN,(logPLgW,state.priors(w)));
     }
@@ -128,16 +117,16 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
     posterior;
   }
 
-
   def posteriorForFeature(state: State, lang: Language, f: Int, values: Set[Int]) = {
     val posterior = LogCounters.LogPairedDoubleCounter[Int,Int]();
 
     for {
-      (Wave(wloc,_,wicov,waveTypes,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
-      logPLgW = logGaussianProb(lang.coords,wloc,wicov) / 1.2
+      (Wave(wloc,vm,waveTypes,waveFeatures),w) <- state.waves.iterator.zipWithIndex;
+      logPLgW = logUniformGaussianProb(lang.coords,wloc,waveVariance) / 1.2
       v <- values;
       logPVgWF = waveFeatures(f)(v) * 1.1
       logPFgW = waveTypes(f) * 1.1
+      // XXX hook into VonMises
     } {
       val joint = logPLgW + logPFgW + logPVgWF + state.priors(w);
       posterior(w,v) = joint;
@@ -145,9 +134,6 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
 
     posterior
   }
-
-
-
 
   // horizontal wrap
   private def wrapDist(x: Vector, y: Vector) = {
@@ -161,13 +147,18 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
     val determinant = icov(0,0) * icov(1,1) - icov(1,0) * icov(0,1);
     -.5 * (diff.t * icov * diff) - log(sqrt(1/determinant) * 2 * Pi) ;
   }
+  
+  private def logUniformGaussianProb(x: Vector, y: Vector, variance: Double) = {
+    val diff = wrapDist(x,y);
+    -.5 * (diff dot diff)/variance - log( sqrt(variance) * 2 * Pi) ;
+  }
 
   private def converged(s: State) = {
     (s.oldLL - s.newLL) / s.oldLL  < 1E-4 && s.oldLL != NEG_INF_DOUBLE;
   }
 
   // icov is inverse covariance
-  case class Wave(loc: Vector, cov: Matrix, icov: Matrix, featureTypes: DoubleCounter[Int], features: PairedDoubleCounter[Int,Int]);
+  case class Wave(loc: Vector, vonMises: VonMises, featureTypes: DoubleCounter[Int], features: PairedDoubleCounter[Int,Int]);
   case class State(waves: Seq[Wave], priors: Seq[Double], newLL: Double, oldLL: Double);
 
   private def initialState(langs: Seq[Language]) = {
@@ -213,7 +204,7 @@ class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
     val features = Array.fill(numWaves)(mapFiller);
     val featureTypes = Array.fill(numWaves)(typeFiller);
     val waves = Array.tabulate(numWaves) { i => 
-      Wave(locs(i),covs(i),icovs(i),featureTypes(i),features(i));
+      Wave(locs(i),VonMises(0,0.01),featureTypes(i),features(i));
     }
     val initState = State(waves, Array.fill(numWaves)(log(1.0/numWaves)), NEG_INF_DOUBLE, NEG_INF_DOUBLE);
 
@@ -237,7 +228,7 @@ trait MainEM {
         hold(true);
         for( w <- i.waves;
           loc = w.loc) {
-          Plot.gaussian(loc,w.cov);
+          //Plot.gaussian(loc,w.cov);
         }
       }
 

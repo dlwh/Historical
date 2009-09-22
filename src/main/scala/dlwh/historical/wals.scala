@@ -17,7 +17,7 @@ object WALS {
   lazy val all: Seq[Language] = {
     val stream = this.getClass.getClassLoader().getResourceAsStream("wals_new");
     // read until we get to a blank line.
-    val lines = Source.fromInputStream(stream).getLines.dropWhile(_.trim != "").drop(1);
+    val lines = Source.fromInputStream(stream).getLines().dropWhile(_.trim != "").drop(1);
 
     val buf = new ArrayBuffer[Language];
     for (descripLine <- lines) {
