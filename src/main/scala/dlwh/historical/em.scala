@@ -16,7 +16,7 @@ import scalanlp.math.Numerics._;
 import scalanlp.stats.sampling._;
 import Counters._;
 import WALS.Language; 
-
+/*
 class EM(val numWaves: Int, val waveVariance: Double = 50.0) {
   def estimate(langs: Seq[Language]) = {
 
@@ -283,3 +283,4 @@ object RunAll extends MainEM {
 object RunIE extends MainEM {
   val data = WALS.daumeIE;
 }
+*/
