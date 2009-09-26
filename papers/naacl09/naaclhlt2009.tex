@@ -1,0 +1,61 @@
+%
+% File naaclhlt2009.tex
+%
+% Contact: nasmith@cs.cmu.edu
+
+\documentclass[11pt]{article}
+\usepackage{naaclhlt2009}
+\usepackage{times}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{enumerate}
+\usepackage{latexsym}
+\setlength\titlebox{6.5cm}    % Expanding the titlebox
+
+\title{}
+
+\author{}
+
+\date{}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+\end{abstract}
+\section{Introduction}
+\section{Model}
+
+We define a generative model of the cognate groups and their individual word forms in each language as follows:
+\begin{enumerate}
+  \item Choose a (binary) tree topology over languages.
+  \item For each edge in the tree, choose a transducer $\phi_{a,d}$ over strings in an ancestor language $a$ and descendent language $d$.
+  \item For each cognate group $g$:
+    \begin{enumerate}
+      \item Choose a root word form $a_{g\mathrm{ROOT}}$ uniformly over strings. (XXX This is degenerate. Oh well.)
+      \item For each interior child $d$ with ancestor $a$:
+        \begin{enumerate}
+          \item Generate ancestral word $a_{gd} \sim \phi_{a,d}(a_{ga},a_{gd})$.
+        \end{enumerate}
+    \end{enumerate}
+  \item For each word position $i$ in language $\ell$:
+    \begin{enumerate}
+      \item Choose a cognate group $z_{\ell i}$ uniformly at random. (XXX: will probably want a DP over this)
+      \item Choose $w_{\ell i} \sim \phi_{Pa(\ell),\ell}(a_{z_{\ell i}Pa(\ell)},w_{\ell i})$.
+    \end{enumerate}
+\end{enumerate}
+
+In our setting, we observe only the binary tree topology and the words in each language, but not their ancestral forms, or even which cognate group they belong to. Estimating
+the remaining parameters requires EM, which we derive from a variational prospective. The full data likelihood is given by:
+\begin{equation}
+  \begin{split}
+    p(\vec w, \vec z, \vec a, \vec \phi) &= (\prod_\ell \prod_i p(w_{\ell i}|g_{\ell i},w_{g_{\ell i}\ell},\phi_{Pa(\ell),\ell})p(g_{\ell i}))\\
+      & (\prod_g p(\vec a_g|\vec\phi) ) p(\vec \phi)
+   \end{split}
+ \end{equation}
+ We consider the factorized distribution $q(\vec z, \vec a, \vec \phi) = (\prod_{a_1,a_2} q_{a_1,a_2}(\vec \phi_{a_1,a_2}))\prod_\ell \prod_i q_{\ell i}(z_{\ell i})\prod_g
+ q_g(\vec a_g)$
+\section{Experiments}
+\section{Conclusion}
+\end{document}
