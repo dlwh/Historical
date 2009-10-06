@@ -27,7 +27,15 @@
 \section{Introduction}
 \section{Model}
 
-We define a generative model of the cognate groups and their individual word forms in each language as follows:
+We make a few high-level modeling assumptions. First, all words in
+a cognate group have a single common ancestor word in a single
+ancestral language. Second, each surface form in each language
+evolved from its parent form via a regular stochastic process that
+is shared across all cognate groups. Specifically, each branch in
+the phylogenetic tree has a weighted finite state transducer from
+parent strings to child strings.
+
+With these principles in mind, we define a generative model of the cognate groups and their individual word forms in each language as follows:
 \begin{enumerate}
   \item Choose a (binary) tree topology over languages.
   \item For each edge in the tree, choose a transducer $\phi_{a,d}$ over strings in an ancestor language $a$ and descendent language $d$.
@@ -54,8 +62,19 @@ the remaining parameters requires EM, which we derive from a variational prospec
       & (\prod_g p(\vec a_g|\vec\phi) ) p(\vec \phi)
    \end{split}
  \end{equation}
+ For simplicity, we assume (XXX probably won't want to do this) a uniform distribution over cognate group assignments $p(g_{\ell i })$, and a degenerate prior over
+ transducers.
  We consider the factorized distribution $q(\vec z, \vec a, \vec \phi) = (\prod_{a_1,a_2} q_{a_1,a_2}(\vec \phi_{a_1,a_2}))\prod_\ell \prod_i q_{\ell i}(z_{\ell i})\prod_g
- q_g(\vec a_g)$
+ q_g(\vec a_g)$, where we restrict the $q(\phi)$'s to be point-masses. We seek to minimize the KL divergence between $q$ and the posterior distribution $p(\vec z, \vec a, \vec \phi| \vec w)$.  Doing so leads to the
+ updates:
+ \begin{equation}
+   \begin{split}
+     \log q_{\ell i}(z_{\ell i}) &\propto E_q[\log p(w_{\ell i}, z_{\ell i}, a_{z_{\ell i} Pa(\ell)},\vec \phi)] \\
+     &\propto E_q[\log  p(w_{\ell i}|g_{\ell i},w_{g_{\ell i}\ell},\phi_{Pa(\ell),\ell}) ]
+     &\propto \sum \phi^*(w_{\ell i}) q(a_{gPa(\ell)}) \\
+     &\propto \sum 
+    \end{split}
+  \end{equation}
 \section{Experiments}
 \section{Conclusion}
 \end{document}
