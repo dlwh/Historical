@@ -8,11 +8,11 @@ object Romance {
     val stream = this.getClass.getClassLoader().getResourceAsStream("romance_ipa");
     val src = Source.fromInputStream(stream)(Codec.UTF8).getLines().drop(1);
     val cognates = (for(line <- src) yield {
-      for( ((w,c),l) <- line.split(' ').zipWithIndex.toSequence zip Seq("Spanish","Italian","Latin","Portuguese")) 
+      for( ((w,c),l) <- line.split(' ').zipWithIndex.toSeq zip Seq("Spanish","Italian","Latin","Portuguese")) 
         yield Cognate(w,l);
-    }).toSequence;
+    }).toSeq;
 
     stream.close();
-    cognates.toSequence;
+    cognates.toSeq;
   }
 }
