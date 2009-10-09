@@ -58,23 +58,83 @@ In our setting, we observe only the binary tree topology and the words in each l
 the remaining parameters requires EM, which we derive from a variational prospective. The full data likelihood is given by:
 \begin{equation}
   \begin{split}
-    p(\vec w, \vec z, \vec a, \vec \phi) &= (\prod_\ell \prod_i p(w_{\ell i}|g_{\ell i},w_{g_{\ell i}\ell},\phi_{Pa(\ell),\ell})p(g_{\ell i}))\\
-      & (\prod_g p(\vec a_g|\vec\phi) ) p(\vec \phi)
+    p(\vec w, \vec z, &\vec a, \mathbf{\phi}) = (\prod_\ell \prod_i p(w_{\ell
+    i}|z_{\ell i},a_{g_{\ell i}Pa(\ell)},\phi_{Pa(\ell),\ell})p(z_{\ell i}))\\
+      & (\prod_g p(\vec a_g|\mathbf{\phi}) ) p(\mathbf{\phi})
    \end{split}
  \end{equation}
  For simplicity, we assume (XXX probably won't want to do this) a uniform distribution over cognate group assignments $p(g_{\ell i })$, and a degenerate prior over
  transducers.
- We consider the factorized distribution $q(\vec z, \vec a, \vec \phi) = (\prod_{a_1,a_2} q_{a_1,a_2}(\vec \phi_{a_1,a_2}))\prod_\ell \prod_i q_{\ell i}(z_{\ell i})\prod_g
- q_g(\vec a_g)$, where we restrict the $q(\phi)$'s to be point-masses. We seek to minimize the KL divergence between $q$ and the posterior distribution $p(\vec z, \vec a, \vec \phi| \vec w)$.  Doing so leads to the
- updates:
+ We consider the factorized distribution 
  \begin{equation}
    \begin{split}
-     \log q_{\ell i}(z_{\ell i}) &\propto E_q[\log p(w_{\ell i}, z_{\ell i}, a_{z_{\ell i} Pa(\ell)},\vec \phi)] \\
-     &\propto E_q[\log  p(w_{\ell i}|g_{\ell i},w_{g_{\ell i}\ell},\phi_{Pa(\ell),\ell}) ]
-     &\propto \sum \phi^*(w_{\ell i}) q(a_{gPa(\ell)}) \\
-     &\propto \sum 
+      q(\vec z, \vec a, \mathbf{\phi}) = (\prod_{a_1,a_2} q_{a_1,a_2}(\mathbf{\phi}_{a_1,a_2}))\prod_\ell \prod_i q_{\ell i}(z_{\ell i})\prod_g
+ q_g(\vec a_g)
     \end{split}
   \end{equation}
+ where we restrict the $q(\phi)$'s to be point-masses. We seek to
+ minimize the KL divergence between $q$ and the posterior distribution $p(\vec z,
+ \vec a, \mathbf{\phi}| \vec w)$. Doing so leads to the updates for each group
+ assignments $z_{\ell i}$:
+ \begin{equation}
+   \begin{split}
+     \log q_{\ell i}&(z_{\ell i}) \propto E_q[\log p(w_{\ell i}, z_{\ell i}, a_{z_{\ell i} Pa(\ell)},\mathbf{\phi})] + \mathrm{const}\\
+     &= E_q[\log  p(w_{\ell i}|z_{\ell i},a_{z_{\ell i}Pa(\ell)},\phi_{Pa(\ell)\ell}) ] + \mathrm{const}\\
+     &= \sum \phi^{\log}_{Pa(\ell)\ell}(a_{gPa(\ell)},w_{\ell i}) q(a_{gPa(\ell)}) + \mathrm{const}\\
+     &= \psi^{\log}_{\ell g}(w_{\ell i}) + \mathrm{const}\\
+    \end{split}
+  \end{equation}
+where $\phi^{\log}_{Pa(\ell)\ell}$ is the transducer
+$\phi_{Pa(\ell)\ell}$ for transforming words in $\ell$'s parent
+language into words in $\ell$ itself except that arc transitions
+are replaced by their log-space counterparts. Each log probability
+can computed using an expectation semiring (XXX cite Eisner) and a
+variant of weighted transducer composition (XXX cite Mohri). In
+fact, a log-space automaton over words $\psi^{\log}_{\ell g}(w)$
+can be precomputed by running (modified) composition and then
+projecting the resulting transducer to only consider words in the
+surface language.
+
+Now we consider the computation of $\log q_g(\vec a_g)$, the log
+probability of the words in each ancestor language for a given
+group. Note that since each group is a binary tree with interior
+nodes being string-valued random variables, we can perform inference
+easily inside the tree using the inside-outside algorithm (XXX
+cite?). The observed words themselves, however, require using the
+variational approximation $q_{\ell i}(z_{\ell i})$, as follows:
+ \begin{equation}
+   \begin{split}
+     \log &q_{g}(\vec a_g) \propto E_q[\log p(\vec w, \vec z, \vec a_g,\mathbf{\phi})] + \mathrm{const}\\
+     &= E_q[\log p(\vec a_g|\mathbf\phi) + \sum_{\ell,i}\log p(w_{\ell i}| z_{\ell i} = g, \vec a_g,\mathbf\phi)] + \mathrm{const}\\
+     &= \log p(\vec a_g|\mathbf\phi) + \sum_{\ell,i} q(z_{\ell i}=g) \log p(w_{\ell i}|a_{g Pa(\ell)},\phi_{\ell,Pa(\ell)}) + \mathrm{const}\\
+     &= \log p(\vec a_g|\mathbf\phi) + \sum_{\ell,i} q(z_{\ell i}=g) \phi_{\ell,Pa(\ell)}^{\log}(a_{g Pa(\ell)},w_{\ell i}) + \mathrm{const}
+    \end{split}
+  \end{equation}
+Note that the right hand summands only depend only on the direct
+parent of each language $\ell$, and so these can be used as a base
+case in the inside pass of the algorithm for the entire tree.
+Moreover, we can also precompute automata
+$\phi_{\ell,Pa(\ell)}(\cdot,w_{\ell i})$ for each word. In the case
+of a fixed topology for $\phi_{\ell,Pa(\ell)}$, these automata can
+in fact be created once and reused in every iteration, changing
+the weight of the automata as $\phi$ is updated.
+
+For $\phi$, we (XXX how best to do $phi$? For the moment:XXX) have
+G edges in each tree that are governed by any given $\phi_{ad}$,
+for a given ancestor language $a$ and descendent language $d$. We
+restrict $q(\phi_{ad})$ to be a point estimate $\delta(\phi_{ad})$,
+which means that we wish to find:XXX fix up a,d confusion
+\begin{equation}
+  \begin{split}
+    \phi_{ad}^* &= \arg\max_{\phi_{ad}^* \in \Phi} E_q[\log p(\vec w, \vec z, \vec a,\mathbf{\phi})] \\
+    &= \arg\max_{\phi_{ad} \in \Phi} E_q[\log p(a_{ga},a_{gd}|\phi_{ad})]\\
+    &= \arg\max_{\phi_{ad} \in \Phi} E_q[\phi^{\log}_{a,d}(a_{ga},a_{gd}))]
+   \end{split}
+ \end{equation}
+which again can be computed using an expectation semiring. In this
+paper, we explore several possible choices for the set of possible
+transducers $\Phi$.
+ (XXX with exterior nodes similarly, taking into account $q(z)$ XXX perhaps I should show this.)
 \section{Experiments}
 \section{Conclusion}
 \end{document}
