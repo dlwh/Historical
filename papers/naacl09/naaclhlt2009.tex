@@ -41,7 +41,7 @@ With these principles in mind, we define a generative model of the cognate group
   \item For each edge in the tree, choose a transducer $\phi_{a,d}$ over strings in an ancestor language $a$ and descendent language $d$.
   \item For each cognate group $g$:
     \begin{enumerate}
-      \item Choose a root word form $a_{g\mathrm{ROOT}}$ uniformly over strings. (XXX This is degenerate. Oh well.)
+      \item Choose a root word form $a_{g\mathrm{ROOT}}$ from an automaton $\phi^0$.
       \item For each interior child $d$ with ancestor $a$:
         \begin{enumerate}
           \item Generate ancestral word $a_{gd} \sim \phi_{a,d}(a_{ga},a_{gd})$.
@@ -55,7 +55,7 @@ With these principles in mind, we define a generative model of the cognate group
 \end{enumerate}
 
 In our setting, we observe only the binary tree topology and the words in each language, but not their ancestral forms, or even which cognate group they belong to. Estimating
-the remaining parameters requires EM, which we derive from a variational prospective. The full data likelihood is given by:
+the remaining parameters requires a variant of EM, which we derive from a variational prospective. The full data likelihood is given by:
 \begin{equation}
   \begin{split}
     p(\vec w, \vec z, &\vec a, \mathbf{\phi}) = (\prod_\ell \prod_i p(w_{\ell
@@ -80,27 +80,27 @@ the remaining parameters requires EM, which we derive from a variational prospec
    \begin{split}
      \log q_{\ell i}&(z_{\ell i}) \propto E_q[\log p(w_{\ell i}, z_{\ell i}, a_{z_{\ell i} Pa(\ell)},\mathbf{\phi})] + \mathrm{const}\\
      &= E_q[\log  p(w_{\ell i}|z_{\ell i},a_{z_{\ell i}Pa(\ell)},\phi_{Pa(\ell)\ell}) ] + \mathrm{const}\\
-     &= \sum \phi^{\log}_{Pa(\ell)\ell}(a_{gPa(\ell)},w_{\ell i}) q(a_{gPa(\ell)}) + \mathrm{const}\\
-     &= \psi^{\log}_{\ell g}(w_{\ell i}) + \mathrm{const}\\
+     &= \sum (\phi^{\log}_{Pa(\ell)\ell}(a_{gPa(\ell)},w_{\ell i}) \\
+     &~ ~ ~ - \phi^{\log}(a_{gPa(\ell)},\cdot))q(a_{gPa(\ell)}) + \mathrm{const}\\
     \end{split}
   \end{equation}
 where $\phi^{\log}_{Pa(\ell)\ell}$ is the transducer
 $\phi_{Pa(\ell)\ell}$ for transforming words in $\ell$'s parent
 language into words in $\ell$ itself except that arc transitions
-are replaced by their log-space counterparts. Each log probability
+are replaced by their log-space counterparts. The notation $\phi^{\log}(a_{gPa(\ell)},\cdot)$
+denotes marginalizing over all possible words in the surface language. (That is, it is
+the value of the log partition function for the probability distribution.)
+Each log score
 can computed using an expectation semiring (XXX cite Eisner) and a
-variant of weighted transducer composition (XXX cite Mohri). In
-fact, a log-space automaton over words $\psi^{\log}_{\ell g}(w)$
-can be precomputed by running (modified) composition and then
-projecting the resulting transducer to only consider words in the
-surface language.
+variant of weighted transducer composition (XXX cite Mohri). 
 
 Now we consider the computation of $\log q_g(\vec a_g)$, the log
 probability of the words in each ancestor language for a given
 group. Note that since each group is a binary tree with interior
-nodes being string-valued random variables, we can perform inference
+nodes being string-valued random variables, we can perform approximate inference
 easily inside the tree using the inside-outside algorithm (XXX
-cite?). The observed words themselves, however, require using the
+cite?), where we approximate the messages as described in Section XXX.
+The observed words themselves, however, require using the
 variational approximation $q_{\ell i}(z_{\ell i})$, as follows:
  \begin{equation}
    \begin{split}
@@ -115,7 +115,7 @@ parent of each language $\ell$, and so these can be used as a base
 case in the inside pass of the algorithm for the entire tree.
 Moreover, we can also precompute automata
 $\phi_{\ell,Pa(\ell)}(\cdot,w_{\ell i})$ for each word. In the case
-of a fixed topology for $\phi_{\ell,Pa(\ell)}$, these automata can
+of a fixed topology for each transducer $\phi_{\ell,Pa(\ell)}$, these automata can
 in fact be created once and reused in every iteration, changing
 the weight of the automata as $\phi$ is updated.
 
