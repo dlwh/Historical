@@ -1,15 +1,18 @@
 package dlwh.cognates;
 
-class InsideOutside(t: Tree, val factors: Factors) {
+import Types._;
+
+import Factors._;
+class InsideOutside(t: Tree, val factors: Factors, initialBeliefs: Language=>Marginal) {
   import factors._;
 
-  private val nodes = scala.collection.mutable.Map[String,Node]();
+  private val nodes = scala.collection.mutable.Map[Language,Node]();
   private val root = new RootNode(t.asInstanceOf[Ancestor]); // whatever
 
-  def marginalFor(s: String) = nodes(s).marginal;
+  def marginalFor(s: Language) = nodes(s).marginal;
 
   private trait Node {
-    def label: String;
+    def label: Language;
     def marginal: Marginal;
     nodes += (label -> this);
   }
@@ -70,8 +73,7 @@ class InsideOutside(t: Tree, val factors: Factors) {
     lazy val marginal = leftChild.upwardMessage * rightChild.upwardMessage;
   }
 
-  private class ChildNode(xlabel: String, parent: NonChildNode) extends NonRootNode {
-    def label = xlabel;
+  private class ChildNode(val label: Language, parent: NonChildNode) extends NonRootNode {
     lazy val upwardMessage = {
       edgeFor(parent.label,label).childMarginalize(initialBeliefs(label));
     }
