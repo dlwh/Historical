@@ -46,5 +46,12 @@ object Tree {
     readTree(line);
   }
 
+  def basic = {
+    val stream = this.getClass.getClassLoader().getResourceAsStream("basic_tree");
+    // read until we get to a blank line.
+    val line = Source.fromInputStream(stream).getLines().next;
+    stream.close();
+    readTree(line);
+  }
 
 }

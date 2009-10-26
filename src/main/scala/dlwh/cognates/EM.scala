@@ -5,11 +5,12 @@ import scalanlp.counters.Counters.DoubleCounter;
 import scalanlp.counters.LogCounters._;
 import scalanlp.fst._;
 import collection.{mutable=>muta}
+import scalanlp.math.Semiring.LogSpace._;
 
 import Types._;
+import Factors._;
 
-abstract class EM(numGroups: Int= 1000) {
-
+class EM(numGroups: Int= 1000) {
 
   def estimate(words: Seq[Cognate], tree: Tree) = {
     val alphabet = Set.empty ++ words.iterator.flatMap(_.word.iterator);
@@ -19,16 +20,24 @@ abstract class EM(numGroups: Int= 1000) {
       val groupAutoCounts = new muta.HashMap[Language,PairedDoubleCounter[Group,Automaton[Double,_,Char]]] {
         override def default(s: Language) = getOrElseUpdate(s,PairedDoubleCounter[Group,Psi]());
       };
-      for(Cognate(word,language) <- words) {
+      var likelihood = 0.0;
+      for(c@Cognate(word,language) <- words) {
+        println(word);
         // precompute parent automaton for each word.
-        val psi : Psi= state.edgePotentialForLanguage(language).fst >> Automaton.constant(word,0.0) inputProjection;
+        val edgeFactor = state.edgePotentialForLanguage(language)
+        val auto = new Marginal(Automaton.constant(word,0.0));
+        val psi : Psi= edgeFactor.childMarginalize(auto).fsa;
+        println(c + "....");
+        println(psi);
 
         val pGgW = LogDoubleCounter[Group]();
         for(group <- 0 until numGroups) {
+          println("  " + group);
           val prior = state.prior(group);
           val likelihood = state.likelihood(psi,language,group);
           pGgW(group) = prior + likelihood;
         }
+        likelihood += pGgW.logTotal;
         val normalizedCtr = normalize(pGgW);
         groupAutoCounts(language).transpose.getRow(psi) += normalizedCtr;
       }
@@ -42,11 +51,11 @@ abstract class EM(numGroups: Int= 1000) {
       // m-step: recalculate edge potentials, marginalize out p(word|language,group)
       val edgePotentials = calculateEdgePotentials(state,groupTrees,tree,alphabet);
 
-      new State(edgePotentials);
+      new State(edgePotentials, likelihood);
     }
   }
 
-  final class State(val factors: Factors) {
+  final class State(val factors: Factors, val likelihood: Double) {
     def prior(g: Int) = 0.0; // XXX todo
     def likelihood(psi: Psi, language: Language, group: Group):Double = {
       factors.expectedScore(psi,group,language);
@@ -62,10 +71,10 @@ abstract class EM(numGroups: Int= 1000) {
       val psi = counts.foldLeft(Automaton.constant("",Math.NEG_INF_DOUBLE)) { (acc,psiCount) =>
         val (psi,count) = psiCount;
         (acc | psi.scaleInitialWeights(count).inputProjection).relabel
-      }.determinize.minimize;
+      }
       new Factors.Marginal(psi.inputProjection);
     }
-    new InsideOutside(tree,state.factors, psis );
+    new InsideOutside(tree,state.factors.edgeFor _, psis );
   }
 
   private def calculateEdgePotentials(state: State, groupTrees: Seq[InsideOutside], tree: Tree, alphabet: Set[Char]): Factors = {
@@ -73,17 +82,46 @@ abstract class EM(numGroups: Int= 1000) {
     new Factors(tree,newFactors,groupTrees.length,alphabet)
   }
 
-  def initialState(words: Seq[Cognate], tree: Tree, alphabet: Set[Char]) = {
+  private def initialState(words: Seq[Cognate], tree: Tree, alphabet: Set[Char]) = {
     val langWords = words.groupBy(_.language);
-    val editDistance = new Factors.SimpleEdgeTransducer(1,1,alphabet);
+    val editDistance = new Factors.SimpleEdgeTransducer(-1,-1,alphabet);
     val marginals = for(g <- Array.range(0,numGroups)) yield {
       Map.empty ++ langWords.map { case (l,_) =>
         val auto = Automaton.constant(langWords(l)(g).word,0.0);
-        val marginal = (editDistance >> auto).inputProjection;
-        (l,new Factors.Marginal(marginal));
+        (l,new Marginal(auto));
       }
     }
-    val factors = new Factors(tree,marginals,numGroups,alphabet);
-    new State(factors);
+    val earlyFactors = new Factors(tree,marginals,numGroups,alphabet);
+    val IOs = for(m <- marginals) yield {
+      new InsideOutside(tree,earlyFactors.edgeFor _ , m);
+    }
+    val factors = calculateEdgePotentials(null, IOs, tree, alphabet);
+    new State(factors, Math.NEG_INF_DOUBLE);
+  }
+}
+
+object RomanceEM { 
+  def main(arg: Array[String]) {
+    val cognates = Cognates.romance().take(10);
+    val tree = Tree.romance;
+    val allCogs = cognates.flatten;
+
+    val em = new EM(20);
+    for( states <- em.estimate(allCogs,tree)) {
+      println(states.likelihood);
+    }
+  }
+}
+
+object BasicEM { 
+  def main(arg: Array[String]) {
+    val cognates = Cognates.basic();
+    val tree = Tree.basic;
+    val allCogs = cognates.flatten;
+
+    val em = new EM(2);
+    for( states <- em.estimate(allCogs,tree)) {
+      println(states.likelihood);
+    }
   }
 }

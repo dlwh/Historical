@@ -9,4 +9,6 @@ object Types {
   type Group = Int;
   // typically p(ancestor|word)
   type Psi = Automaton[Double,_,Char];
+
+  def trace[T](x: T) = { println(x); x }
 }

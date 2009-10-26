@@ -3,13 +3,15 @@ package dlwh.cognates;
 import Types._;
 
 import Factors._;
-class InsideOutside(t: Tree, val factors: Factors, initialBeliefs: Language=>Marginal) {
-  import factors._;
-
+class InsideOutside(t: Tree, edgeFor: (Language,Language)=>EdgeFactor, initialBeliefs: Language=>Marginal) {
   private val nodes = scala.collection.mutable.Map[Language,Node]();
   private val root = new RootNode(t.asInstanceOf[Ancestor]); // whatever
 
-  def marginalFor(s: Language) = nodes(s).marginal;
+  def marginalFor(s: Language) = {
+    val marg = nodes(s).marginal;
+    println(s + marg.fsa);
+    marg
+  }
 
   private trait Node {
     def label: Language;
@@ -23,8 +25,8 @@ class InsideOutside(t: Tree, val factors: Factors, initialBeliefs: Language=>Mar
 
   private trait NonChildNode extends Node {
     def tree: Ancestor;
-    lazy val leftChild = nodeFor(tree.lchild);
-    lazy val rightChild = nodeFor(tree.rchild);
+    val leftChild = nodeFor(tree.lchild);
+    val rightChild = nodeFor(tree.rchild);
     def leftMessage: Marginal;
     def rightMessage: Marginal;
 
@@ -63,6 +65,7 @@ class InsideOutside(t: Tree, val factors: Factors, initialBeliefs: Language=>Mar
     def tree = xtree;
 
     lazy val leftMessage = {
+      println((label,tree.lchild.label))
       edgeFor(label,tree.lchild.label).parentMarginalize(rightChild.upwardMessage);
     }
 
@@ -75,6 +78,9 @@ class InsideOutside(t: Tree, val factors: Factors, initialBeliefs: Language=>Mar
 
   private class ChildNode(val label: Language, parent: NonChildNode) extends NonRootNode {
     lazy val upwardMessage = {
+      println("up" + (parent.label,label))
+      println(initialBeliefs(label).fsa);
+      println("Actual message");
       edgeFor(parent.label,label).childMarginalize(initialBeliefs(label));
     }
 

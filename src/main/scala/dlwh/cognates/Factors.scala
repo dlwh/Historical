@@ -8,9 +8,12 @@ import Factors._;
 import Types._;
 
 class Factors(t: Tree, marginals: Seq[Language=>Marginal], numGroups: Int, alphabet: Set[Char]) {
-  def edgeFor(parent: String, child: String): EdgeFactor = new EdgeFactor(new SimpleEdgeTransducer(-1,-1,alphabet));
+  def edgeFor(parent: String, child: String): EdgeFactor = ef;
+  val ef = new EdgeFactor(new SimpleEdgeTransducer(-1,-1,alphabet));
   def parentOf(l: String): String = parents(l);
   def expectedScore(psi: Psi, group: Group, language:Language) = {
+    println("es " + psi + group + language);
+    //println(marginalFor(group,parentOf(language)).fsa + " marg ");
     val expectedJointScore = Transducer.logSpaceExpectationCompose(marginalFor(group,parentOf(language)).fsa,psi).cost.value;
     val margScore = expectedMarginalScore(group)(language);
     expectedJointScore - margScore;
@@ -30,14 +33,17 @@ class Factors(t: Tree, marginals: Seq[Language=>Marginal], numGroups: Int, alpha
   private val (parents,languages) = processTree(t);
 
   // Maps (Group,Language) => expected edge cost for any child.
-  val expectedMarginalScore: Seq[Map[Language,Double]] = {
+  lazy val expectedMarginalScore: Seq[Map[Language,Double]] = {
     for ( groupMarginals <- marginals) 
     yield Map.empty ++ { for( language <- languages)
       yield { 
         val parent = parentOf(language);
+        println(language);
         val marg = groupMarginals(parent);
         val parentMarginal = edgeFor(parent,language).fst.inputProjection;
+        println("Start exp");
         val marginalCost = Transducer.logSpaceExpectationCompose(marg.fsa,parentMarginal).cost.value;
+        println("end exp");
         (language,marginalCost);
       }
     }
@@ -50,7 +56,7 @@ object Factors {
     * Computes the product of two marginals by intersecting their automata
     */
     def *(m: Marginal) = {
-      new Marginal(this.fsa&m.fsa);
+      new Marginal(this.fsa&m.fsa relabel);
     }
 
     /**
@@ -67,10 +73,10 @@ object Factors {
   // parent to child (argument order)
   class EdgeFactor(val fst: Transducer[Double,_,Char,Char]) {
     def childMarginalize(c: Marginal) = {
-      new Marginal((c.fsa >> fst.swapLabels).outputProjection);
+      new Marginal(trace((fst >> c.fsa).inputProjection));
     }
     def parentMarginalize(p: Marginal) = {
-      new Marginal((p.fsa >> fst).outputProjection);
+      new Marginal(trace((p.fsa >> fst).outputProjection));
     }
   }
 
@@ -78,48 +84,52 @@ object Factors {
   * Levhenstein distance with the given parameters, which must be less than 0.
   */
   class SimpleEdgeTransducer(sub: Double, del: Double, alphabet: Set[Char]) 
-      extends Transducer[Double,Unit,Char,Char] {
+      extends Transducer[Double,Unit,Char,Char]()(doubleIsLogSpace,implicitly[Alphabet[Char]],implicitly[Alphabet[Char]]) {
     import Transducer._;
     require( sub < 0);
     require( del < 0);
 
-    implicit val ring = implicitly[Semiring[Double]];
-
     val initialStateWeights = Map( () -> 0.0);
 
     def finalWeight(s: Unit) = 0.0;
+    val epsilon = inAlpha.epsilon;
+    val alphabetSeq = alphabet.toSeq;
 
     override val allEdges = {
-      val subs = {for(a <- alphabet iterator;
-          b <- alphabet iterator)
-        yield Arc((),(),Some(a),Some(b),if(a != b) sub else 0.0)}.toSeq;
+      val subs = for(a <- alphabetSeq;
+          b <- alphabetSeq)
+        yield Arc((),(),a,b,if(a != b) sub else 0.0);
       val dels = for(a <- alphabet iterator)
-        yield Arc((),(),Some(a),None,del);
+        yield Arc((),(),a,`epsilon`,del);
       val dels2 = for(a <- alphabet iterator)
-        yield Arc((),(),None,Some(a),del);
+        yield Arc((),(),`epsilon`,a,del);
 
       subs ++ dels ++ dels2;
     }
 
-    def edgesFrom(s: Unit) = allEdges;
-
-    override def edgesWithOutput(s: Unit, a: Option[Char]) = a match {
-      case Some(_) =>
-        (for(b <- alphabet iterator)
-          yield Arc((),(),Some(b),a,if(a != b) sub else 0.))toSeq;
-      case None =>
-        (for(a <- alphabet iterator)
-          yield Arc((),(),Some(a),None,del)) toSeq;
+    def edgesMatching(s: Unit, a: Char, b: Char) = {
+      if(a == inAlpha.sigma && b == outAlpha.sigma) {
+        allEdges
+      } else if(a == inAlpha.sigma) {
+        if(b == outAlpha.epsilon) {
+          for(a <- alphabetSeq)
+            yield Arc((),(),a,a,del);
+        } else {
+          for(a <- alphabetSeq)
+            yield Arc((),(),a,b,if(a != b) sub else 0.0);
+        }
+      } else if(b == outAlpha.sigma) {
+        if(a == outAlpha.epsilon) {
+          for(b <- alphabetSeq)
+            yield Arc((),(),a,b,del);
+        } else {
+          for(b <- alphabetSeq)
+            yield Arc((),(),a,b,if(a != b) sub else 0.0);
+        }
+      } else {
+        Seq(Arc((),(),a,b,if(a != b) sub else 0.0));
+      }
     }
-
-    override def edgesWithInput(s: Unit, a: Option[Char]) = a match {
-      case sa@ Some(a) =>
-        for(b <- alphabet toSeq)
-          yield Arc((),(),sa,Some(b),if(a != b) sub else 0.);
-      case None =>
-        for(a <- alphabet toSeq)
-          yield Arc((),(),None,Some(a),del);
-    }
-
   }
+
 }
