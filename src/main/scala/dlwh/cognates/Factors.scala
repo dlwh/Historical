@@ -3,19 +3,22 @@ package dlwh.cognates;
 import scalanlp.math.Semiring;
 import scalanlp.math.Semiring.LogSpace._;
 import scalanlp.fst._;
+import scalanlp.util.Log._;
 
 import Factors._;
 import Types._;
 
 class Factors(t: Tree, marginals: Seq[Language=>Marginal], numGroups: Int, alphabet: Set[Char]) {
   def edgeFor(parent: String, child: String): EdgeFactor = ef;
-  val ef = new EdgeFactor(new SimpleEdgeTransducer(-1,-1,alphabet));
+  val ef = new EdgeFactor(new EditDistance(-1,-1,alphabet));
   def parentOf(l: String): String = parents(l);
   def expectedScore(psi: Psi, group: Group, language:Language) = {
-    println("es " + psi + group + language);
-    //println(marginalFor(group,parentOf(language)).fsa + " marg ");
-    val expectedJointScore = Transducer.logSpaceExpectationCompose(marginalFor(group,parentOf(language)).fsa,psi).cost.value;
+    //globalLog.log(DEBUG)(marginalFor(group,parentOf(language)).fsa + " marg ");
+    val expectedJointScore = ExpectationComposition.logSpaceExpectationCompose(marginalFor(group,parentOf(language)).fsa,psi).cost.value;
+    assert(!expectedJointScore.isNaN);
     val margScore = expectedMarginalScore(group)(language);
+    assert(!margScore.isNaN);
+    globalLog.log(DEBUG)("scores" + margScore + " " +expectedJointScore);
     expectedJointScore - margScore;
   }
 
@@ -38,12 +41,12 @@ class Factors(t: Tree, marginals: Seq[Language=>Marginal], numGroups: Int, alpha
     yield Map.empty ++ { for( language <- languages)
       yield { 
         val parent = parentOf(language);
-        println(language);
+        globalLog.log(DEBUG)(language);
         val marg = groupMarginals(parent);
         val parentMarginal = edgeFor(parent,language).fst.inputProjection;
-        println("Start exp");
-        val marginalCost = Transducer.logSpaceExpectationCompose(marg.fsa,parentMarginal).cost.value;
-        println("end exp");
+        globalLog.log(DEBUG)("Start exp");
+        val marginalCost = ExpectationComposition.logSpaceExpectationCompose(marg.fsa,parentMarginal).cost.value;
+        globalLog.log(DEBUG)("end exp");
         (language,marginalCost);
       }
     }
@@ -56,7 +59,11 @@ object Factors {
     * Computes the product of two marginals by intersecting their automata
     */
     def *(m: Marginal) = {
-      new Marginal(this.fsa&m.fsa relabel);
+      globalLog.log(DEBUG)("fsa1\n" + fsa);
+      globalLog.log(DEBUG)("fsa2\n" + m.fsa);
+      globalLog.log(DEBUG)("comp\n" + (fsa&m.fsa));
+      globalLog.log(DEBUG)("min" + (this.fsa & m.fsa minimize).inputProjection);
+      new Marginal( (this.fsa&m.fsa).minimize.inputProjection);
     }
 
     /**
@@ -73,14 +80,12 @@ object Factors {
   // parent to child (argument order)
   class EdgeFactor(val fst: Transducer[Double,_,Char,Char]) {
     def childMarginalize(c: Marginal) = {
-      new Marginal(trace((fst >> c.fsa).inputProjection));
+      new Marginal((fst >> c.fsa).minimize.inputProjection);
     }
     def parentMarginalize(p: Marginal) = {
-      new Marginal(trace((p.fsa >> fst).outputProjection));
+      new Marginal((p.fsa >> fst).minimize.outputProjection);
     }
   }
 
-    }
-  }
-
+  
 }

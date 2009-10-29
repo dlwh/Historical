@@ -4,6 +4,7 @@ import scalanlp.counters.Counters.PairedDoubleCounter;
 import scalanlp.counters.Counters.DoubleCounter;
 import scalanlp.counters.LogCounters._;
 import scalanlp.fst._;
+import scalanlp.util.Log._;
 import collection.{mutable=>muta}
 import scalanlp.math.Semiring.LogSpace._;
 
@@ -22,19 +23,20 @@ class EM(numGroups: Int= 1000) {
       };
       var likelihood = 0.0;
       for(c@Cognate(word,language) <- words) {
-        println(word);
+        globalLog.log(DEBUG)(word);
         // precompute parent automaton for each word.
         val edgeFactor = state.edgePotentialForLanguage(language)
         val auto = new Marginal(Automaton.constant(word,0.0));
         val psi : Psi= edgeFactor.childMarginalize(auto).fsa;
-        println(c + "....");
-        println(psi);
+        globalLog.log(DEBUG)(c + "....");
+        globalLog.log(DEBUG)(psi);
 
         val pGgW = LogDoubleCounter[Group]();
         for(group <- 0 until numGroups) {
-          println("  " + group);
+          globalLog.log(DEBUG)("  " + group);
           val prior = state.prior(group);
           val likelihood = state.likelihood(psi,language,group);
+          globalLog.log(DEBUG)("  " + group + ":" + likelihood);
           pGgW(group) = prior + likelihood;
         }
         likelihood += pGgW.logTotal;
@@ -84,7 +86,6 @@ class EM(numGroups: Int= 1000) {
 
   private def initialState(words: Seq[Cognate], tree: Tree, alphabet: Set[Char]) = {
     val langWords = words.groupBy(_.language);
-    val editDistance = new Factors.SimpleEdgeTransducer(-1,-1,alphabet);
     val marginals = for(g <- Array.range(0,numGroups)) yield {
       Map.empty ++ langWords.map { case (l,_) =>
         val auto = Automaton.constant(langWords(l)(g).word,0.0);
@@ -108,20 +109,21 @@ object RomanceEM {
 
     val em = new EM(20);
     for( states <- em.estimate(allCogs,tree)) {
-      println(states.likelihood);
+      globalLog.log(DEBUG)(states.likelihood);
     }
   }
 }
 
 object BasicEM { 
   def main(arg: Array[String]) {
+    globalLog.level = DEBUG;
     val cognates = Cognates.basic();
     val tree = Tree.basic;
     val allCogs = cognates.flatten;
 
     val em = new EM(2);
     for( states <- em.estimate(allCogs,tree)) {
-      println(states.likelihood);
+      globalLog.log(INFO)("likelihood" + states.likelihood);
     }
   }
 }

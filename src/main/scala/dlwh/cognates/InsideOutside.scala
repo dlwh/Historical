@@ -1,6 +1,7 @@
 package dlwh.cognates;
 
 import Types._;
+import scalanlp.util.Log._;
 
 import Factors._;
 class InsideOutside(t: Tree, edgeFor: (Language,Language)=>EdgeFactor, initialBeliefs: Language=>Marginal) {
@@ -9,7 +10,7 @@ class InsideOutside(t: Tree, edgeFor: (Language,Language)=>EdgeFactor, initialBe
 
   def marginalFor(s: Language) = {
     val marg = nodes(s).marginal;
-    println(s + marg.fsa);
+    globalLog.log(DEBUG)(s + marg.fsa);
     marg
   }
 
@@ -65,7 +66,7 @@ class InsideOutside(t: Tree, edgeFor: (Language,Language)=>EdgeFactor, initialBe
     def tree = xtree;
 
     lazy val leftMessage = {
-      println((label,tree.lchild.label))
+      globalLog.log(DEBUG)((label,tree.lchild.label))
       edgeFor(label,tree.lchild.label).parentMarginalize(rightChild.upwardMessage);
     }
 
@@ -78,9 +79,9 @@ class InsideOutside(t: Tree, edgeFor: (Language,Language)=>EdgeFactor, initialBe
 
   private class ChildNode(val label: Language, parent: NonChildNode) extends NonRootNode {
     lazy val upwardMessage = {
-      println("up" + (parent.label,label))
-      println(initialBeliefs(label).fsa);
-      println("Actual message");
+      globalLog.log(DEBUG)("up" + (parent.label,label))
+      globalLog.log(DEBUG)(initialBeliefs(label).fsa);
+      globalLog.log(DEBUG)("Actual message");
       edgeFor(parent.label,label).childMarginalize(initialBeliefs(label));
     }
 
