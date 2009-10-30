@@ -25,7 +25,7 @@ class Factors(t: Tree, marginals: Seq[Language=>Marginal], numGroups: Int, alpha
   def marginalFor(group: Group, ancestor: Language) = marginals(group)(ancestor);
 
   private def processTree(t: Tree):(Map[Language,Language],Seq[Language]) = t match {
-    case Ancestor(label,l,r) => 
+    case Ancestor(label,l,r) =>
       val (lcMap,lcLangs) = processTree(l);
       val (rcMap,rcLangs) = processTree(r);
       val myM = Map(l.label->t.label,r.label->t.label) ++ lcMap ++ rcMap;
@@ -37,9 +37,9 @@ class Factors(t: Tree, marginals: Seq[Language=>Marginal], numGroups: Int, alpha
 
   // Maps (Group,Language) => expected edge cost for any child.
   lazy val expectedMarginalScore: Seq[Map[Language,Double]] = {
-    for ( groupMarginals <- marginals) 
+    for ( groupMarginals <- marginals)
     yield Map.empty ++ { for( language <- languages)
-      yield { 
+      yield {
         val parent = parentOf(language);
         globalLog.log(DEBUG)(language);
         val marg = groupMarginals(parent);
@@ -55,15 +55,12 @@ class Factors(t: Tree, marginals: Seq[Language=>Marginal], numGroups: Int, alpha
 
 object Factors {
   class Marginal(val fsa: Psi) {
+    def this(w: String, cost: Double) = this(Automaton.constant(w,cost));
     /**
     * Computes the product of two marginals by intersecting their automata
     */
     def *(m: Marginal) = {
-      globalLog.log(DEBUG)("fsa1\n" + fsa);
-      globalLog.log(DEBUG)("fsa2\n" + m.fsa);
-      globalLog.log(DEBUG)("comp\n" + (fsa&m.fsa));
-      globalLog.log(DEBUG)("min" + (this.fsa & m.fsa minimize).inputProjection);
-      new Marginal( (this.fsa&m.fsa).minimize.inputProjection);
+      new Marginal( (this.fsa&m.fsa).minimize.inputProjection.relabel);
     }
 
     /**
@@ -74,18 +71,19 @@ object Factors {
     /**
     * returns the log-normalized log probability of the word.
     */
-    def apply(w: String)= (fsa & Automaton.constant(w,0.0)).cost - partition;
+    def apply(word: String)= (fsa & Automaton.constant(word,0.0)).cost - partition;
   }
 
   // parent to child (argument order)
   class EdgeFactor(val fst: Transducer[Double,_,Char,Char]) {
     def childMarginalize(c: Marginal) = {
-      new Marginal((fst >> c.fsa).minimize.inputProjection);
+      new Marginal((fst >> c.fsa).minimize.inputProjection.relabel);
     }
     def parentMarginalize(p: Marginal) = {
-      new Marginal((p.fsa >> fst).minimize.outputProjection);
+      new Marginal((p.fsa >> fst).minimize.outputProjection.relabel);
     }
   }
 
-  
+  def simpleEdge(alphabet: Set[Char]) = new EdgeFactor(new EditDistance(-1,-1,alphabet));
+  def decayMarginal(alphabet: Set[Char]) = new Marginal(new DecayAutomaton(5.0,alphabet));
 }
