@@ -50,6 +50,7 @@ class Gibbs(numGroups: Int= 1000) {
       val group = groupAssignments(word);
       val io = insideOutsides(group);
       val newIO = io.remove(word);
+      globalLog.log(INFO)(newIO);
       val newIOS = insideOutsides.updated(group,newIO);
       val newGroups = groupAssignments - word;
       this.copy(insideOutsides = newIOS, groupAssignments = newGroups);
@@ -91,3 +92,21 @@ object BasicGibbs {
     }
   }
 }
+
+
+object RomanceGibbs { 
+  def main(arg: Array[String]) {
+    globalLog.level = DEBUG;
+    val cognates = Cognates.romance().take(200);
+    val tree = Tree.romance;
+    val allCogs = cognates.flatten;
+
+    val gibbs = new Gibbs(allCogs.length);
+    for( state <- gibbs.chain(allCogs,tree)) {
+      globalLog.log(INFO)("likelihood" + state.likelihood);
+      globalLog.log(INFO)(state.groupAssignments);
+    }
+  }
+}
+
+
