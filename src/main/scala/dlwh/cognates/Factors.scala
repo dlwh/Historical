@@ -56,12 +56,16 @@ class Factors(t: Tree, marginals: Seq[Language=>Marginal], numGroups: Int, alpha
 object Factors {
   class Marginal(val fsa: Psi) {
     def this(w: String, cost: Double) = this(Automaton.constant(w,cost));
+
     /**
     * Computes the product of two marginals by intersecting their automata
     */
     def *(m: Marginal) = {
-      new Marginal( (this.fsa&m.fsa).minimize.inputProjection.relabel);
+      new Marginal( (this.fsa&m.fsa).inputProjection.relabel);
     }
+
+    def normalize = new Marginal(fsa.scaleInitialWeights(-fsa.cost).inputProjection);
+    
 
     /**
     * The log-normalizer of this automata
@@ -71,16 +75,24 @@ object Factors {
     /**
     * returns the log-normalized log probability of the word.
     */
-    def apply(word: String)= (fsa & Automaton.constant(word,0.0)).cost - partition;
+    def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost - partition;
   }
 
   // parent to child (argument order)
   class EdgeFactor(val fst: Transducer[Double,_,Char,Char]) {
     def childMarginalize(c: Marginal) = {
-      new Marginal((fst >> c.fsa).minimize.inputProjection.relabel);
+      //println("composing");
+      //println(fst);
+      //println(c.fsa);
+      //println(fst >> c.fsa)
+      new Marginal((fst >> c.fsa).inputProjection.relabel);
     }
     def parentMarginalize(p: Marginal) = {
-      new Marginal((p.fsa >> fst).minimize.outputProjection.relabel);
+      //println("composing");
+      //println(p.fsa)
+      //println(fst)
+      //println(p.fsa >> fst)
+      new Marginal((p.fsa >> fst).outputProjection.relabel) ;
     }
   }
 
