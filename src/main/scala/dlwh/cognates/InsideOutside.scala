@@ -10,6 +10,11 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
   private val nodes = scala.collection.mutable.Map[Language,Node]();
   private val root = new RootNode(t.asInstanceOf[Ancestor]); // whatever
 
+  override def toString = {
+    "digraph Tree {\n origin -> " + root.label + "[label="+rootMarginal.partition+"];\n" +
+      root.toString + "\n}\n"
+  }
+
   def marginalFor(s: Language) = {
     val marg = nodes(s).marginal;
     globalLog.log(DEBUG)(s + marg.fsa);
@@ -36,7 +41,12 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
     }.foldLeft[Double](0.0)( _ + _ );
   }
 
-  def likelihoodWith(word: Cognate) = include(word.language,word.word,0.0).likelihood - likelihood;
+  def likelihoodWith(word: Cognate) = {
+    val incl = include(word.language,word.word,0.0);
+    globalLog.log(INFO)("with " + incl);
+    globalLog.log(INFO)("without " + this);
+    incl.likelihood - likelihood
+  }
 
   private trait Node {
     def label: Language;
@@ -55,6 +65,15 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
     val rightChild = nodeFor(tree.rchild);
     def leftMessage: Marginal;
     def rightMessage: Marginal;
+
+    override def toString = {
+      val sb = new StringBuffer;
+      sb.append(label + " -> " + leftChild.label + "[label=" + leftMessage.partition +"];\n");
+      sb.append(label + " -> " + rightChild.label + "[label=" + rightMessage.partition +"];\n");
+      sb.append(leftChild.toString);
+      sb.append(rightChild.toString);
+      sb.toString;
+    }
 
 
     def messageTo(n: Node) = n match {
@@ -90,6 +109,19 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
       edgeFor(parent.label,label).childMarginalize(incomingMarg);
     }
 
+    override def toString = {
+      val sb = new StringBuffer;
+      sb.append(label + " -> " + leftChild.label + "[label=" + leftMessage.partition +"];\n");
+      sb.append(label + " -> " + rightChild.label + "[label=" + rightMessage.partition +"];\n");
+      if(hasUpwardMessage)
+        sb.append(label + " -> " + parent.label + "[label=" + upwardMessage.partition +"];\n");
+      else
+        sb.append(label + " -> " + parent.label + "[label=nothing];\n");
+      sb.append(leftChild.toString);
+      sb.append(rightChild.toString);
+      sb.toString;
+    }
+
     lazy val leftMessage = {
       val incomingMarg = if(rightChildHasMessage == 1) {
         rightChild.upwardMessage * parent.messageTo(this);
@@ -107,6 +139,7 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
       }
       edgeFor(label,tree.lchild.label).parentMarginalize(incomingMarg);
     }
+
 
     lazy val marginal = {
       val parentMessage = parent.messageTo(this);
@@ -144,6 +177,19 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
   }
 
   private class ChildNode(val label: Language, parent: NonChildNode) extends NonRootNode {
+
+    override def toString = {
+      val sb = new StringBuffer;
+      if(hasUpwardMessage)
+        sb.append(label + " -> " + parent.label + "[label=" + upwardMessage.partition +"];\n");
+      else
+        sb.append(label + " -> " + parent.label + "[label=nothing];\n");
+      for( w <- bottomWords(label)) {
+        sb.append(label + " -> " + w._1 + ";\n");
+      }
+      sb.toString;
+    }
+
     lazy val hasUpwardMessage = bottomWords.get(label).map(!_.isEmpty).getOrElse(false);
 
     lazy val upwardMessage = {
