@@ -35,10 +35,7 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
   }
 
   lazy val likelihood = {
-    nodes.valuesIterator.map { 
-      case c:ChildNode => c.likelihood 
-      case x =>  0.0:Double
-    }.foldLeft[Double](0.0)( _ + _ );
+    root.likelihood;
   }
 
   def likelihoodWith(word: Cognate) = {
@@ -94,8 +91,8 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
     def label = tree.label;
     def tree = xtree;
     lazy val hasUpwardMessage = (leftChildHasMessage == 1) || (rightChildHasMessage == 1);
-    private lazy val leftChildHasMessage : Int = leftChild.hasUpwardMessage.asInstanceOf[Int];
-    private lazy val rightChildHasMessage : Int = rightChild.hasUpwardMessage.asInstanceOf[Int];
+    private lazy val leftChildHasMessage : Int = if(leftChild.hasUpwardMessage) 1 else 0 
+    private lazy val rightChildHasMessage : Int = if(rightChild.hasUpwardMessage) 1 else 0
 
     lazy val upwardMessage = {
       assert(hasUpwardMessage);
@@ -159,6 +156,8 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
 
     val parentMessage = rootMarginal;
 
+    def likelihood = marginal.partition;
+
     lazy val leftMessage = {
       globalLog.log(DEBUG)(("Root lm",label,tree.lchild.label))
       if(rightChild.hasUpwardMessage)
@@ -173,7 +172,7 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
       else edgeFor(label,tree.rchild.label).parentMarginalize(parentMessage);
     }
 
-    lazy val marginal = leftChild.upwardMessage * rightChild.upwardMessage;
+    lazy val marginal = leftChild.upwardMessage * rightChild.upwardMessage * parentMessage;
   }
 
   private class ChildNode(val label: Language, parent: NonChildNode) extends NonRootNode {
@@ -198,22 +197,19 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
       val edge = edgeFor(parent.label,label);
 
       val message = bottomWords.getOrElse(label,Map.empty).iterator map { case (word,score) =>
-        val const = new Marginal(word,score);
-        edge.childMarginalize(const)
+        val wordMarginal = new Marginal(word,score);
+        edge.childMarginalize(wordMarginal)
       } reduceLeft (_*_);
 
       globalLog.log(DEBUG)("Actual message" + message.fsa);
       message;
     }
 
-    lazy val likelihood:Double = { 
-      bottomWords.getOrElse(label,Map.empty).iterator.map { case (word,score) =>
-        // i.e. assignment must be hard. It doesn't make sense otherwise
-        marginal(word);
-      }.foldLeft(0.0)(_ + _);
+    lazy val marginal ={
+      val marg = parent.messageTo(this);
+      println(label + "Marg: " + marg.partition);
+      marg
     }
-
-    lazy val marginal = parent.messageTo(this);
   }
 
 }
