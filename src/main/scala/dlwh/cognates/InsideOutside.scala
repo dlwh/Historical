@@ -29,8 +29,8 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
   }
 
   // Remove the word
-  def remove(language: Language, word: Word) = {
-    val newBottomWords = bottomWords.updated(language,bottomWords(language) - word).withDefaultValue(Map.empty);
+  def remove(word: Cognate) = {
+    val newBottomWords = bottomWords.updated(word.language,bottomWords(word.language) - word.word).withDefaultValue(Map.empty);
     this.copy(bottomWords = newBottomWords);
   }
 

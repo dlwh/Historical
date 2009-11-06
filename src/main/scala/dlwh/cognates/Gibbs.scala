@@ -49,7 +49,8 @@ class Gibbs(numGroups: Int= 1000) {
     def forgetAssignment(word: Cognate) = {
       val group = groupAssignments(word);
       val io = insideOutsides(group);
-      val newIOS = insideOutsides.updated(group,io.remove(word.language,word.word));
+      val newIO = io.remove(word);
+      val newIOS = insideOutsides.updated(group,newIO);
       val newGroups = groupAssignments - word;
       this.copy(insideOutsides = newIOS, groupAssignments = newGroups);
     }
