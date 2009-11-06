@@ -63,6 +63,9 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
     def leftMessage: Marginal;
     def rightMessage: Marginal;
 
+    protected lazy val leftChildHasMessage : Int = if(leftChild.hasUpwardMessage) 1 else 0 
+    protected lazy val rightChildHasMessage : Int = if(rightChild.hasUpwardMessage) 1 else 0
+
     override def toString = {
       val sb = new StringBuffer;
       sb.append(label + " -> " + leftChild.label + "[label=" + leftMessage.partition +"];\n");
@@ -91,8 +94,6 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
     def label = tree.label;
     def tree = xtree;
     lazy val hasUpwardMessage = (leftChildHasMessage == 1) || (rightChildHasMessage == 1);
-    private lazy val leftChildHasMessage : Int = if(leftChild.hasUpwardMessage) 1 else 0 
-    private lazy val rightChildHasMessage : Int = if(rightChild.hasUpwardMessage) 1 else 0
 
     lazy val upwardMessage = {
       assert(hasUpwardMessage);
@@ -148,6 +149,7 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
         case _ => error("odd. This should be 1, 2, or 3");
       };
     }
+
   }
 
   private class RootNode(xtree: Ancestor) extends NonChildNode {
@@ -172,7 +174,16 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
       else edgeFor(label,tree.rchild.label).parentMarginalize(parentMessage);
     }
 
-    lazy val marginal = leftChild.upwardMessage * rightChild.upwardMessage * parentMessage;
+    lazy val marginal = {
+      (leftChildHasMessage << 1)|rightChildHasMessage match {
+        case 0 => parentMessage;
+        case 1 => rightChild.upwardMessage * parentMessage;
+        case 2 => leftChild.upwardMessage * parentMessage;
+        case 3 => rightChild.upwardMessage * leftChild.upwardMessage * parentMessage;
+        case _ => error("odd. This should be 1, 2, or 3");
+      };
+    }
+
   }
 
   private class ChildNode(val label: Language, parent: NonChildNode) extends NonRootNode {
