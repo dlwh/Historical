@@ -1,0 +1,163 @@
+I have two deterministic/sort-of-nonlossy ways of shrinking automata.
+The first is minimization and the second is just collapsing arcs that
+are identical up to weight. I haven't implemented epsilon removal,
+which will might should help when I do.
+
+
+=== Minimization ===
+
+First, note that these automata are non-deterministic, and so the
+result of minimization is not guaranteed to actually be minimal
+(actually minimizing NFAs of basically any sort is NP-complete).
+Second, and more importantly, minimization does the wrong thing on
+ambiguous NFAs. That is, automata for which there is more than one
+accepting path. As an example,
+
+Consider the automata:
+
+0 -> 1 [a]
+1 -> 3 [c]
+
+0 -> 2 [b]
+2 -> 3 [d]
+
+0 -> 4 [a]
+4 -> 5 [c]
+
+where 3 and 5 have some final weight, and there are weights somewhere.
+Minimization will collapse the two ac paths, but there's no obvious
+(to me) way to ensure that you add together the weights for the two
+paths without simultaneously messing  up the bd path. I also could
+have a bug, but I think this is a real problem.
+
+ I think that maybe replacing final weights with some kind of epsilon
+transition to a neutral final state might help. Alternatively, I think
+that if I plugged in Alex's edit distance method the problem could go
+away, since there won't be an double counting and hence no
+ambiguities.
+
+=== Compression ====
+
+I wanted to see just how the two techniques would work. I took two
+cognate words, pushed them through edit distance, and intersected the
+resulting projections. The edit distance parameters were match=0,
+delete=insert=4, match=3.
+
+The uncompressed automaton has 510 states and 16992 arcs. Minimizing
+the two automata before intersecting resulted in 199 states and 6602
+arcs. Also compressing after intersecting the two resulted in 184
+states and 6337 arcs. So we're looking at about 60% drop in the number
+of states and arcs. The ambiguity problem  (or maybe some other bug)
+is affecting likelihoods a lot though.
+
+==== Minimization Algorithm ====
+
+Here's
+a slight modification of the n log n algorithm for deterministic
+unweighted minimization:
+
+Q1 = FinalStates, Q2 = States - FinalStates
+t := 2;
+until steady state is reached:
+ for each i = 1 to t
+   // repartition Q_i by the (labeled) follow set.
+   // call this line (*)
+   {Qs} = Partition Q_i s.t. foreach Q_s, forall a \in \Sigma, exists
+j s.t. followSet[Q_s,a] \subseteq Q_j
+   if size({Qs}) != 1
+     Q_i = some arbitrary member of Qs
+     Q_{t+1}..._{t+n-1} =  {rest of Qs}
+ done
+done
+
+Use the Q_i as states, with edges defined in the obvious way.
+
+The basic idea is to split the states into equivalence classes, and to
+run relaxation steps until the follow-set constraints are satisfied.
+
+In the non-deterministic case, we have the following things to consider:
+
+1)  if I have two edges leaving the same state with the same label, in
+the end should they both go to the same partition?
+2)  what to do with states that don't have an edge for a particular
+label, or in general have a different number of states?
+
+In the weighted case, we have the following to consider:
+3) if I have two edges leaving the same state with the same label, and
+they end up going to the same partition, should I simply sum their
+weights?
+4) We have to group things not just by number and label of edges, but
+by weight for those edges
+5) Initial weights must be summed together
+6) Final weights.
+
+1) seems like no. 3) seems like yes. 2) is dealt with easily by
+introducing a gutter state. 4 is easily dealt with too. 5 is simple.
+6) I deal with by saying that a final state is actually an epsilon
+transition to a singleton final state.
+
+Ok, so my attempt to generalize the algorithm is the following:
+
+An arc "kind" is its label and its weight.
+
+1) Initialize partitions by final weight and number and kind of out
+going arcs, and the gutter partition for dead arcs.
+2) replace (*) by
+   {Qs} = Partition Q_i s.t. foreach Q_s, forall (a,w) \in (Sigma x
+K), exists j, \forall p \in Q_s \sum_{q \in Q_j}, weightOf[p,q,a] = w
+
+=== Kbest lists ===
+
+I extracted a 10,000 best list from the automaton. There are just 16
+unique scores associated with that list and the first 16 items all
+have the same score. These 16 are, unsurprisingly, all within hamming
+distance 1.
+
+Coverage. These k-best list accounts for XX% of the probability mass:
+
+100: 22.5%
+1000: 47.5%
+5000:  56%
+10000: 63%
+
+I don't know what's typical, but this is fairly fat tailed. Adding in
+more words (and not just the two) will make it more peaked. Minimized
+KBest lists were similar.
+
+All of this makes me fairly hopeful that a lossy minimization approach
+based on divergences between states will be reasonable and effective.
+(And by lossy, I mean actually lossy and not just David-screwed-up
+lossy.)
+
+== Forward-Backward ==
+Computed posterior probability of traversing through a state.
+
+Histogram (forwardbackward.png) shows how many states are loaded
+where. Total LL of the automaton (partition) is -18.5. There are
+184 states in the minimized automaton.  Exactly half the states
+have ll of -30 or less. (i.e. prob of traversing that state <=
+6e-6!). 53 have < -37 or less (i.e. half the ll).
+
+This seems like a good way forward. Could also consider max path, or something.
+
+=== KL pruning ===
+
+Thoughts:
+
+*Would like to adapt standard/retrofitted minimization algorithm to tolerate
+differences in total flow weight.
+
+* JS pruning is probably a better name. Though it turns out that's not what I'm doing.
+
+* Intuition: Don't split partitions that have small JS divergence.
+
+Worries: 
+ * Follow-set partitions will probably need to be the same or else could lose monotonicity.
+ * Alternative: allow them to stay the same if in the current iteration would guarantee monotonicity.
+   * Guarantees: Two partitions not accessible from each other, or the only access is an arc from one to the other. (Verify!)
+
+Results:
+ * Tried different thesholds for KL(P||Q) + KL(Q||P), unsmoothed. 
+ * No appreciable LL loss when the KL threshold is set to... infinity! I.e., as long as they have the same support, it's fine
+   to collapse them. Best: 107 states 3572 arcs! This should be very fast/easy to implement.
+  * Pruning looks like it might still apply.
