@@ -9,7 +9,7 @@ import Factors._;
 import Types._;
 
 class Factors(t: Tree, marginals: Seq[Language=>Marginal], numGroups: Int, alphabet: Set[Char]) {
-  def edgeFor(parent: String, child: String): EdgeFactor = ef;
+  def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = ef;
   val ef = new EdgeFactor(new EditDistance(-1,-1,alphabet));
   def parentOf(l: String): String = parents(l);
   def expectedScore(psi: Psi, group: Group, language:Language) = {
@@ -43,7 +43,7 @@ class Factors(t: Tree, marginals: Seq[Language=>Marginal], numGroups: Int, alpha
         val parent = parentOf(language);
         globalLog.log(DEBUG)(language);
         val marg = groupMarginals(parent);
-        val parentMarginal = edgeFor(parent,language).fst.inputProjection;
+        val parentMarginal = edgeFor(parent,language,alphabet).fst.inputProjection;
         globalLog.log(DEBUG)("Start exp");
         val marginalCost = ExpectationComposition.logSpaceExpectationCompose(marg.fsa,parentMarginal).cost.value;
         globalLog.log(DEBUG)("end exp");
@@ -81,21 +81,27 @@ object Factors {
   // parent to child (argument order)
   class EdgeFactor(val fst: Transducer[Double,_,Char,Char]) {
     def childMarginalize(c: Marginal) = {
-      //println("composing");
-      //println(fst);
-      //println(c.fsa);
-      //println(fst >> c.fsa)
-      new Marginal((fst >> c.fsa).inputProjection.relabel);
+      println("composing");
+      println(fst);
+      println(c.fsa);
+      println(fst >> c.fsa shrink)
+      new Marginal((fst >> c.fsa).inputProjection.shrink.inputProjection)
     }
     def parentMarginalize(p: Marginal) = {
-      //println("composing");
-      //println(p.fsa)
-      //println(fst)
-      //println(p.fsa >> fst)
-      new Marginal((p.fsa >> fst).outputProjection.relabel) ;
+      println("composing");
+      println(p.fsa)
+      println(fst)
+      println(p.fsa >> fst minimize)
+      new Marginal((p.fsa >> fst).outputProjection.shrink.outputProjection)
     }
   }
 
-  def simpleEdge(alphabet: Set[Char]) = new EdgeFactor(new EditDistance(-1,-1,alphabet));
-  def decayMarginal(alphabet: Set[Char]) = new Marginal(new DecayAutomaton(5.0,alphabet));
+  def simpleEdge(alphabet: Set[Char], fullBet: Set[Char]) = {
+    println(alphabet,fullBet);
+    new EdgeFactor(new EditDistance(-1,-1,alphabet,rhoSize=fullBet.size-alphabet.size));
+  }
+  def decayMarginal(alphabet: Set[Char], fullBet: Set[Char]) ={
+    println(alphabet,fullBet);
+    new Marginal(new DecayAutomaton(5.0,alphabet,rhoSize=fullBet.size-alphabet.size));
+  }
 }

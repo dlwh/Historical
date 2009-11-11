@@ -4,14 +4,21 @@ import Types._;
 import scalanlp.util.Log._;
 
 import Factors._;
-case class InsideOutside(t: Tree, rootMarginal: Marginal,
-                         edgeFor: (Language,Language)=>EdgeFactor,
+case class InsideOutside(t: Tree, 
+                         rootMarginal: Set[Char]=>Marginal,
+                         edgeFor: (Language,Language,Set[Char])=>EdgeFactor,
                          bottomWords: Map[Language,Map[Word,Double]]) {
+
+  val alphabet = Set.empty ++ (for( map <- bottomWords.valuesIterator;
+                      word <- map.keysIterator;
+                      ch <- word.iterator
+                     ) yield ch);
+
   private val nodes = scala.collection.mutable.Map[Language,Node]();
   private val root = new RootNode(t.asInstanceOf[Ancestor]); // whatever
 
   override def toString = {
-    "digraph Tree {\n origin -> " + root.label + "[label="+rootMarginal.partition+"];\n" +
+    "digraph Tree {\n origin -> " + root.label + "[label="+rootMarginal(alphabet).partition+"];\n" +
       root.toString + "\n}\n"
   }
 
@@ -104,7 +111,7 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
         case 3 => rightChild.upwardMessage * leftChild.upwardMessage;
         case _ => error("odd. This should be 1, 2, or 3");
       };
-      edgeFor(parent.label,label).childMarginalize(incomingMarg);
+      edgeFor(parent.label,label,alphabet).childMarginalize(incomingMarg);
     }
 
     override def toString = {
@@ -126,7 +133,7 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
       } else {
         parent.messageTo(this);
       }
-      edgeFor(label,tree.lchild.label).parentMarginalize(incomingMarg);
+      edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(incomingMarg);
     }
 
     lazy val rightMessage = {
@@ -135,7 +142,7 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
       } else {
         parent.messageTo(this);
       }
-      edgeFor(label,tree.lchild.label).parentMarginalize(incomingMarg);
+      edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(incomingMarg);
     }
 
 
@@ -156,22 +163,22 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
     def label = tree.label;
     def tree = xtree;
 
-    val parentMessage = rootMarginal;
+    val parentMessage = rootMarginal(alphabet);
 
     def likelihood = marginal.partition;
 
     lazy val leftMessage = {
       globalLog.log(DEBUG)(("Root lm",label,tree.lchild.label))
       if(rightChild.hasUpwardMessage)
-        edgeFor(label,tree.lchild.label).parentMarginalize(rightChild.upwardMessage * parentMessage);
-      else edgeFor(label,tree.lchild.label).parentMarginalize(parentMessage);
+        edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(rightChild.upwardMessage * parentMessage);
+      else edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(parentMessage);
     }
 
     lazy val rightMessage = {
       globalLog.log(DEBUG)(("Root rm",label,tree.rchild.label))
       if(leftChild.hasUpwardMessage)
-        edgeFor(label,tree.rchild.label).parentMarginalize(leftChild.upwardMessage * parentMessage);
-      else edgeFor(label,tree.rchild.label).parentMarginalize(parentMessage);
+        edgeFor(label,tree.rchild.label,alphabet).parentMarginalize(leftChild.upwardMessage * parentMessage);
+      else edgeFor(label,tree.rchild.label,alphabet).parentMarginalize(parentMessage);
     }
 
     lazy val marginal = {
@@ -205,7 +212,7 @@ case class InsideOutside(t: Tree, rootMarginal: Marginal,
     lazy val upwardMessage = {
       globalLog.log(DEBUG)("up" + (parent.label,label))
       globalLog.log(DEBUG)(bottomWords(label));
-      val edge = edgeFor(parent.label,label);
+      val edge = edgeFor(parent.label,label,alphabet);
 
       val message = bottomWords.getOrElse(label,Map.empty).iterator map { case (word,score) =>
         val wordMarginal = new Marginal(word,score);

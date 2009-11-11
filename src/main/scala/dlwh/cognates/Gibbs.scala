@@ -50,7 +50,6 @@ class Gibbs(numGroups: Int= 1000) {
       val group = groupAssignments(word);
       val io = insideOutsides(group);
       val newIO = io.remove(word);
-      globalLog.log(INFO)(newIO);
       val newIOS = insideOutsides.updated(group,newIO);
       val newGroups = groupAssignments - word;
       this.copy(insideOutsides = newIOS, groupAssignments = newGroups);
@@ -66,10 +65,10 @@ class Gibbs(numGroups: Int= 1000) {
 
   private def initialState(words: Seq[Cognate], tree: Tree, alphabet: Set[Char]) = {
     val groupAssignments = new muta.HashMap[Cognate,Group]();
-    val rootMarginal = Factors.decayMarginal(alphabet);
-    val simpleEdge = Factors.simpleEdge(alphabet);
     val ios = for(g <- Array.range(0,numGroups)) yield {
-      val io = new InsideOutside(tree,rootMarginal,(_:Language,_:Language)=> simpleEdge,Map.empty.withDefaultValue(Map.empty));
+      val io = new InsideOutside(tree, Factors.decayMarginal(_,alphabet),
+                                (_:Language,_:Language, alpha: Set[Char])=> Factors.simpleEdge(alpha,alphabet),
+                                Map.empty.withDefaultValue(Map.empty));
       val cog = words(g%words.length);
       groupAssignments(cog) = g;
       io.include(cog.language,cog.word,0.0);

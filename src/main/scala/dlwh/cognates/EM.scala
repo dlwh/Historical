@@ -63,7 +63,7 @@ class EM(numGroups: Int= 1000) {
     def likelihood(psi: Psi, language: Language, group: Group):Double = {
       factors.expectedScore(psi,group,language);
     }
-    def edgePotentialForLanguage(l: Language) = factors.edgeFor(factors.parentOf(l),l);
+    def edgePotentialForLanguage(l: Language) = factors.edgeFor(factors.parentOf(l),l,alphabet);
   }
 
   private def insideOutside(group: Group,
@@ -73,7 +73,7 @@ class EM(numGroups: Int= 1000) {
       val counts = pairCtr(group);
       Map() ++ counts;
     }
-    new InsideOutside(tree,Factors.decayMarginal(state.alphabet),state.factors.edgeFor _, psis );
+    new InsideOutside(tree,_ => Factors.decayMarginal(state.alphabet,state.alphabet),state.factors.edgeFor _, psis );
   }
 
   private def calculateEdgePotentials(state: State, groupTrees: Seq[InsideOutside], tree: Tree, alphabet: Set[Char]): Factors = {
@@ -89,7 +89,7 @@ class EM(numGroups: Int= 1000) {
       }
     }
     val IOs = for(m <- marginals) yield {
-      new InsideOutside(tree,Factors.decayMarginal(alphabet),(l:Language,l2:Language) => Factors.simpleEdge(alphabet), m);
+      new InsideOutside(tree,Factors.decayMarginal(_,alphabet),(l:Language,l2:Language, alp: Set[Char]) => Factors.simpleEdge(alp,alphabet), m);
     }
     val factors = calculateEdgePotentials(null, IOs, tree, alphabet);
     new State(factors,   Math.NEG_INF_DOUBLE, alphabet);
