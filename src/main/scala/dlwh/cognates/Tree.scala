@@ -7,9 +7,16 @@ import scala.util.parsing.input._;
 
 import scala.io.Source;
 
-sealed trait Tree { val label: String};
-case class Ancestor(label: String, lchild: Tree, rchild: Tree) extends Tree;
-case class Child(label: String) extends Tree;
+sealed trait Tree { 
+  val label: String
+  def map(f: String=>String): Tree
+};
+case class Ancestor(label: String, lchild: Tree, rchild: Tree) extends Tree {
+  def map(f: String=>String) = Ancestor(f(label), lchild map f, rchild map f);
+}
+case class Child(label: String) extends Tree { 
+  def map(f: String=>String) = Child(f(label));
+}
 
 object Tree {
   def readTree(s: String) = {
