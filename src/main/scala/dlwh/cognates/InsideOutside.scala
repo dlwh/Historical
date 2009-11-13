@@ -47,8 +47,6 @@ case class InsideOutside(t: Tree,
 
   def likelihoodWith(word: Cognate) = {
     val incl = include(word.language,word.word,0.0);
-    globalLog.log(INFO)("with " + incl);
-    globalLog.log(INFO)("without " + this);
     incl.likelihood - likelihood
   }
 
