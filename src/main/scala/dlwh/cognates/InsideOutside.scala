@@ -3,11 +3,10 @@ package dlwh.cognates;
 import Types._;
 import scalanlp.util.Log._;
 
-import Factors._;
 case class InsideOutside(t: Tree, 
-                         rootMarginal: Set[Char]=>Marginal,
-                         edgeFor: (Language,Language,Set[Char])=>EdgeFactor,
+                         f: Factors,
                          bottomWords: Map[Language,Map[Word,Double]]) {
+  import f._;
 
   val alphabet = Set.empty ++ (for( map <- bottomWords.valuesIterator;
                       word <- map.keysIterator;
@@ -24,7 +23,6 @@ case class InsideOutside(t: Tree,
 
   def marginalFor(s: Language) = {
     val marg = nodes(s).marginal;
-    globalLog.log(DEBUG)(s + marg.fsa);
     marg
   }
 
@@ -213,17 +211,15 @@ case class InsideOutside(t: Tree,
       val edge = edgeFor(parent.label,label,alphabet);
 
       val message = bottomWords.getOrElse(label,Map.empty).iterator map { case (word,score) =>
-        val wordMarginal = new Marginal(word,score);
+        val wordMarginal = marginalForWord(word,score);
         edge.childMarginalize(wordMarginal)
       } reduceLeft (_*_);
 
-      globalLog.log(DEBUG)("Actual message" + message.fsa);
       message;
     }
 
     lazy val marginal ={
       val marg = parent.messageTo(this);
-      println(label + "Marg: " + marg.partition);
       marg
     }
   }

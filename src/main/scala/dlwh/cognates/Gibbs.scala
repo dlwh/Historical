@@ -10,7 +10,6 @@ import collection.{mutable=>muta}
 import scalanlp.math.Semiring.LogSpace._;
 
 import Types._;
-import Factors._;
 
 class Gibbs(numGroups: Int= 1000) {
 
@@ -65,9 +64,9 @@ class Gibbs(numGroups: Int= 1000) {
 
   private def initialState(words: Seq[Cognate], tree: Tree, alphabet: Set[Char]) = {
     val groupAssignments = new muta.HashMap[Cognate,Group]();
+    val factors = new TransducerFactors(tree,alphabet);
     val ios = for(g <- Array.range(0,numGroups)) yield {
-      val io = new InsideOutside(tree, Factors.decayMarginal(_,alphabet),
-                                (_:Language,_:Language, alpha: Set[Char])=> Factors.simpleEdge(alpha,alphabet),
+      val io = new InsideOutside(tree, factors,
                                 Map.empty.withDefaultValue(Map.empty));
       val cog = words(g%words.length);
       groupAssignments(cog) = g;

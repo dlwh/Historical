@@ -5,56 +5,42 @@ import scalanlp.math.Semiring.LogSpace._;
 import scalanlp.fst._;
 import scalanlp.util.Log._;
 
-import Factors._;
 import Types._;
 
-class Factors(t: Tree, marginals: Seq[Language=>Marginal], numGroups: Int, alphabet: Set[Char]) {
-  def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = ef;
-  val ef = new EdgeFactor(new EditDistance(-1,-1,alphabet));
-  def parentOf(l: String): String = parents(l);
-  def expectedScore(psi: Psi, group: Group, language:Language) = {
-    //globalLog.log(DEBUG)(marginalFor(group,parentOf(language)).fsa + " marg ");
-    val expectedJointScore = ExpectationComposition.logSpaceExpectationCompose(marginalFor(group,parentOf(language)).fsa,psi).cost.value;
-    assert(!expectedJointScore.isNaN);
-    val margScore = expectedMarginalScore(group)(language);
-    assert(!margScore.isNaN);
-    globalLog.log(DEBUG)("scores" + margScore + " " +expectedJointScore);
-    expectedJointScore - margScore;
+trait Factors {
+  trait EdgeFactorBase {
+    def childMarginalize(c: Marginal):Marginal;
+    def parentMarginalize(c: Marginal):Marginal;
+  }
+  type EdgeFactor <: EdgeFactorBase;
+
+  trait MarginalBase {
+    def *(other: Marginal): Marginal
+    def partition: Double
+    def apply(word: String):Double
   }
 
-  def marginalFor(group: Group, ancestor: Language) = marginals(group)(ancestor);
+  type Marginal <: MarginalBase
 
-  private def processTree(t: Tree):(Map[Language,Language],Seq[Language]) = t match {
-    case Ancestor(label,l,r) =>
-      val (lcMap,lcLangs) = processTree(l);
-      val (rcMap,rcLangs) = processTree(r);
-      val myM = Map(l.label->t.label,r.label->t.label) ++ lcMap ++ rcMap;
-      (myM, rcLangs ++ lcLangs);
-    case Child(l) => (Map.empty,Seq(l));
-  }
-
-  private val (parents,languages) = processTree(t);
-
-  // Maps (Group,Language) => expected edge cost for any child.
-  lazy val expectedMarginalScore: Seq[Map[Language,Double]] = {
-    for ( groupMarginals <- marginals)
-    yield Map.empty ++ { for( language <- languages)
-      yield {
-        val parent = parentOf(language);
-        globalLog.log(DEBUG)(language);
-        val marg = groupMarginals(parent);
-        val parentMarginal = edgeFor(parent,language,alphabet).fst.inputProjection;
-        globalLog.log(DEBUG)("Start exp");
-        val marginalCost = ExpectationComposition.logSpaceExpectationCompose(marg.fsa,parentMarginal).cost.value;
-        globalLog.log(DEBUG)("end exp");
-        (language,marginalCost);
-      }
-    }
-  }
+  def edgeFor(parent: Language, child:Language, alphabet: Set[Char]): EdgeFactor;
+  def rootMarginal(alphabet: Set[Char]): Marginal;
+  def marginalForWord(w: String, score: Double=0.0): Marginal;
 }
 
-object Factors {
-  class Marginal(val fsa: Psi) {
+class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
+  def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
+    val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
+    new EdgeFactor(ed);
+  }
+  def rootMarginal(alphabet: Set[Char]) = {
+    new Marginal(new DecayAutomaton(5.0,alphabet,rhoSize=fullAlphabet.size-alphabet.size));
+  }
+  def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
+
+  type Marginal = TransducerMarginal;
+  type EdgeFactor = TransducerEdge;
+
+  class TransducerMarginal(val fsa: Psi) extends MarginalBase {
     def this(w: String, cost: Double) = this(Automaton.constant(w,cost));
 
     /**
@@ -83,7 +69,7 @@ object Factors {
   }
 
   // parent to child (argument order)
-  class EdgeFactor(val fst: Transducer[Double,_,Char,Char]) {
+  class TransducerEdge(val fst: Transducer[Double,_,Char,Char]) extends EdgeFactorBase {
     def childMarginalize(c: Marginal) = {
       println("QQQ compose");
       println(fst);
@@ -109,10 +95,14 @@ object Factors {
     }
   }
 
-  def simpleEdge(alphabet: Set[Char], fullBet: Set[Char]) = {
-    new EdgeFactor(new EditDistance(-3,-4,alphabet,rhoSize=fullBet.size-alphabet.size));
+  private def processTree(t: Tree):(Map[Language,Language],Seq[Language]) = t match {
+    case Ancestor(label,l,r) =>
+      val (lcMap,lcLangs) = processTree(l);
+      val (rcMap,rcLangs) = processTree(r);
+      val myM = Map(l.label->t.label,r.label->t.label) ++ lcMap ++ rcMap;
+      (myM, rcLangs ++ lcLangs);
+    case Child(l) => (Map.empty,Seq(l));
   }
-  def decayMarginal(alphabet: Set[Char], fullBet: Set[Char]) ={
-    new Marginal(new DecayAutomaton(5.0,alphabet,rhoSize=fullBet.size-alphabet.size));
-  }
+
+  private val (parents,languages) = processTree(t);
 }
