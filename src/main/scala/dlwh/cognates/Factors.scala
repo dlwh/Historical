@@ -10,7 +10,7 @@ import Types._;
 trait Factors {
   trait EdgeFactorBase {
     def childMarginalize(c: Marginal):Marginal;
-    def parentMarginalize(c: Marginal):Marginal;
+    def parentMarginalize(p: Marginal):Marginal;
   }
   type EdgeFactor <: EdgeFactorBase;
 
