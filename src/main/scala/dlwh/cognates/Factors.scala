@@ -61,10 +61,14 @@ object Factors {
     * Computes the product of two marginals by intersecting their automata
     */
     def *(m: Marginal) = {
-      new Marginal( (this.fsa&m.fsa).inputProjection.relabel);
+      val inter = fsa & m.fsa
+      import Minimizer._;
+      import ApproximatePartitioner._;
+      val minned = minimize(inter.inputProjection).relabel;
+      new Marginal( minned.relabel.inputProjection);
     }
 
-    def normalize = new Marginal(fsa.scaleInitialWeights(-fsa.cost).inputProjection);
+    def normalize = new Marginal(fsa.pushWeights.inputProjection);
     
 
     /**
@@ -81,27 +85,34 @@ object Factors {
   // parent to child (argument order)
   class EdgeFactor(val fst: Transducer[Double,_,Char,Char]) {
     def childMarginalize(c: Marginal) = {
-      println("composing");
+      println("QQQ compose");
       println(fst);
       println(c.fsa);
-      println(fst >> c.fsa shrink)
-      new Marginal((fst >> c.fsa).inputProjection.shrink.inputProjection)
+      val composed = (fst >> c.fsa).inputProjection;
+      val minned = {
+        import Minimizer._;
+        import ApproximatePartitioner._;
+        minimize(composed).relabel;
+      }
+      println("XXX " +minned.toConnectivityDot);
+      new Marginal(minned.relabel.inputProjection);
     }
     def parentMarginalize(p: Marginal) = {
-      println("composing");
-      println(p.fsa)
-      println(fst)
-      println(p.fsa >> fst minimize)
-      new Marginal((p.fsa >> fst).outputProjection.shrink.outputProjection)
+      val composed = (p.fsa >> fst).outputProjection;
+      val minned = {
+        import Minimizer._;
+        import ApproximatePartitioner._;
+        minimize(composed).relabel;
+      }
+      println("M:"+minned.relabel.cost);
+      new Marginal(minned.relabel.outputProjection);
     }
   }
 
   def simpleEdge(alphabet: Set[Char], fullBet: Set[Char]) = {
-    println(alphabet,fullBet);
-    new EdgeFactor(new EditDistance(-1,-1,alphabet,rhoSize=fullBet.size-alphabet.size));
+    new EdgeFactor(new EditDistance(-3,-4,alphabet,rhoSize=fullBet.size-alphabet.size));
   }
   def decayMarginal(alphabet: Set[Char], fullBet: Set[Char]) ={
-    println(alphabet,fullBet);
     new Marginal(new DecayAutomaton(5.0,alphabet,rhoSize=fullBet.size-alphabet.size));
   }
 }
