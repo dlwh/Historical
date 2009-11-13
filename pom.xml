@@ -23,6 +23,9 @@
         <configuration>
           <scalaVersion>${scala.version}</scalaVersion>
           <displayCmd>true</displayCmd>
+          <args>
+            <arg>-deprecation</arg>
+          </args>
           <jvmArgs>
             <jvmArg>-Xmx2G</jvmArg>
           </jvmArgs>
