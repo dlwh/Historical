@@ -3,8 +3,8 @@ package dlwh.cognates;
 import Types._;
 import scalanlp.util.Log._;
 
-case class InsideOutside(t: Tree, 
-                         f: Factors,
+case class InsideOutside[F<:Factors](t: Tree, 
+                         f: F,
                          bottomWords: Map[Language,Map[Word,Double]]) {
   import f._;
 

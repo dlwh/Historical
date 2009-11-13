@@ -78,10 +78,11 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
       val minned = {
         import Minimizer._;
         import ApproximatePartitioner._;
-        minimize(composed).relabel;
+        minimize(composed).relabel.inputProjection;
       }
       println("XXX " +minned.toConnectivityDot);
-      new Marginal(minned.relabel.inputProjection);
+      println("MC" + minned.cost);
+      new Marginal(minned);
     }
     def parentMarginalize(p: Marginal) = {
       val composed = (p.fsa >> fst).outputProjection;
