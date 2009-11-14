@@ -50,8 +50,11 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
       val inter = fsa & m.fsa
       import Minimizer._;
       import ApproximatePartitioner._;
-      val minned = minimize(inter.inputProjection).relabel;
-      new Marginal( minned.relabel.inputProjection);
+      val minned = minimize(inter.inputProjection).relabel.inputProjection;
+      val pruned = prune(minned);
+    //  println("*CM:"+ minned.cost);
+    //  println("*PM:"+ pruned.relabel.cost);
+      new Marginal( pruned);
     }
 
     def normalize = new Marginal(fsa.pushWeights.inputProjection);
@@ -68,31 +71,39 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
     def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost - partition;
   }
 
+  def prune(fsa: Psi) = {
+    val cost = fsa.cost;
+    // Prune states with posteriors 6 x 10-6 or less
+    Pruning.prune(fsa,(x:Double) => x - cost < -7).inputProjection;
+  }
+
   // parent to child (argument order)
   class TransducerEdge(val fst: Transducer[Double,_,Char,Char]) extends EdgeFactorBase {
     def childMarginalize(c: Marginal) = {
-      println("QQQ compose");
-      println(fst);
-      println(c.fsa);
       val composed = (fst >> c.fsa).inputProjection;
       val minned = {
         import Minimizer._;
         import ApproximatePartitioner._;
         minimize(composed).relabel.inputProjection;
       }
-      println("XXX " +minned.toConnectivityDot);
-      println("MC" + minned.cost);
-      new Marginal(minned);
+      val pruned = prune(minned);
+      //println("Entering cost:");
+     // println("MC" + minned.cost);
+      //println("PR" + pruned.cost);
+      new Marginal(pruned);
     }
     def parentMarginalize(p: Marginal) = {
       val composed = (p.fsa >> fst).outputProjection;
       val minned = {
         import Minimizer._;
         import ApproximatePartitioner._;
-        minimize(composed).relabel;
+        minimize(composed).relabel.outputProjection;
       }
-      println("M:"+minned.relabel.cost);
-      new Marginal(minned.relabel.outputProjection);
+      //println("Entering cost:");
+      //println("M:"+minned.cost);
+      val pruned = prune(minned);
+      //println("PR" + pruned.cost);
+      new Marginal(pruned);
     }
   }
 

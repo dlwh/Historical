@@ -24,7 +24,7 @@ class Fixed(val tree: Tree) {
 
 object RomanceFixed { 
   def main(arg: Array[String]) {
-    globalLog.level = DEBUG;
+    globalLog.level = INFO;
     val cognates = Cognates.romance();
     val tree = Tree.romance;
 
@@ -34,9 +34,10 @@ object RomanceFixed {
       (factors,io) = fixed.inferenceOn(cogs)
     } {
       val labeledTree = tree map { l =>
-        val oneBest = KBest.extractList(io.marginalFor(l).fsa,1).first;
-        l + " " + oneBest;
+        val (oneBest,_) = KBest.extractList(io.marginalFor(l).fsa,1).head;
+        l + " " + oneBest.mkString;
       }
+      println(cogs);
       println(labeledTree);
     }
   }
