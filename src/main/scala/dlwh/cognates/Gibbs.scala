@@ -11,7 +11,7 @@ import scalanlp.math.Semiring.LogSpace._;
 
 import Types._;
 
-class Gibbs(numGroups: Int= 1000) {
+class Gibbs(numGroups: Int= 1000, smoothing: Double=0.5) {
 
   def chain(words: Seq[Cognate], tree: Tree) = {
     val alphabet = Set.empty ++ words.iterator.flatMap(_.word.iterator);
@@ -24,7 +24,7 @@ class Gibbs(numGroups: Int= 1000) {
         val state = assignedState.forgetAssignment(word);
 
         val pGgW = LogDoubleCounter[Group]();
-        for(group <- 0 until numGroups) {
+        for(group <- state.validTablesForLanguage(word.language)) {
           val prior = state.prior(group);
           val likelihood = state.likelihood(word,group);
           globalLog.log(INFO)("  " + group + ":" + likelihood);
@@ -39,40 +39,140 @@ class Gibbs(numGroups: Int= 1000) {
     }
   }
 
-  final case class State(groupAssignments: Map[Cognate,Group], likelihood: Double, insideOutsides: Seq[InsideOutside]) {
-    def prior(g: Int) = 0.0; // XXX todo
+  final case class State private (
+      tree: Tree,
+      groupAssignments: Map[Cognate,Group],
+      likelihood: Double,
+      tables: Seq[InsideOutside[TransducerFactors]],
+      factors: TransducerFactors,
+      occupiedTables: Int,
+      firstUnoccupiedTable:Int) {
+
+
+    def this(tree: Tree, f: TransducerFactors) = this(
+      tree=tree,
+      groupAssignments = Map.empty,
+      likelihood= -1.0/0.0,
+      tables= Seq.empty ++ Seq(emptyTable(tree,f)),
+      factors=f,
+      occupiedTables =0,
+      firstUnoccupiedTable=0
+    );
+
+
+    def validTablesForLanguage(l: Language) = {
+      val openTables = for {
+        (io,g) <- tables.iterator.zipWithIndex
+        // only include the first unoccupied tables, and those occupied:w
+        if !io.isEmpty || g == firstUnoccupiedTable
+        if isValidForLanguage(g,l)
+      } yield {
+        g
+      }
+
+      openTables
+    }
+
+    def isValidForLanguage(g: Group, l: Language) = {
+      tables(g).numOccupants(l) == 0;
+    }
+
+    def prior(g: Int) = {
+      val numerator = (tables(g).numOccupants + smoothing)
+      val denom = groupAssignments.size + occupiedTables * smoothing;
+      Math.log(numerator / denom);
+    }
+
     def likelihood(word: Cognate, group: Group):Double = {
-      insideOutsides(group).likelihoodWith(word);
+      tables(group).likelihoodWith(word);
     }
 
+    /**
+    * Forget that the word belongs to any group, so that he can come
+    * back to the restaurant and be reseated.
+    */
     def forgetAssignment(word: Cognate) = {
-      val group = groupAssignments(word);
-      val io = insideOutsides(group);
-      val newIO = io.remove(word);
-      val newIOS = insideOutsides.updated(group,newIO);
-      val newGroups = groupAssignments - word;
-      this.copy(insideOutsides = newIOS, groupAssignments = newGroups);
+      if(!groupAssignments.contains(word)) {
+        this 
+      } else {
+        val group = groupAssignments(word);
+        val io = tables(group);
+        val newIO = io.remove(word);
+        val newTables = tables.updated(group,newIO);
+        val newGroups = groupAssignments - word;
+
+        val newFirstUnoccupiedTable = if (newIO.isEmpty) {
+          group min firstUnoccupiedTable
+        } else {
+          firstUnoccupiedTable
+        }
+
+        val newOccupiedTables = if (newIO.isEmpty) {
+          occupiedTables - 1
+        } else {
+          occupiedTables
+        }
+
+        this.copy(
+          tables = newTables,
+          groupAssignments = newGroups,
+          firstUnoccupiedTable = newFirstUnoccupiedTable,
+          occupiedTables = newOccupiedTables
+        );
+      }
     }
 
+
+    /**
+    * Put the customer at a table
+    */
     def assign(word: Cognate, group: Group) = {
-      val io = insideOutsides(group);
-      val newIOS = insideOutsides.updated(group,io.include(word.language,word.word,0.0));
+      val io = tables(group);
+
+      val wasEmpty = io.numOccupants == 0;
+
+      var newTables = tables.updated(group,io.include(word.language,word.word,0.0));
       val newGroups = groupAssignments + (word -> group);
-      this.copy(insideOutsides = newIOS, groupAssignments = newGroups);
+
+      assert(!wasEmpty || group == firstUnoccupiedTable);
+      val newUnoccupiedTable = if(wasEmpty) {
+        val index = newTables.indexWhere(_.numOccupants == 0,group);
+        if(index == -1) {
+          // I feel dirty XXX
+          newTables = newTables ++  Seq(emptyTable(tree, factors))
+          newTables.size - 1;
+        } else {
+          index
+        }
+      } else {
+        firstUnoccupiedTable
+      }
+
+      val newOccupiedTables = if(wasEmpty) {
+        occupiedTables + 1
+      } else {
+        occupiedTables
+      }
+
+      this.copy(
+        tables = newTables,
+        groupAssignments = newGroups,
+        firstUnoccupiedTable = newUnoccupiedTable,
+        occupiedTables = newOccupiedTables
+      );
     }
   }
+
+  private def emptyTable(tree : Tree, f: TransducerFactors) = {
+    new InsideOutside(tree,f,Map.empty withDefaultValue Map.empty);
+  }
+
 
   private def initialState(words: Seq[Cognate], tree: Tree, alphabet: Set[Char]) = {
     val groupAssignments = new muta.HashMap[Cognate,Group]();
     val factors = new TransducerFactors(tree,alphabet);
-    val ios = for(g <- Array.range(0,numGroups)) yield {
-      val io = new InsideOutside(tree, factors,
-                                Map.empty.withDefaultValue(Map.empty));
-      val cog = words(g%words.length);
-      groupAssignments(cog) = g;
-      io.include(cog.language,cog.word,0.0);
-    }
-    new State(Map.empty ++ groupAssignments,Math.NEG_INF_DOUBLE,ios);
+   // XXX todo: initial assignments 
+    new State(tree,factors);
   }
 }
 

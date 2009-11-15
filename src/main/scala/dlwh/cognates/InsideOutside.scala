@@ -16,6 +16,10 @@ case class InsideOutside[F<:Factors](t: Tree,
   private val nodes = scala.collection.mutable.Map[Language,Node]();
   private val root = new RootNode(t.asInstanceOf[Ancestor]); // whatever
 
+  def numOccupants = bottomWords.valuesIterator.map(_.size).toSeq.sum;
+  def numOccupants(l: Language) = bottomWords(l).size
+  def isEmpty = numOccupants == 0;
+
   override def toString = {
     "digraph Tree {\n origin -> " + root.label + "[label="+rootMarginal(alphabet).partition+"];\n" +
       root.toString + "\n}\n"
