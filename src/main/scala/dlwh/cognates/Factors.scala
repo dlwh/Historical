@@ -28,12 +28,14 @@ trait Factors {
 }
 
 class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
+  type Self = TransducerFactors;
   def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
-    val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
+    //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
+    val ed =  new EditDistance(-5,-6,fullAlphabet)
     new EdgeFactor(ed);
   }
   def rootMarginal(alphabet: Set[Char]) = {
-    new Marginal(new DecayAutomaton(5.0,alphabet,rhoSize=fullAlphabet.size-alphabet.size));
+    new Marginal(new DecayAutomaton(5.0,fullAlphabet));
   }
   def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
 
@@ -52,8 +54,8 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
       import ApproximatePartitioner._;
       val minned = minimize(inter.inputProjection).relabel.inputProjection;
       val pruned = prune(minned);
-    //  println("*CM:"+ minned.cost);
-    //  println("*PM:"+ pruned.relabel.cost);
+      //println("*CM:"+ minned.cost);
+      //println("*PM:"+ pruned.relabel.cost);
       new Marginal( pruned);
     }
 
@@ -63,7 +65,9 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
     /**
     * The log-normalizer of this automata
     */
-    lazy val partition = fsa.cost;
+    lazy val partition = {
+      fsa.cost;
+    }
 
     /**
     * returns the log-normalized log probability of the word.
@@ -81,15 +85,22 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
   class TransducerEdge(val fst: Transducer[Double,_,Char,Char]) extends EdgeFactorBase {
     def childMarginalize(c: Marginal) = {
       val composed = (fst >> c.fsa).inputProjection;
+      //println("Composing");
+      //println(c.fsa);
+      //println(c.fsa.cost);
+      //println("CCc");
+      //println(composed.ring.zero);
+      //println(composed.cost);
       val minned = {
         import Minimizer._;
         import ApproximatePartitioner._;
         minimize(composed).relabel.inputProjection;
       }
+      //println(composed.toConnectivityDot);
       val pruned = prune(minned);
+      //println("MC:"+ minned.cost);
+      //println("PR:"+ pruned.relabel.cost);
       //println("Entering cost:");
-     // println("MC" + minned.cost);
-      //println("PR" + pruned.cost);
       new Marginal(pruned);
     }
     def parentMarginalize(p: Marginal) = {

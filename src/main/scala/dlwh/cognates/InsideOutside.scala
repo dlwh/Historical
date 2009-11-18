@@ -5,8 +5,10 @@ import scalanlp.util.Log._;
 
 case class InsideOutside[F<:Factors](t: Tree, 
                          f: F,
-                         bottomWords: Map[Language,Map[Word,Double]]) {
-  import f._;
+                         bottomWords: Map[Language,Map[Word,Double]]) { outer =>
+                         
+  val factors = f;
+  import factors._;
 
   val alphabet = Set.empty ++ (for( map <- bottomWords.valuesIterator;
                       word <- map.keysIterator;
@@ -15,6 +17,26 @@ case class InsideOutside[F<:Factors](t: Tree,
 
   private val nodes = scala.collection.mutable.Map[Language,Node]();
   private val root = new RootNode(t.asInstanceOf[Ancestor]); // whatever
+
+  def cachedUpwardMessage(from: Language): Marginal = nodes(from) match {
+    case n:NonRootNode => n.upwardMessage;
+    case _ => error("Shouldn't be here"); 
+  }
+
+  def cachedLeftMessage(from: Language): Marginal = nodes(from) match {
+    case n:NonChildNode => n.leftMessage;
+    case _ => error("Shouldn't be here"); 
+  }
+
+  def cachedRightMessage(from: Language): Marginal = nodes(from) match {
+    case n:NonChildNode => n.rightMessage;
+    case _ => error("Shouldn't be here"); 
+  }
+
+  def marginalFor(s: Language) = {
+    val marg = nodes(s).marginal;
+    marg
+  }
 
   def numOccupants = bottomWords.valuesIterator.map(_.size).toSeq.sum;
   def numOccupants(l: Language) = bottomWords(l).size
@@ -25,16 +47,13 @@ case class InsideOutside[F<:Factors](t: Tree,
       root.toString + "\n}\n"
   }
 
-  def marginalFor(s: Language) = {
-    val marg = nodes(s).marginal;
-    marg
-  }
-
   // Include this word as as base word for this language
   def include(language: Language, word: Word, score: Double) = {
     assert(score == 0.0);
     val newBottomWords = bottomWords + (language -> bottomWords(language).+( (word,score))) withDefaultValue(Map.empty);
-    this.copy(bottomWords = newBottomWords);
+    new InsideOutside(t,f,newBottomWords) {
+      
+    }
   }
 
   // Remove the word
@@ -59,14 +78,14 @@ case class InsideOutside[F<:Factors](t: Tree,
   }
 
   private trait NonRootNode extends Node {
-    def upwardMessage: Marginal
+    def upwardMessage: Marginal;
     def hasUpwardMessage: Boolean
   }
 
   private trait NonChildNode extends Node {
     def tree: Ancestor;
-    val leftChild = nodeFor(tree.lchild);
-    val rightChild = nodeFor(tree.rchild);
+    val leftChild = nodeFor(this,tree.lchild);
+    val rightChild = nodeFor(this,tree.rchild);
     def leftMessage: Marginal;
     def rightMessage: Marginal;
 
@@ -75,27 +94,29 @@ case class InsideOutside[F<:Factors](t: Tree,
 
     override def toString = {
       val sb = new StringBuffer;
-      sb.append(label + " -> " + leftChild.label + "[label=" + leftMessage.partition +"];\n");
-      sb.append(label + " -> " + rightChild.label + "[label=" + rightMessage.partition +"];\n");
+      sb.append(label + " -> " + leftChild.label + "[label=" + cachedLeftMessage(label).partition +"];\n");
+      sb.append(label + " -> " + rightChild.label + "[label=" + cachedRightMessage(label).partition +"];\n");
       sb.append(leftChild.toString);
       sb.append(rightChild.toString);
       sb.toString;
     }
 
 
-    def messageTo(n: Node) = n match {
-      case `leftChild` => leftMessage;
-      case `rightChild` => rightMessage;
-      case _ => {
-        throw new Exception("Not one of my ("+tree.label+") children " + n.label + n + leftChild + rightChild);
-      }
+    def messageTo(n: Node) = if(n.label == leftChild.label) {
+      cachedLeftMessage(label);
+    } else if(n.label == rightChild.label) {
+      cachedRightMessage(label);
+    } else {
+      error("Not one of my ("+tree.label+") children " + n.label + n + leftChild + rightChild);
     }
 
-    private def nodeFor(t: Tree):NonRootNode = t match {
-      case a@Ancestor(l,lc,rc) => new InteriorNode(this,a);
-      case c@Child(l) => new ChildNode(l,this);
-    }
   }
+
+  private def nodeFor(self: NonChildNode, t: Tree):NonRootNode = t match {
+    case a@Ancestor(l,lc,rc) => new InteriorNode(self,a);
+    case c@Child(l) => new ChildNode(l,self);
+  }
+
 
   private class InteriorNode(parent: NonChildNode, xtree: Ancestor) extends NonChildNode with NonRootNode {
     def label = tree.label;
@@ -106,9 +127,9 @@ case class InsideOutside[F<:Factors](t: Tree,
       assert(hasUpwardMessage);
       val incomingMarg = (leftChildHasMessage << 1)|rightChildHasMessage match {
         case 0 => error("Shouldn't be calling this if I don't have a message");
-        case 1 => rightChild.upwardMessage;
-        case 2 => leftChild.upwardMessage;
-        case 3 => rightChild.upwardMessage * leftChild.upwardMessage;
+        case 1 => cachedUpwardMessage(rightChild.label);
+        case 2 => cachedUpwardMessage(leftChild.label);
+        case 3 => cachedUpwardMessage(rightChild.label) * cachedUpwardMessage(leftChild.label);
         case _ => error("odd. This should be 1, 2, or 3");
       };
       edgeFor(parent.label,label,alphabet).childMarginalize(incomingMarg);
@@ -116,10 +137,10 @@ case class InsideOutside[F<:Factors](t: Tree,
 
     override def toString = {
       val sb = new StringBuffer;
-      sb.append(label + " -> " + leftChild.label + "[label=" + leftMessage.partition +"];\n");
-      sb.append(label + " -> " + rightChild.label + "[label=" + rightMessage.partition +"];\n");
+      sb.append(label + " -> " + leftChild.label + "[label=" + cachedLeftMessage(label).partition +"];\n");
+      sb.append(label + " -> " + rightChild.label + "[label=" + cachedRightMessage(label).partition +"];\n");
       if(hasUpwardMessage)
-        sb.append(label + " -> " + parent.label + "[label=" + upwardMessage.partition +"];\n");
+        sb.append(label + " -> " + parent.label + "[label=" + cachedUpwardMessage(label).partition +"];\n");
       else
         sb.append(label + " -> " + parent.label + "[label=nothing];\n");
       sb.append(leftChild.toString);
@@ -129,7 +150,7 @@ case class InsideOutside[F<:Factors](t: Tree,
 
     lazy val leftMessage = {
       val incomingMarg = if(rightChildHasMessage == 1) {
-        rightChild.upwardMessage * parent.messageTo(this);
+        cachedUpwardMessage(rightChild.label) * parent.messageTo(this);
       } else {
         parent.messageTo(this);
       }
@@ -138,7 +159,7 @@ case class InsideOutside[F<:Factors](t: Tree,
 
     lazy val rightMessage = {
       val incomingMarg = if(leftChildHasMessage == 1) {
-        leftChild.upwardMessage * parent.messageTo(this);
+        cachedUpwardMessage(leftChild.label) * parent.messageTo(this);
       } else {
         parent.messageTo(this);
       }
@@ -150,9 +171,9 @@ case class InsideOutside[F<:Factors](t: Tree,
       val parentMessage = parent.messageTo(this);
       (leftChildHasMessage << 1)|rightChildHasMessage match {
         case 0 => parentMessage;
-        case 1 => rightChild.upwardMessage * parentMessage;
-        case 2 => leftChild.upwardMessage * parentMessage;
-        case 3 => rightChild.upwardMessage * leftChild.upwardMessage * parentMessage;
+        case 1 => cachedUpwardMessage(rightChild.label) * parentMessage;
+        case 2 => cachedUpwardMessage(leftChild.label) * parentMessage;
+        case 3 => cachedUpwardMessage(rightChild.label) * cachedUpwardMessage(leftChild.label) * parentMessage;
         case _ => error("odd. This should be 1, 2, or 3");
       };
     }
@@ -170,23 +191,23 @@ case class InsideOutside[F<:Factors](t: Tree,
     lazy val leftMessage = {
       globalLog.log(DEBUG)(("Root lm",label,tree.lchild.label))
       if(rightChild.hasUpwardMessage)
-        edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(rightChild.upwardMessage * parentMessage);
+        edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(cachedUpwardMessage(rightChild.label) * parentMessage);
       else edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(parentMessage);
     }
 
     lazy val rightMessage = {
       globalLog.log(DEBUG)(("Root rm",label,tree.rchild.label))
       if(leftChild.hasUpwardMessage)
-        edgeFor(label,tree.rchild.label,alphabet).parentMarginalize(leftChild.upwardMessage * parentMessage);
+        edgeFor(label,tree.rchild.label,alphabet).parentMarginalize(cachedUpwardMessage(leftChild.label) * parentMessage);
       else edgeFor(label,tree.rchild.label,alphabet).parentMarginalize(parentMessage);
     }
 
     lazy val marginal = {
       (leftChildHasMessage << 1)|rightChildHasMessage match {
         case 0 => parentMessage;
-        case 1 => rightChild.upwardMessage * parentMessage;
-        case 2 => leftChild.upwardMessage * parentMessage;
-        case 3 => rightChild.upwardMessage * leftChild.upwardMessage * parentMessage;
+        case 1 => cachedUpwardMessage(rightChild.label) * parentMessage;
+        case 2 => cachedUpwardMessage(leftChild.label) * parentMessage;
+        case 3 => cachedUpwardMessage(rightChild.label) * cachedUpwardMessage(leftChild.label) * parentMessage;
         case _ => error("odd. This should be 1, 2, or 3");
       };
     }
@@ -198,7 +219,7 @@ case class InsideOutside[F<:Factors](t: Tree,
     override def toString = {
       val sb = new StringBuffer;
       if(hasUpwardMessage)
-        sb.append(label + " -> " + parent.label + "[label=" + upwardMessage.partition +"];\n");
+        sb.append(label + " -> " + parent.label + "[label=" + cachedUpwardMessage(label).partition +"];\n");
       else
         sb.append(label + " -> " + parent.label + "[label=nothing];\n");
       for( w <- bottomWords(label)) {

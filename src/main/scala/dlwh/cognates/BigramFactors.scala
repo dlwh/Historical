@@ -13,6 +13,7 @@ import scalanlp.counters.LogCounters._;
 import Types._;
 
 class BigramFactors(logSmoothing: Double, alphabet: Set[Char]) extends Factors {
+  type Self = BigramFactors
   type Marginal = BigramMarginal
   type EdgeFactor = BigramEdge
   def edgeFor(parent: Language, child: Language, alphabet: Set[Char]) = new EdgeFactor();
