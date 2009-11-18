@@ -11,9 +11,11 @@ sealed trait Tree {
   val label: String
   def map(f: String=>String): Tree
 };
+
 case class Ancestor(label: String, lchild: Tree, rchild: Tree) extends Tree {
   def map(f: String=>String) = Ancestor(f(label), lchild map f, rchild map f);
 }
+
 case class Child(label: String) extends Tree { 
   def map(f: String=>String) = Child(f(label));
 }

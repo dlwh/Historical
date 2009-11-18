@@ -4,6 +4,7 @@ import scalanlp.math.Semiring;
 import scalanlp.math.Semiring.LogSpace._;
 import scalanlp.fst._;
 import scalanlp.util.Log._;
+import scalanlp.math.Numerics._;
 import scalanlp.counters._;
 import scalanlp.counters.Counters._;
 import scalala.Scalala._;
