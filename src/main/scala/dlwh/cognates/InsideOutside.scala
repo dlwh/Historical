@@ -3,34 +3,32 @@ package dlwh.cognates;
 import Types._;
 import scalanlp.util.Log._;
 
-case class InsideOutside[F<:Factors](t: Tree, 
-                         f: F,
+case class InsideOutside[F<:Factors](tree: Tree, 
+                         factors: F,
                          bottomWords: Map[Language,Map[Word,Double]]) { outer =>
-                         
-  val factors = f;
   import factors._;
-
+                         
   val alphabet = Set.empty ++ (for( map <- bottomWords.valuesIterator;
                       word <- map.keysIterator;
                       ch <- word.iterator
                      ) yield ch);
 
   private val nodes = scala.collection.mutable.Map[Language,Node]();
-  private val root = new RootNode(t.asInstanceOf[Ancestor]); // whatever
+  private val root = new RootNode(tree.asInstanceOf[Ancestor]); // whatever
 
   def cachedUpwardMessage(from: Language): Marginal = nodes(from) match {
     case n:NonRootNode => n.upwardMessage;
-    case _ => error("Shouldn't be here"); 
+    case _ => error("Shouldn'tree be here"); 
   }
 
   def cachedLeftMessage(from: Language): Marginal = nodes(from) match {
     case n:NonChildNode => n.leftMessage;
-    case _ => error("Shouldn't be here"); 
+    case _ => error("Shouldn'tree be here"); 
   }
 
   def cachedRightMessage(from: Language): Marginal = nodes(from) match {
     case n:NonChildNode => n.rightMessage;
-    case _ => error("Shouldn't be here"); 
+    case _ => error("Shouldn'tree be here"); 
   }
 
   def marginalFor(s: Language) = {
@@ -51,15 +49,17 @@ case class InsideOutside[F<:Factors](t: Tree,
   def include(language: Language, word: Word, score: Double) = {
     assert(score == 0.0);
     val newBottomWords = bottomWords + (language -> bottomWords(language).+( (word,score))) withDefaultValue(Map.empty);
-    new InsideOutside(t,f,newBottomWords) {
-      
-    }
+    val badMessages = tree.predecessorsOfLanguage(language);
+    val keep = (Set.empty ++ nodes.keysIterator.filterNot(badMessages));
+    InsideOutside.mapped(this, keep, newBottomWords);
   }
 
   // Remove the word
   def remove(word: Cognate) = {
     val newBottomWords = bottomWords.updated(word.language,bottomWords(word.language) - word.word).withDefaultValue(Map.empty);
-    this.copy(bottomWords = newBottomWords);
+    val badMessages = tree.predecessorsOfLanguage(word.language);
+    val keep = (Set.empty ++ nodes.keysIterator.filterNot(badMessages));
+    InsideOutside.mapped(this, keep, newBottomWords);
   }
 
   lazy val likelihood = {
@@ -112,7 +112,7 @@ case class InsideOutside[F<:Factors](t: Tree,
 
   }
 
-  private def nodeFor(self: NonChildNode, t: Tree):NonRootNode = t match {
+  private def nodeFor(self: NonChildNode, tree: Tree):NonRootNode = tree match {
     case a@Ancestor(l,lc,rc) => new InteriorNode(self,a);
     case c@Child(l) => new ChildNode(l,self);
   }
@@ -126,7 +126,7 @@ case class InsideOutside[F<:Factors](t: Tree,
     lazy val upwardMessage = {
       assert(hasUpwardMessage);
       val incomingMarg = (leftChildHasMessage << 1)|rightChildHasMessage match {
-        case 0 => error("Shouldn't be calling this if I don't have a message");
+        case 0 => error("Shouldn'tree be calling this if I don'tree have a message");
         case 1 => cachedUpwardMessage(rightChild.label);
         case 2 => cachedUpwardMessage(leftChild.label);
         case 3 => cachedUpwardMessage(rightChild.label) * cachedUpwardMessage(leftChild.label);
@@ -249,4 +249,31 @@ case class InsideOutside[F<:Factors](t: Tree,
     }
   }
 
+}
+
+object InsideOutside {
+  def mapped[F<:Factors](current: InsideOutside[F],
+    keepFactors: Set[Language],
+    newBottomWords: Map[Language,Map[Word,Double]]) = {
+    new InsideOutside[F](current.tree,current.factors,newBottomWords) {
+      import factors._;
+      override def cachedUpwardMessage(from: Language): Marginal = if(keepFactors(from)) {
+        current.cachedUpwardMessage(from).asInstanceOf[factors.Marginal];
+      } else {
+        super.cachedUpwardMessage(from);
+      }
+
+      override def cachedLeftMessage(from: Language): Marginal = if(keepFactors(from)) {
+        current.cachedLeftMessage(from).asInstanceOf[factors.Marginal];
+      } else {
+        super.cachedLeftMessage(from);
+      }
+
+      override def cachedRightMessage(from: Language): Marginal = if(keepFactors(from)) {
+        current.cachedRightMessage(from).asInstanceOf[factors.Marginal];
+      } else {
+        super.cachedRightMessage(from);
+      }
+    }
+  }
 }

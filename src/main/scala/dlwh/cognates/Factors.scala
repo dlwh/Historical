@@ -8,6 +8,7 @@ import scalanlp.util.Log._;
 import Types._;
 
 trait Factors {
+  type Self <: Factors;
   trait EdgeFactorBase {
     def childMarginalize(c: Marginal):Marginal;
     def parentMarginalize(p: Marginal):Marginal;
@@ -52,7 +53,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
       val inter = fsa & m.fsa
       import Minimizer._;
       import ApproximatePartitioner._;
-      val minned = minimize(inter.inputProjection).relabel.inputProjection;
+      val minned = minimize(inter.relabel).inputProjection;
       val pruned = prune(minned);
       //println("*CM:"+ minned.cost);
       //println("*PM:"+ pruned.relabel.cost);
@@ -94,7 +95,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
       val minned = {
         import Minimizer._;
         import ApproximatePartitioner._;
-        minimize(composed).relabel.inputProjection;
+        minimize(composed.relabel).inputProjection;
       }
       //println(composed.toConnectivityDot);
       val pruned = prune(minned);
@@ -104,11 +105,11 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
       new Marginal(pruned);
     }
     def parentMarginalize(p: Marginal) = {
-      val composed = (p.fsa >> fst).outputProjection;
+      val composed = (p.fsa >> fst).outputProjection.relabel;
       val minned = {
         import Minimizer._;
         import ApproximatePartitioner._;
-        minimize(composed).relabel.outputProjection;
+        minimize(composed).outputProjection;
       }
       //println("Entering cost:");
       //println("M:"+minned.cost);

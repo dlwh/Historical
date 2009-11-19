@@ -10,14 +10,26 @@ import scala.io.Source;
 sealed trait Tree { 
   val label: String
   def map(f: String=>String): Tree
+  /**
+  * Returns all languages (including l) that are on a path from the root to l
+  */
+  def predecessorsOfLanguage(l: String): Set[String];
 };
 
 case class Ancestor(label: String, lchild: Tree, rchild: Tree) extends Tree {
   def map(f: String=>String) = Ancestor(f(label), lchild map f, rchild map f);
+  def predecessorsOfLanguage(l: String) = {
+    lazy val leftPath = lchild.predecessorsOfLanguage(l);
+    lazy val rightPath = rchild.predecessorsOfLanguage(l);
+    if(!leftPath.isEmpty) leftPath + label;
+    else if(!rightPath.isEmpty) rightPath + label;
+    else Set.empty;
+  }
 }
 
 case class Child(label: String) extends Tree { 
   def map(f: String=>String) = Child(f(label));
+  def predecessorsOfLanguage(l : String) = if(l == label) Set(l) else Set.empty;
 }
 
 object Tree {
