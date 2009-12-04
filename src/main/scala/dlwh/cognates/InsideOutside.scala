@@ -41,7 +41,7 @@ case class InsideOutside[F<:Factors](tree: Tree,
   def isEmpty = numOccupants == 0;
 
   override def toString = {
-    "digraph Tree {\n origin -> " + root.label + "[label="+rootMarginal(alphabet).partition+"];\n" +
+    "digraph Tree {\n origin -> " + root.label + ";\n" + 
       root.toString + "\n}\n"
   }
 
@@ -68,6 +68,7 @@ case class InsideOutside[F<:Factors](tree: Tree,
 
   def likelihoodWith(word: Cognate) = {
     val incl = include(word.language,word.word,0.0);
+    globalLog.log(INFO)(incl);
     incl.likelihood - likelihood
   }
 
@@ -94,8 +95,8 @@ case class InsideOutside[F<:Factors](tree: Tree,
 
     override def toString = {
       val sb = new StringBuffer;
-      sb.append(label + " -> " + leftChild.label + "[label=" + cachedLeftMessage(label).partition +"];\n");
-      sb.append(label + " -> " + rightChild.label + "[label=" + cachedRightMessage(label).partition +"];\n");
+      sb.append(label + " -> " + leftChild.label + ";\n");
+      sb.append(label + " -> " + rightChild.label + ";\n");
       sb.append(leftChild.toString);
       sb.append(rightChild.toString);
       sb.toString;
@@ -137,12 +138,8 @@ case class InsideOutside[F<:Factors](tree: Tree,
 
     override def toString = {
       val sb = new StringBuffer;
-      sb.append(label + " -> " + leftChild.label + "[label=" + cachedLeftMessage(label).partition +"];\n");
-      sb.append(label + " -> " + rightChild.label + "[label=" + cachedRightMessage(label).partition +"];\n");
-      if(hasUpwardMessage)
-        sb.append(label + " -> " + parent.label + "[label=" + cachedUpwardMessage(label).partition +"];\n");
-      else
-        sb.append(label + " -> " + parent.label + "[label=nothing];\n");
+      sb.append(label + " -> " + leftChild.label + ";\n");
+      sb.append(label + " -> " + rightChild.label + ";\n");
       sb.append(leftChild.toString);
       sb.append(rightChild.toString);
       sb.toString;
@@ -218,10 +215,6 @@ case class InsideOutside[F<:Factors](tree: Tree,
 
     override def toString = {
       val sb = new StringBuffer;
-      if(hasUpwardMessage)
-        sb.append(label + " -> " + parent.label + "[label=" + cachedUpwardMessage(label).partition +"];\n");
-      else
-        sb.append(label + " -> " + parent.label + "[label=nothing];\n");
       for( w <- bottomWords(label)) {
         sb.append(label + " -> " + w._1 + ";\n");
       }
