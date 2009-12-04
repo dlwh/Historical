@@ -3,6 +3,7 @@ package dlwh.cognates;
 import scalanlp.fst._;
 import scalanlp.util.Index;
 import scalanlp.counters.LogCounters._;
+import scalanlp.math.Numerics._;
 
 class Compression(klThreshold: Double) {
   import BigramSemiring._;
@@ -11,11 +12,11 @@ class Compression(klThreshold: Double) {
     auto.reweight(promote[Int] _ , promoteOnlyWeight _).cost.counts;
   }
   def compress(ao: Automaton[Double,Int,Char]) = {
-    val cts : LogPairedDoubleCounter[Char,Char] = handleAuto(ao);
-    val marginal = marginalize(cts);
+    val counts : LogPairedDoubleCounter[Char,Char] = handleAuto(ao);
+    val marginal = marginalize(counts);
     val charIndex = Index[Char]();
     val divergentStates = Map.empty ++ (for {
-      (ch,ctr) <- cts.rows;
+      (ch,ctr) <- counts.rows;
       kl = klDivergence(ctr,marginal)
       () = println(kl);
       if kl > klThreshold
@@ -25,6 +26,14 @@ class Compression(klThreshold: Double) {
     import Automaton._;
     val startState = if(divergentStates contains '#') charIndex('#') else -1;
     val endState = -2;
+
+    // special handling for # in the marginal case
+    val endCount = logSum((for {
+      (_,ctr) <- counts.rows;
+      v = ctr('#')
+    } yield v).toSeq);
+    
+    marginal('#') = endCount;
 
     val unigramArcs = for {
       (ch2,w) <- marginal.iterator;

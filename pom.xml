@@ -99,6 +99,6 @@
     </plugins>
   </reporting>
   <properties>
-    <scala.version>2.8.0-SNAPSHOT</scala.version>
+    <scala.version>2.8.0.Beta1-RC2</scala.version>
   </properties>
 </project>
