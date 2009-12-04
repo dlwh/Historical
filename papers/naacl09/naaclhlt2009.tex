@@ -25,7 +25,90 @@
 \begin{abstract}
 \end{abstract}
 \section{Introduction}
+\section{Background}
+\subsection{Weighted Automata}
+
+We encode distributions over strings as weighted finite state
+automata ( XXX cite Mohri). Weighted automata have been successfully
+applied to speech processing ( XXX cite Mohri) and more recently
+to morphology (cite Dreyer and Eisner). Informally, a weighted
+automaton encodes a distribution over strings (or pairs of strings)
+as weighted paths through a graph. Each edge in the graph has a
+label (a single character, or the empty character) and a weight.
+The weight of a string is then the sum of all paths through the
+graph that accept a string.
+
+More specifically, a weighted transducer assigns weights from a set
+$S$ to pairs of strings with characters in alphabets $\Sigma$ and
+$\Delta$. Each path through the transducer corresponds to an alignment
+between two strings, with an associated score for that alignment.
+The weights in S must satisfy the semiring axioms, namely that there
+is an operation $\oplus$ (addition) with an identity element $\bar
+0$, an operation $\otimes$ with identity $\bar 1$ that distributes
+over $\oplus$, and $\forall s\in S, s\otimes \bar 0 = \bar 0 \otimes
+s = \bar 0$. Examples of semirings include the nonnegative real
+numbers, the logarithms of the nonnegative reals, and the nonnegative
+real numbers with $\otimes = +$ and $\oplus = \max$. These semirings
+correspond to probabilities, log probabilities, and the Viterbi
+approximation to log probabilities.
+
+Formally, a weighted transducer over pairs of strings and a semiring
+$(S,\oplus,\otimes,\bar 0, \bar 1)$ is a tuple
+$(\Sigma,\Delta,Q,I,F,E,\lambda,\rho)$, where $\Sigma$ is the
+``input'' alphabet, $\Delta$ the ``output'' alphabet, $Q$ a set of
+states, $I \subseteq Q$ a set of initial states, $F \subseteq Q$ a
+set of final states, $E \subseteq (Q \times Q \times \Sigma^+ \times
+\Delta^+ \times S)$ the set of labeled and weighted edges, $\lambda:
+I \rightarrow S$ an initial weight function, and $\rho: F \rightarrow
+S$ the final weight function. A weighted acceptor can be viewed as
+a transducer over a single alphabet, where the input and output
+labels are always the same thing.
+
+In our setting, we are primarily concerned with transducers and
+acceptors over the log semiring. In this case, a transducer assigns
+a (possibly unnormalized) log-probability to pairs of strings, and
+an acceptor similarly assigns log-probabilities to single strings.
+
+\subsection{Transducer Operations}
+
+For our purposes we are concerned with three fundamental operations
+on weighted transducers, all explained in more depth in (XXX cite
+Mohri) The first is computing the sum of all paths through a
+transducer, which corresponds to computing the partition function
+of the distribution. This operation can be performed in worst case
+cubic time (using a generalization of the Floyd-Warshall Algorithm),
+though for acyclic or feed-forward transducers this can be improved
+dramatically by using a generalization of Djisktra's algorithm, the
+Bellman-Ford algorithm or other related algorithms.
+
+The second is the composition of two transducers. Intuitively,
+composition creates a new transducer that takes the output from one
+automata and process it through the other transducer and returns
+the output of that transducer. That is, consider two transducers
+$T_1$ and $T_2$. $T_1$ has input alphabet $\Sigma$ and output
+alphabet $\Delta$, while $T_2$ has input alphabet $\Delta$ and
+output alphabet $\Omega$. The composition $T_1 \circ T_2$ returns
+a new transducer over $\Sigma$ and $\Omega$ such that $(T_1 \circ
+T_2)(s,t) = \bigoplus_{u} T_1(s,u)\otimes T_2(u,t)$. In this paper,
+we use composition for marginalization. Given a factor $f_1(s,u;T_1)$
+and another factor $f_2(u,t;T_2)$, composition corresponds to the
+operation $\psi(s,t) = \sum_u f_1(s,u) f_2(u,t)$.
+
+The third operation is transducer minimization. Transducer compositions
+produces $O(nm)$ states, where $n$ and $m$ are the number of states
+in each transducer. Repeated compositions compound the problem:
+iterated composition of $k$ transducers produces $O(n^k)$ states.
+Minimization alleviates this problem by collapsing indistinguishable
+states into a single state.  Unfortunately, minimization does not
+always shrink enough states. In section XXX, we discuss approaches
+to ``lossy'' minimization that produce automata that are not exactly
+the same, but are typically much smaller.
+
 \section{Model}
+
+In this section we present a generative model of the derivation of
+cognate words. Our task is to recover both which words are cognate
+with one another and to recover ancestral forms of those words.
 
 We make a few high-level modeling assumptions. First, all words in
 a cognate group have a single common ancestor word in a single
@@ -54,8 +137,12 @@ With these principles in mind, we define a generative model of the cognate group
     \end{enumerate}
 \end{enumerate}
 
-In our setting, we observe only the binary tree topology and the words in each language, but not their ancestral forms, or even which cognate group they belong to. Estimating
-the remaining parameters requires a variant of EM, which we derive from a variational prospective. The full data likelihood is given by:
+In our setting, we observe only the binary tree topology and the words in each language, but not their ancestral forms, the groups they belong to, or the transducers that
+govern how the words evolve.  In order to
+estimate these parameters we use a variant of ``collapsed'' simulated annealing (XXX cite), in which we explicitly sample only the cognate group to which each word belongs. 
+We estimate the parameters for the transducers $\phi$ based on these samples, which we discuss in section XXX.
+
+The parameters XXX
 \begin{equation}
   \begin{split}
     p(\vec w, \vec z, &\vec a, \mathbf{\phi}) = (\prod_\ell \prod_i p(w_{\ell
@@ -63,78 +150,65 @@ the remaining parameters requires a variant of EM, which we derive from a variat
       & (\prod_g p(\vec a_g|\mathbf{\phi}) ) p(\mathbf{\phi})
    \end{split}
  \end{equation}
- For simplicity, we assume (XXX probably won't want to do this) a uniform distribution over cognate group assignments $p(g_{\ell i })$, and a degenerate prior over
- transducers.
- We consider the factorized distribution 
- \begin{equation}
-   \begin{split}
-      q(\vec z, \vec a, \mathbf{\phi}) = (\prod_{a_1,a_2} q_{a_1,a_2}(\mathbf{\phi}_{a_1,a_2}))\prod_\ell \prod_i q_{\ell i}(z_{\ell i})\prod_g
- q_g(\vec a_g)
-    \end{split}
-  \end{equation}
- where we restrict the $q(\phi)$'s to be point-masses. We seek to
- minimize the KL divergence between $q$ and the posterior distribution $p(\vec z,
- \vec a, \mathbf{\phi}| \vec w)$. Doing so leads to the updates for each group
- assignments $z_{\ell i}$:
- \begin{equation}
-   \begin{split}
-     \log q_{\ell i}&(z_{\ell i}) \propto E_q[\log p(w_{\ell i}, z_{\ell i}, a_{z_{\ell i} Pa(\ell)},\mathbf{\phi})] + \mathrm{const}\\
-     &= E_q[\log  p(w_{\ell i}|z_{\ell i},a_{z_{\ell i}Pa(\ell)},\phi_{Pa(\ell)\ell}) ] + \mathrm{const}\\
-     &= \sum (\phi^{\log}_{Pa(\ell)\ell}(a_{gPa(\ell)},w_{\ell i}) \\
-     &~ ~ ~ - \phi^{\log}(a_{gPa(\ell)},\cdot))q(a_{gPa(\ell)}) + \mathrm{const}\\
-    \end{split}
-  \end{equation}
-where $\phi^{\log}_{Pa(\ell)\ell}$ is the transducer
-$\phi_{Pa(\ell)\ell}$ for transforming words in $\ell$'s parent
-language into words in $\ell$ itself except that arc transitions
-are replaced by their log-space counterparts. The notation $\phi^{\log}(a_{gPa(\ell)},\cdot)$
-denotes marginalizing over all possible words in the surface language. (That is, it is
-the value of the log partition function for the probability distribution.)
-Each log score
-can computed using an expectation semiring (XXX cite Eisner) and a
-variant of weighted transducer composition (XXX cite Mohri). 
 
-Now we consider the computation of $\log q_g(\vec a_g)$, the log
-probability of the words in each ancestor language for a given
-group. Note that since each group is a binary tree with interior
-nodes being string-valued random variables, we can perform approximate inference
-easily inside the tree using the inside-outside algorithm (XXX
-cite?), where we approximate the messages as described in Section XXX.
-The observed words themselves, however, require using the
-variational approximation $q_{\ell i}(z_{\ell i})$, as follows:
- \begin{equation}
-   \begin{split}
-     \log &q_{g}(\vec a_g) \propto E_q[\log p(\vec w, \vec z, \vec a_g,\mathbf{\phi})] + \mathrm{const}\\
-     &= E_q[\log p(\vec a_g|\mathbf\phi) + \sum_{\ell,i}\log p(w_{\ell i}| z_{\ell i} = g, \vec a_g,\mathbf\phi)] + \mathrm{const}\\
-     &= \log p(\vec a_g|\mathbf\phi) + \sum_{\ell,i} q(z_{\ell i}=g) \log p(w_{\ell i}|a_{g Pa(\ell)},\phi_{\ell,Pa(\ell)}) + \mathrm{const}\\
-     &= \log p(\vec a_g|\mathbf\phi) + \sum_{\ell,i} q(z_{\ell i}=g) \phi_{\ell,Pa(\ell)}^{\log}(a_{g Pa(\ell)},w_{\ell i}) + \mathrm{const}
-    \end{split}
-  \end{equation}
-Note that the right hand summands only depend only on the direct
-parent of each language $\ell$, and so these can be used as a base
-case in the inside pass of the algorithm for the entire tree.
-Moreover, we can also precompute automata
-$\phi_{\ell,Pa(\ell)}(\cdot,w_{\ell i})$ for each word. In the case
-of a fixed topology for each transducer $\phi_{\ell,Pa(\ell)}$, these automata can
-in fact be created once and reused in every iteration, changing
-the weight of the automata as $\phi$ is updated.
+ XXX
 
-For $\phi$, we (XXX how best to do $phi$? For the moment:XXX) have
-G edges in each tree that are governed by any given $\phi_{ad}$,
-for a given ancestor language $a$ and descendent language $d$. We
-restrict $q(\phi_{ad})$ to be a point estimate $\delta(\phi_{ad})$,
-which means that we wish to find:XXX fix up a,d confusion
-\begin{equation}
-  \begin{split}
-    \phi_{ad}^* &= \arg\max_{\phi_{ad}^* \in \Phi} E_q[\log p(\vec w, \vec z, \vec a,\mathbf{\phi})] \\
-    &= \arg\max_{\phi_{ad} \in \Phi} E_q[\log p(a_{ga},a_{gd}|\phi_{ad})]\\
-    &= \arg\max_{\phi_{ad} \in \Phi} E_q[\phi^{\log}_{a,d}(a_{ga},a_{gd}))]
-   \end{split}
- \end{equation}
-which again can be computed using an expectation semiring. In this
-paper, we explore several possible choices for the set of possible
-transducers $\Phi$.
- (XXX with exterior nodes similarly, taking into account $q(z)$ XXX perhaps I should show this.)
+\section{Message Approximation}
+
+Unfortunately, the maximal number of states in a message in each
+cognate group is exponential in the number of words assigned to
+that group. Minimization can only help so much: in order for two
+states to be collapsed, the distribution over transitions from those
+states must be indistinguishable, or indistinguishable to within
+some tolerance. In practice, for the kinds of transducers generated
+in our model, minimization removes at most half the states, which is
+not sufficient to negate the exponential growth.
+
+Previous authors have focused on a combination of n-best lists and
+unigram back-off models. (XXX cite eisner) In our setting, n-best
+lists seem inadequate: a 10,000-best list for a typical message
+only accounts for 50\% of message log perplexity. (XXX probably
+should run experiments for comparison.)
+
+We consider a different approach based on state splitting. Intuitively,
+we should prefer to use a unigram model over words unless there is
+evidence that a particular sequence is more probable than that
+independence assumption should suggest.
+
+Using an expectation semiring (XXX cite Eisner), we tally the
+expected number of transitions with a given label, as well as the
+expected number of bigram transitions. Then, for each character y
+(plus a hallucinated ``start'' character), we see if the distribution
+over unigram transitions $p(x_t)$ is an adequate approximation of
+the conditional distribution of unigrams $p(x_{t+1}|x_t = y)$. If
+so, then the $y$ transition can be a self-loop into the basic unigram
+model. If not, then we can create a new state which is transitioned
+into after observing any $y$. To determine whether or not to make
+a split, we measure the KL divergence between the distribution
+$p(x_t)$ and $p(x_{t+1}|x_t=y)$, and use a threshold to determine
+which states to merge and which to split.\footnote{It should be
+noted that this form of the KL divergence is identical to the mutual
+information.}
+
+This state splitting approach lends itself to recursive invocation.
+Once we consider bigrams, we could continue by splitting bigram
+states, therefore creating trigram states, and so on. In our experiments,
+we tried XXX, and found that 
+
+\subsection{Transducer Estimation}
+
+Estimating the parameters to each transducer can be performed
+analogously to the message approximation algorithm presented in the
+previous section. For each pair of parent/child languages $(a,d)$
+and each cognate group $g$, we maintain a factor marginal as a
+transducer. Our goal is to compress these G factor marginals into
+a single transducer that best approximates the alignments seen
+across all cognate groups. We follow a similar approach to the
+approach described for messages, but we must tally expected ``alignment
+n-grams'' rather than character n-grams.
+
+XXX possibly featurize.
+
 \section{Experiments}
 \section{Conclusion}
 \end{document}
