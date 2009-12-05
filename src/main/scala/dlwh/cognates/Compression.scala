@@ -14,6 +14,15 @@ class Compression(klThreshold: Double) {
   def compress(ao: Automaton[Double,Int,Char]) = {
     val counts : LogPairedDoubleCounter[Char,Char] = handleAuto(ao);
     val marginal = marginalize(counts);
+    // special handling for # in the marginal case, since it represents the start token
+    // but we want the end token.
+    val endCount = logSum((for {
+      (_,ctr) <- counts.rows;
+      v = ctr('#')
+    } yield v).toSeq);
+    
+    marginal('#') = endCount;
+
     val charIndex = Index[Char]();
     val divergentStates = Map.empty ++ (for {
       (ch,ctr) <- counts.rows;
@@ -26,14 +35,6 @@ class Compression(klThreshold: Double) {
     import Automaton._;
     val startState = if(divergentStates contains '#') charIndex('#') else -1;
     val endState = -2;
-
-    // special handling for # in the marginal case
-    val endCount = logSum((for {
-      (_,ctr) <- counts.rows;
-      v = ctr('#')
-    } yield v).toSeq);
-    
-    marginal('#') = endCount;
 
     val unigramArcs = for {
       (ch2,w) <- marginal.iterator;
