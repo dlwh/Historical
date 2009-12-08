@@ -15,12 +15,12 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
   import TrigramSemiring._;
   import ring._;
   require(maxStates >= 1);
-  def handleAuto(auto: Automaton[Double,Int,Char]) = {
+  private def handleAuto(auto: Transducer[Double,Int,Char,Char]) = {
     auto.reweight(promote[Int] _ , promoteOnlyWeight _).cost.counts;
   }
 
-  def marginalizeCounts(counts: LogPairedDoubleCounter[Gram,Char]) = {
-    val result = LogDoubleCounter[Char];
+  private def marginalizeCounts(counts: LogPairedDoubleCounter[Gram,EncodedChars]) = {
+    val result = LogDoubleCounter[EncodedChars];
     for( (Unigram(_),ctr) <- counts.rows;
       (ch,v) <- ctr) {
       result(ch) = logSum(result(ch),v);
@@ -29,16 +29,16 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
     result;
   }
 
-  def selectStates(maxStates:Int,
-                   counts: LogPairedDoubleCounter[Gram,Char],
-                   comparisonGram: Gram=>LogDoubleCounter[Char]) = {
-    def orderGrams(g1: (Gram,LogDoubleCounter[Char],Double),
-                   g2: (Gram,LogDoubleCounter[Char],Double)) = (
+  private def selectStates(maxStates:Int,
+                   counts: LogPairedDoubleCounter[Gram,EncodedChars],
+                   comparisonGram: Gram=>LogDoubleCounter[EncodedChars]) = {
+    def orderGrams(g1: (Gram,LogDoubleCounter[EncodedChars],Double),
+                   g2: (Gram,LogDoubleCounter[EncodedChars],Double)) = (
       g1._3 < g2._3
     )
     implicit val tupleOrdering = Ordering.fromLessThan(orderGrams _ )
 
-    val pq = new PriorityQueue[(Gram,LogDoubleCounter[Char],Double)]();
+    val pq = new PriorityQueue[(Gram,LogDoubleCounter[EncodedChars],Double)]();
 
     for {
       (gram:Unigram,ctr) <- counts.rows;
@@ -50,7 +50,7 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
       pq += ((gram,ctr,kl));
     }
 
-    val result = new ArrayBuffer[(Gram,LogDoubleCounter[Char])];
+    val result = new ArrayBuffer[(Gram,LogDoubleCounter[EncodedChars])];
     while(result.size < maxStates-1 && !pq.isEmpty) {
       val (gram,ctr,_) = pq.dequeue();
 
@@ -75,8 +75,8 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
     Map.empty ++ result
   }
 
-  def compress(ao: Automaton[Double,Int,Char]) = {
-    val counts : LogPairedDoubleCounter[Gram,Char] = handleAuto(ao);
+  def compress(ao: Transducer[Double,Int,Char,Char]) = {
+    val counts : LogPairedDoubleCounter[Gram,EncodedChars] = handleAuto(ao);
     val marginal = marginalizeCounts(counts);
 
     // compare to the gram of order n-1
@@ -96,17 +96,18 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
     val unigramState = -1
     // Compute the start state last
     val startState = {
-      if(selectedStates contains Unigram('#'))
-        gramIndex(Unigram('#'))
-      else if(selectedStates contains Bigram('#','#'))
-        gramIndex(Bigram('#','#'))
+      if(selectedStates contains beginningUnigram)
+        gramIndex(beginningUnigram)
+      else if(selectedStates contains beginningBigram)
+        gramIndex(beginningBigram)
       else -1;
     }
 
 
+    val endingChars = encode('#','#');
     // compute destination for an arc 
-    def destinationFor(gram: Gram, ch2: Char) = {
-      if(ch2 == '#') -2
+    def destinationFor(gram: Gram, ch2: EncodedChars) = {
+      if(ch2 == endingChars) -2
       else if(gram == Noncegram) {
         if(selectedStates contains Unigram(ch2)) gramIndex(Unigram(ch2));
         else unigramState
@@ -125,8 +126,10 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
     val unigramArcs = for {
       (ch2,w) <- marginal.iterator;
       idx2 = destinationFor(Noncegram,ch2);
-      chreal = if(ch2 == '#') ao.inAlpha.epsilon else ch2
-    } yield Arc(unigramState,idx2,chreal,chreal,w-marginal.logTotal);
+      (decCh1,decCh2) = decode(ch2)
+      ch1real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh1
+      ch2real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh2
+    } yield Arc(unigramState,idx2,ch1real,ch2real,w-marginal.logTotal);
 
     // mainloop: until we have enough states, add arcs for that state, also enqueue
     // successor states (bigrams)
@@ -134,12 +137,14 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
     val divArcs = for {
       (gram,ctr) <- selectedStates.iterator;
       idx1 = gramIndex(gram);
-      (ch2,w) <- marginal.iterator;
+      (ch2,w) <- ctr.iterator;
       idx2 = destinationFor(gram,ch2);
-      chreal = if(ch2 == '#') ao.inAlpha.epsilon else ch2
-    } yield Arc(idx1,idx2,chreal,chreal,w-marginal.logTotal);
+      (decCh1,decCh2) = decode(ch2)
+      ch1real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh1
+      ch2real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh2
+    } yield Arc(idx1,idx2,ch1real,ch2real,w-ctr.logTotal);
 
-    val auto = automaton(Map(startState->0.0),Map(endState->0.0))(
+    val auto = Transducer.transducer(Map(startState->0.0),Map(endState->0.0))(
       (unigramArcs ++ divArcs).toSeq :_*
     );
     auto
