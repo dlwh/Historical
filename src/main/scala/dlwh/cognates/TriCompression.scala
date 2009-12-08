@@ -16,7 +16,8 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
   import ring._;
   require(maxStates >= 1);
   private def handleAuto(auto: Transducer[Double,Int,Char,Char]) = {
-    auto.reweight(promote[Int] _ , promoteOnlyWeight _).cost.counts;
+    val cost = auto.reweight(promote[Int] _ , promoteOnlyWeight _).cost;
+    (cost.totalProb,cost.counts);
   }
 
   private def marginalizeCounts(counts: LogPairedDoubleCounter[Gram,EncodedChars]) = {
@@ -76,7 +77,7 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
   }
 
   def compress(ao: Transducer[Double,Int,Char,Char]) = {
-    val counts : LogPairedDoubleCounter[Gram,EncodedChars] = handleAuto(ao);
+    val (prob,counts) = handleAuto(ao);
     val marginal = marginalizeCounts(counts);
 
     // compare to the gram of order n-1
@@ -144,7 +145,7 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
       ch2real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh2
     } yield Arc(idx1,idx2,ch1real,ch2real,w-ctr.logTotal);
 
-    val auto = Transducer.transducer(Map(startState->0.0),Map(endState->0.0))(
+    val auto = Transducer.transducer(Map(startState->prob),Map(endState->0.0))(
       (unigramArcs ++ divArcs).toSeq :_*
     );
     auto
