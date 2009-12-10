@@ -55,8 +55,6 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
       import ApproximatePartitioner._;
       val minned = minimize(inter.relabel).inputProjection;
       val pruned = prune(minned);
-      //println("*CM:"+ minned.cost);
-      //println("*PM:"+ pruned.relabel.cost);
       new Marginal( pruned);
     }
 
@@ -76,33 +74,21 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
     def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost - partition;
   }
 
+  val compression = new TriCompression(0.01,20);
   def prune(fsa: Psi) = {
-    val cost = fsa.cost;
-    // Prune states with posteriors 6 x 10-6 or less
-    Pruning.prune(fsa,(x:Double) => x - cost < -7).inputProjection;
+    compression.compress(fsa).inputProjection
   }
 
   // parent to child (argument order)
   class TransducerEdge(val fst: Transducer[Double,_,Char,Char]) extends EdgeFactorBase {
     def childMarginalize(c: Marginal) = {
       val composed = (fst >> c.fsa).inputProjection;
-      //println("Composing");
-      //println(c.fsa);
-      //println(c.fsa.cost);
-      //println("CCc");
-      //println(composed.ring.zero);
-      //println(composed.cost);
       val minned = {
         import Minimizer._;
         import ApproximatePartitioner._;
         minimize(composed.relabel).inputProjection;
       }
-      //println(composed.toConnectivityDot);
-      val pruned = prune(minned);
-      //println("MC:"+ minned.cost);
-      //println("PR:"+ pruned.relabel.cost);
-      //println("Entering cost:");
-      new Marginal(pruned);
+      new Marginal(minned);
     }
     def parentMarginalize(p: Marginal) = {
       val composed = (p.fsa >> fst).outputProjection.relabel;
@@ -111,11 +97,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
         import ApproximatePartitioner._;
         minimize(composed).outputProjection;
       }
-      //println("Entering cost:");
-      //println("M:"+minned.cost);
-      val pruned = prune(minned);
-      //println("PR" + pruned.cost);
-      new Marginal(pruned);
+      new Marginal(minned);
     }
   }
 

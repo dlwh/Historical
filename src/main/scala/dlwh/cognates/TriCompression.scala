@@ -15,9 +15,11 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
   import TrigramSemiring._;
   import ring._;
   require(maxStates >= 1);
-  private def handleAuto(auto: Transducer[Double,Int,Char,Char]) = {
-    val cost = auto.reweight(promote[Int] _ , promoteOnlyWeight _).cost;
-    (cost.totalProb,cost.counts);
+  private def handleAuto(auto: Transducer[Double,_,Char,Char]) = {
+    println("Enter");
+    val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
+    println("Exit");
+    (cost.totalProb,cost.decode);
   }
 
   private def marginalizeCounts(counts: LogPairedDoubleCounter[Gram,EncodedChars]) = {
@@ -45,7 +47,7 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
       (gram:Unigram,ctr) <- counts.rows;
       comparison = comparisonGram(gram);
       kl = klDivergence(ctr,comparison)
-  //    () = println(kl);
+      //    () = println(kl);
       if kl > klThreshold
     } {
       pq += ((gram,ctr,kl));
@@ -76,7 +78,7 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
     Map.empty ++ result
   }
 
-  def compress(ao: Transducer[Double,Int,Char,Char]) = {
+  def compress(ao: Transducer[Double,_,Char,Char]) = {
     val (prob,counts) = handleAuto(ao);
     val marginal = marginalizeCounts(counts);
 
@@ -134,7 +136,6 @@ class TriCompression(klThreshold: Double, maxStates: Int) {
 
     // mainloop: until we have enough states, add arcs for that state, also enqueue
     // successor states (bigrams)
-    var numStates = 1;
     val divArcs = for {
       (gram,ctr) <- selectedStates.iterator;
       idx1 = gramIndex(gram);
