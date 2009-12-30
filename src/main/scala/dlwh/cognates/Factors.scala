@@ -36,15 +36,15 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
     new EdgeFactor(ed);
   }
   def rootMarginal(alphabet: Set[Char]) = {
-    new Marginal(new DecayAutomaton(5.0,fullAlphabet));
+    new Marginal(new DecayAutomaton(5.0,fullAlphabet) : Psi, Set.empty: Set[(Char,Char)]);
   }
   def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
 
   type Marginal = TransducerMarginal;
   type EdgeFactor = TransducerEdge;
 
-  class TransducerMarginal(val fsa: Psi) extends MarginalBase {
-    def this(w: String, cost: Double) = this(Automaton.constant(w,cost));
+  class TransducerMarginal(val fsa: Psi, val interestingChars: Set[(Char,Char)]) extends MarginalBase {
+    def this(w: String, cost: Double) = this(Automaton.constant(w,cost), Set.empty ++ w.map(c => (c,c)));
 
     /**
     * Computes the product of two marginals by intersecting their automata
@@ -54,11 +54,11 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
       import Minimizer._;
       import ApproximatePartitioner._;
       val minned = minimize(inter.relabel).inputProjection;
-      val pruned = prune(minned);
-      new Marginal( pruned);
+      val pruned = prune(minned,this.interestingChars ++ m.interestingChars);
+      new Marginal( pruned,this.interestingChars ++ m.interestingChars);
     }
 
-    def normalize = new Marginal(fsa.pushWeights.inputProjection);
+    def normalize = new Marginal(fsa.pushWeights.inputProjection,interestingChars);
     
 
     /**
@@ -74,8 +74,8 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
     def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost - partition;
   }
 
-  val compression = new TriCompression(0.01,20);
-  def prune(fsa: Psi) = {
+  def prune(fsa: Psi, interestingChars: Set[(Char,Char)]) = {
+    val compression = new TriCompression(0.01,20,interestingChars);
     compression.compress(fsa).inputProjection
   }
 
@@ -88,7 +88,8 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
         import ApproximatePartitioner._;
         minimize(composed.relabel).inputProjection;
       }
-      new Marginal(minned);
+      // XXX todo
+      new Marginal(minned, c.interestingChars);
     }
     def parentMarginalize(p: Marginal) = {
       val composed = (p.fsa >> fst).outputProjection.relabel;
@@ -97,7 +98,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
         import ApproximatePartitioner._;
         minimize(composed).outputProjection;
       }
-      new Marginal(minned);
+      new Marginal(minned, p.interestingChars);
     }
   }
 

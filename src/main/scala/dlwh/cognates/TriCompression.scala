@@ -11,140 +11,163 @@ import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
 
 
-class TriCompression(klThreshold: Double, maxStates: Int) {
+class TriCompression(klThreshold: Double, maxStates: Int, chars: Set[(Char,Char)]) {
+  
+  // Set up the semiring
+  val tgs = new TrigramSemiring(chars);
   import TrigramSemiring._;
+  import tgs._;
   import ring._;
+  
   require(maxStates >= 1);
-  private def handleAuto(auto: Transducer[Double,_,Char,Char]) = {
-    println("Enter");
+  
+  private def computeDistance(auto: Transducer[Double,_,Char,Char]) = {
     val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
-    println("Exit");
     (cost.totalProb,cost.decode);
   }
 
-  private def marginalizeCounts(counts: LogPairedDoubleCounter[Gram,EncodedChars]) = {
-    val result = LogDoubleCounter[EncodedChars];
-    for( (Unigram(_),ctr) <- counts.rows;
+  private def marginalizeCounts(counts: LogPairedDoubleCounter[Bigram,(Char,Char)]) = {
+    val marginals = LogDoubleCounter[(Char,Char)];
+    val bigrams = LogPairedDoubleCounter[(Char,Char),(Char,Char)];
+    for( (Bigram(b1,b2),ctr) <- counts.rows;
       (ch,v) <- ctr) {
-      result(ch) = logSum(result(ch),v);
+      if(b2 != (('#','#')) || ch != (('#','#'))) {
+        marginals(ch) = logSum(marginals(ch),v);
+        bigrams(b2,ch) = logSum(bigrams(b2,ch),v);
+      }
     }
 
-    result;
+    (marginals,bigrams);
+  }
+  
+  private sealed abstract class State {
+    val transitions: LogDoubleCounter[(Char,Char)];
+    val score: Double;
+    def chars : Seq[(Char,Char)]
+  }
+  private case class BiState(bigram: Bigram, transitions: LogDoubleCounter[(Char,Char)], score: Double) extends State {
+    def chars = Seq(bigram._1,bigram._2); 
+  }
+  private case class UniState(ch: (Char,Char), transitions: LogDoubleCounter[(Char,Char)], score: Double) extends State {
+    def chars = Seq(ch);
+  }
+  private case class NullState(transitions: LogDoubleCounter[(Char,Char)], score: Double) extends State {
+    def chars = Seq.empty;
   }
 
   private def selectStates(maxStates:Int,
-                   counts: LogPairedDoubleCounter[Gram,EncodedChars],
-                   comparisonGram: Gram=>LogDoubleCounter[EncodedChars]) = {
-    def orderGrams(g1: (Gram,LogDoubleCounter[EncodedChars],Double),
-                   g2: (Gram,LogDoubleCounter[EncodedChars],Double)) = (
-      g1._3 < g2._3
-    )
-    implicit val tupleOrdering = Ordering.fromLessThan(orderGrams _ )
+                   marginal: LogDoubleCounter[(Char,Char)],
+                   bigrams: LogPairedDoubleCounter[(Char,Char),(Char,Char)],
+                   trigrams: LogPairedDoubleCounter[Bigram,(Char,Char)]) = {
+    def orderStates(g1: State, g2: State) = {
+      g1.score < g2.score
+    }
+    implicit val stateOrdering = Ordering.fromLessThan(orderStates _ )
 
-    val pq = new PriorityQueue[(Gram,LogDoubleCounter[EncodedChars],Double)]();
+    val pq = new PriorityQueue[State]();
 
     for {
-      (gram:Unigram,ctr) <- counts.rows;
-      comparison = comparisonGram(gram);
-      kl = klDivergence(ctr,comparison)
-      //    () = println(kl);
+      (history,ctr) <- bigrams.rows;
+      kl = klDivergence(ctr,marginal)
+       () = println(history + " " + kl);
       if kl > klThreshold
     } {
-      pq += ((gram,ctr,kl));
+      pq += UniState(history,ctr,kl);
     }
 
-    val result = new ArrayBuffer[(Gram,LogDoubleCounter[EncodedChars])];
+    val result = scala.collection.mutable.Map[Seq[(Char,Char)],State]();
     while(result.size < maxStates-1 && !pq.isEmpty) {
-      val (gram,ctr,_) = pq.dequeue();
+      val oldState = pq.dequeue();
 
-      result += ((gram,ctr));
+      result += ((oldState.chars,oldState));
 
-      gram match {
-        case Unigram(ch) =>
-        // TODO: make this more efficient by precomputing successors
+      oldState match {
+        case UniState(ch,trans,_) if ch != (('#','#')) =>
+        // compute successors, enqueue them.
         for {
-          (gram2 @ Bigram(`ch`,ch2),ctr) <- counts.rows;
-          comparison = comparisonGram(gram);
-          kl = klDivergence(ctr,comparison)
-          //() = println(kl);
+          ch2 <- chars;
+          bg = Bigram(ch2,ch);
+          bgTrans = trigrams(bg);
+          // todo: state split
+          kl = klDivergence(bgTrans,oldState.transitions)
+          () = println(bg + " " + kl);
           if kl > klThreshold
         } {
-          pq += ((gram2,ctr,kl));
+          pq += BiState(bg,bgTrans,kl);
         }
+        case BiState(bg,bgTrans,kl) =>
+        // We have to add the previous state, if it's not already there.
+        // We should dequeue it and process it immediately, or something
+        // but meh.
+        val uniOneMinus = Seq(bg._1);
+        if (!result.contains(uniOneMinus)) {
+          result += (uniOneMinus -> UniState(bg._1,bigrams(bg._1),-1));
+        }
+          
         case _ => () // do nothing
       }
     }
 
-    Map.empty ++ result
+    Map.empty ++ result;
   }
 
   def compress(ao: Transducer[Double,_,Char,Char]) = {
-    val (prob,counts) = handleAuto(ao);
-    val marginal = marginalizeCounts(counts);
+    val (prob,counts) = computeDistance(ao);
+    val (marginal,bigrams) = marginalizeCounts(counts);
 
-    // compare to the gram of order n-1
-    def comparisonGram(gram: Gram) = gram match {
-      case b: Bigram => counts(Unigram(b._2)) 
-      case u: Unigram => marginal;
-      case _ => error("Unexpected" + gram);
+    val selectedStates = selectStates(maxStates,marginal,bigrams,counts);
+    println(selectedStates);
+
+    val gramIndex = Index[Seq[(Char,Char)]]();
+    gramIndex.index(Seq.empty);
+    for( a <- selectedStates.keysIterator) {
+      gramIndex.index(a);
     }
-
-    val selectedStates = selectStates(maxStates,counts, comparisonGram _);
-
-    val gramIndex = Index[Gram]();
 
     // a few useful states
 
-    val endState = -2;
-    val unigramState = -1
-    // Compute the start state last
+    val endState = -1;
+    val unigramState = 0;
     val startState = {
-      if(selectedStates contains beginningUnigram)
-        gramIndex(beginningUnigram)
-      else if(selectedStates contains beginningBigram)
-        gramIndex(beginningBigram)
-      else -1;
+      if(selectedStates contains Seq(beginningUnigram))
+        gramIndex(Seq(beginningUnigram))
+      else if(selectedStates contains Seq(beginningUnigram,beginningUnigram))
+        gramIndex(Seq(beginningUnigram,beginningUnigram))
+      else unigramState;
     }
-
-
+    
     val endingChars = encode('#','#');
-    // compute destination for an arc 
-    def destinationFor(gram: Gram, ch2: EncodedChars) = {
-      if(ch2 == endingChars) -2
-      else if(gram == Noncegram) {
-        if(selectedStates contains Unigram(ch2)) gramIndex(Unigram(ch2));
-        else unigramState
+    def destinationFor(history: Seq[(Char,Char)], trans: (Char,Char)):Int = {
+      if(trans == endingChars) {
+        endState 
       } else {
-        val bg = gram match {
-          case b: Bigram => Bigram(b._2,ch2);
-          case u: Unigram => Bigram(u._1,ch2);
-          case _ => error("Shouldn't be here"); 
+        var whole = history ++ Seq(trans);
+        while(!gramIndex.contains(whole)) {
+          whole = whole.drop(1);
         }
-        if(selectedStates contains bg) gramIndex(bg);
-        else if(selectedStates contains Unigram(ch2)) gramIndex(Unigram(ch2));
-        else unigramState
+        gramIndex(whole);
       }
     }
 
+
     val unigramArcs = for {
       (ch2,w) <- marginal.iterator;
-      idx2 = destinationFor(Noncegram,ch2);
+      idx2 = destinationFor(Seq.empty,ch2);
       (decCh1,decCh2) = decode(ch2)
       ch1real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh1
       ch2real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh2
     } yield Arc(unigramState,idx2,ch1real,ch2real,w-marginal.logTotal);
 
-    // mainloop: until we have enough states, add arcs for that state, also enqueue
-    // successor states (bigrams)
+
     val divArcs = for {
-      (gram,ctr) <- selectedStates.iterator;
-      idx1 = gramIndex(gram);
-      (ch2,w) <- ctr.iterator;
-      idx2 = destinationFor(gram,ch2);
+      (chars,state) <- selectedStates.iterator;
+      idx1 = gramIndex(chars);
+      (ch2,w) <- state.transitions.iterator
+      idx2 = destinationFor(chars,ch2);
       (decCh1,decCh2) = decode(ch2)
       ch1real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh1
       ch2real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh2
-    } yield Arc(idx1,idx2,ch1real,ch2real,w-ctr.logTotal);
+    } yield Arc(idx1,idx2,ch1real,ch2real,w-state.transitions.logTotal);
 
     val auto = Transducer.transducer(Map(startState->prob),Map(endState->0.0))(
       (unigramArcs ++ divArcs).toSeq :_*
