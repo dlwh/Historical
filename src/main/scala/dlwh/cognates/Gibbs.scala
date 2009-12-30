@@ -1,5 +1,7 @@
 package dlwh.cognates;
 
+
+import scalanlp.stats.sampling._;
 import scalanlp.counters.Counters.PairedDoubleCounter;
 import scalanlp.counters.Counters.DoubleCounter;
 import scalanlp.counters.LogCounters._;
@@ -27,7 +29,7 @@ class Gibbs(numGroups: Int= 1000, smoothing: Double=0.5) {
         for(group <- state.validTablesForLanguage(word.language)) {
           val prior = state.prior(group);
           val likelihood = state.likelihood(word,group);
-          globalLog.log(INFO)("  " + group + ":" + likelihood);
+          globalLog.log(INFO)("  " + group + ":" + likelihood + " " + prior);
           pGgW(group) = prior + likelihood;
         }
         val group = Multinomial(pGgW).draw;
@@ -79,7 +81,7 @@ class Gibbs(numGroups: Int= 1000, smoothing: Double=0.5) {
 
     def prior(g: Int) = {
       val numerator = (tables(g).numOccupants + smoothing)
-      val denom = groupAssignments.size + occupiedTables * smoothing;
+      val denom = (groupAssignments.size + occupiedTables * smoothing + 0.0001);
       Math.log(numerator / denom);
     }
 
