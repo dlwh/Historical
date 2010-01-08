@@ -41,8 +41,8 @@ class Compression(klThreshold: Double) {
       idx2 = if(ch2 == '#') -2
         else if(divergentStates contains ch2) charIndex(ch2)
         else -1
-      chreal = if(ch2 == '#') ao.inAlpha.epsilon else ch2
-     } yield Arc(-1,idx2,chreal,chreal,w-marginal.logTotal);
+      chreal = if(ch2 == '#') implicitly[Alphabet[Char]].epsilon else ch2
+     } yield Arc(-1,idx2,chreal,w-marginal.logTotal);
 
 
     val divArcs = for {
@@ -52,8 +52,8 @@ class Compression(klThreshold: Double) {
       idx2 = if(ch2 == '#') -2
         else if(divergentStates contains ch2) charIndex(ch2)
         else -1
-      chreal = if(ch2 == '#') ao.inAlpha.epsilon else ch2
-     } yield Arc(idx1,idx2,chreal,chreal,w-ctr.logTotal);
+      chreal = if(ch2 == '#') implicitly[Alphabet[Char]].epsilon else ch2
+     } yield Arc(idx1,idx2,chreal,w-ctr.logTotal);
 
     val auto = automaton(Map(startState->0.0),Map(endState->0.0))(
       (unigramArcs ++ divArcs).toSeq :_*

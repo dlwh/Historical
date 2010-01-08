@@ -1,6 +1,5 @@
 package dlwh.cognates;
 
-import scalanlp.math.Semiring;
 import scalanlp.math.Semiring.LogSpace._;
 import scalanlp.fst._;
 import scalanlp.util.Log._;
@@ -12,6 +11,7 @@ trait Factors {
   trait EdgeFactorBase {
     def childMarginalize(c: Marginal):Marginal;
     def parentMarginalize(p: Marginal):Marginal;
+    def withMarginals(from: Marginal, to: Marginal):EdgeFactor;
   }
   type EdgeFactor <: EdgeFactorBase;
 
@@ -28,23 +28,29 @@ trait Factors {
   def marginalForWord(w: String, score: Double=0.0): Marginal;
 }
 
-class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
+class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
+                        editDistances: Map[(Language,Language),Transducer[Double,_,Char,Char]]=Map.empty) extends Factors {
   type Self = TransducerFactors;
-  def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
-    //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
-    val ed =  new EditDistance(-5,-6,fullAlphabet)
-    new EdgeFactor(ed);
-  }
-  def rootMarginal(alphabet: Set[Char]) = {
-    new Marginal(new DecayAutomaton(5.0,fullAlphabet) : Psi, Set.empty: Set[(Char,Char)]);
-  }
-  def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
-
   type Marginal = TransducerMarginal;
   type EdgeFactor = TransducerEdge;
 
-  class TransducerMarginal(val fsa: Psi, val interestingChars: Set[(Char,Char)]) extends MarginalBase {
-    def this(w: String, cost: Double) = this(Automaton.constant(w,cost), Set.empty ++ w.map(c => (c,c)));
+  def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
+    //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
+    val ed = (for( ed <- editDistances.get((parent,child)))
+              yield pruneToAlphabet(ed,alphabet)) getOrElse new EditDistance(-5,-6,alphabet);
+    new EdgeFactor(ed);
+  }
+
+  def rootMarginal(alphabet: Set[Char]) = {
+    new Marginal(new DecayAutomaton(5.0,alphabet) : Psi, Set.empty: Set[Char], Set.empty);
+  }
+
+  def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
+
+  class TransducerMarginal(val fsa: Psi,
+                           val interestingChars: Set[Char],
+                           val intBigrams: Set[(Char,(Char))]) extends MarginalBase {
+    def this(w: String, cost: Double) = this(Automaton.constant(w,cost), unigramsOfWord(w), bigramsOfWord(w) );
 
     /**
     * Computes the product of two marginals by intersecting their automata
@@ -53,12 +59,12 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
       val inter = fsa & m.fsa
       import Minimizer._;
       import ApproximatePartitioner._;
-      val minned = minimize(inter.relabel).inputProjection;
-      val pruned = prune(minned,this.interestingChars ++ m.interestingChars);
-      new Marginal( pruned,this.interestingChars ++ m.interestingChars);
+      val minned = minimize(inter.relabel);
+      val pruned = prune(minned,this.interestingChars ++ m.interestingChars,this.intBigrams ++ m.intBigrams);
+      new Marginal( pruned,this.interestingChars ++ m.interestingChars, this.intBigrams ++ m.intBigrams);
     }
 
-    def normalize = new Marginal(fsa.pushWeights.inputProjection,interestingChars);
+    def normalize = new Marginal(fsa.pushWeights,interestingChars, intBigrams);
     
 
     /**
@@ -74,31 +80,34 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
     def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost - partition;
   }
 
-  def prune(fsa: Psi, interestingChars: Set[(Char,Char)]) = {
-    val compression = new TriCompression(0.01,20,interestingChars);
-    compression.compress(fsa).inputProjection
+  def prune(fsa: Psi, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
+    val compression = new TriCompression[Char](0.01,15,interestingChars,intBigrams,'#');
+    compression.compress(fsa)
   }
 
   // parent to child (argument order)
   class TransducerEdge(val fst: Transducer[Double,_,Char,Char]) extends EdgeFactorBase {
     def childMarginalize(c: Marginal) = {
-      val composed = (fst >> c.fsa).inputProjection;
+      val composed = (fst >> c.fsa.asTransducer).inputProjection;
       val minned = {
         import Minimizer._;
         import ApproximatePartitioner._;
-        minimize(composed.relabel).inputProjection;
+        minimize(composed.relabel);
       }
-      // XXX todo
-      new Marginal(minned, c.interestingChars);
+      new Marginal(minned, c.interestingChars, c.intBigrams);
     }
     def parentMarginalize(p: Marginal) = {
-      val composed = (p.fsa >> fst).outputProjection.relabel;
+      val composed = (p.fsa.asTransducer >> fst).outputProjection.relabel;
       val minned = {
         import Minimizer._;
         import ApproximatePartitioner._;
-        minimize(composed).outputProjection;
+        minimize(composed);
       }
-      new Marginal(minned, p.interestingChars);
+      new Marginal(minned, p.interestingChars, p.intBigrams);
+    }
+
+    def withMarginals(from: Marginal, to: Marginal) = {
+      new TransducerEdge(from.fsa.asTransducer >> fst >> to.fsa.asTransducer);
     }
   }
 
@@ -109,6 +118,23 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char]) extends Factors {
       val myM = Map(l.label->t.label,r.label->t.label) ++ lcMap ++ rcMap;
       (myM, rcLangs ++ lcLangs);
     case Child(l) => (Map.empty,Seq(l));
+  }
+
+  private def bigramsOfWord(s: String): Set[(Char,Char)] = {
+    Set.empty ++ (s.take(s.length-1) zip s.drop(1));
+  }
+
+  private def unigramsOfWord(s: String) = Set.empty ++ s;
+
+  // XXX renormalize edges (maybe, or just let them die)
+  private def pruneToAlphabet[S](ed: Transducer[Double,S,Char,Char], validCh: Set[Char]): Transducer[Double,S,Char,Char] = {
+    new Transducer[Double,S,Char,Char] {
+      def edgesMatching(s: S, ch: (Char,Char)) = {
+        ed.edgesMatching(s,ch).filter { case Arc(_,_,(a,b),_) => validCh(a) && validCh(b) }
+      }
+      val initialStateWeights = ed.initialStateWeights;
+      def finalWeight(s:S) = ed.finalWeight(s: S);
+    }
   }
 
   private val (parents,languages) = processTree(t);

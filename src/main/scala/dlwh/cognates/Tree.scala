@@ -14,6 +14,7 @@ sealed trait Tree {
   * Returns all languages (including l) that are on a path from the root to l
   */
   def predecessorsOfLanguage(l: String): Set[String];
+  def edges: Set[(String,String)];
 };
 
 case class Ancestor(label: String, lchild: Tree, rchild: Tree) extends Tree {
@@ -25,11 +26,13 @@ case class Ancestor(label: String, lchild: Tree, rchild: Tree) extends Tree {
     else if(!rightPath.isEmpty) rightPath + label;
     else Set.empty;
   }
+  def edges = lchild.edges ++ rchild.edges ++ Set((label,lchild.label),(label,rchild.label));
 }
 
 case class Child(label: String) extends Tree { 
   def map(f: String=>String) = Child(f(label));
   def predecessorsOfLanguage(l : String) = if(l == label) Set(l) else Set.empty;
+  def edges = Set.empty;
 }
 
 object Tree {

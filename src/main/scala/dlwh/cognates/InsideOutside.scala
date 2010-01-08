@@ -31,6 +31,22 @@ case class InsideOutside[F<:Factors](tree: Tree,
     case _ => error("Shouldn'tree be here"); 
   }
 
+  def edgeMarginal(from: Language, to: Language) = {
+    val f = nodes(from).asInstanceOf[NonChildNode];
+    val t = nodes(to).asInstanceOf[NonRootNode];
+
+    val fromMessage = if(t.label == f.leftChild.label) {
+      f.leftFactorMessage;
+    } else {
+      require(t.label == f.rightChild.label);
+      f.rightFactorMessage;
+    }
+    val toMessage = t.upwardFactorMessage;
+
+    val edge = edgeFor(from,to,alphabet);
+    edge.withMarginals(fromMessage,toMessage);
+  }
+
   def marginalFor(s: Language) = {
     val marg = nodes(s).marginal;
     marg
@@ -47,11 +63,15 @@ case class InsideOutside[F<:Factors](tree: Tree,
 
   // Include this word as as base word for this language
   def include(language: Language, word: Word, score: Double) = {
-    assert(score == 0.0);
     val newBottomWords = bottomWords + (language -> bottomWords(language).+( (word,score))) withDefaultValue(Map.empty);
-    val badMessages = tree.predecessorsOfLanguage(language);
-    val keep = (Set.empty ++ nodes.keysIterator.filterNot(badMessages));
-    InsideOutside.mapped(this, keep, newBottomWords);
+    if(alphabet !=  (alphabet ++ word))  {
+      new InsideOutside(tree,factors,newBottomWords)
+    } else {
+      assert(score == 0.0);
+      val badMessages = tree.predecessorsOfLanguage(language);
+      val keep = (Set.empty ++ nodes.keysIterator.filterNot(badMessages));
+      InsideOutside.mapped(this, keep, newBottomWords);
+    }
   }
 
   // Remove the word
@@ -81,6 +101,7 @@ case class InsideOutside[F<:Factors](tree: Tree,
   private trait NonRootNode extends Node {
     def upwardMessage: Marginal;
     def hasUpwardMessage: Boolean
+    def upwardFactorMessage: Marginal;
   }
 
   private trait NonChildNode extends Node {
@@ -89,6 +110,8 @@ case class InsideOutside[F<:Factors](tree: Tree,
     val rightChild = nodeFor(this,tree.rchild);
     def leftMessage: Marginal;
     def rightMessage: Marginal;
+    def leftFactorMessage: Marginal;
+    def rightFactorMessage: Marginal;
 
     protected lazy val leftChildHasMessage : Int = if(leftChild.hasUpwardMessage) 1 else 0 
     protected lazy val rightChildHasMessage : Int = if(rightChild.hasUpwardMessage) 1 else 0
@@ -124,16 +147,17 @@ case class InsideOutside[F<:Factors](tree: Tree,
     def tree = xtree;
     lazy val hasUpwardMessage = (leftChildHasMessage == 1) || (rightChildHasMessage == 1);
 
+    lazy val upwardFactorMessage = (leftChildHasMessage << 1)|rightChildHasMessage match {
+      case 0 => error("Shouldn'tree be calling this if I don'tree have a message");
+      case 1 => cachedUpwardMessage(rightChild.label);
+      case 2 => cachedUpwardMessage(leftChild.label);
+      case 3 => cachedUpwardMessage(rightChild.label) * cachedUpwardMessage(leftChild.label);
+      case _ => error("odd. This should be 1, 2, or 3");
+    };
+
     lazy val upwardMessage = {
       assert(hasUpwardMessage);
-      val incomingMarg = (leftChildHasMessage << 1)|rightChildHasMessage match {
-        case 0 => error("Shouldn'tree be calling this if I don'tree have a message");
-        case 1 => cachedUpwardMessage(rightChild.label);
-        case 2 => cachedUpwardMessage(leftChild.label);
-        case 3 => cachedUpwardMessage(rightChild.label) * cachedUpwardMessage(leftChild.label);
-        case _ => error("odd. This should be 1, 2, or 3");
-      };
-      edgeFor(parent.label,label,alphabet).childMarginalize(incomingMarg);
+      edgeFor(parent.label,label,alphabet).childMarginalize(upwardFactorMessage);
     }
 
     override def toString = {
@@ -145,21 +169,31 @@ case class InsideOutside[F<:Factors](tree: Tree,
       sb.toString;
     }
 
-    lazy val leftMessage = {
+    lazy val leftFactorMessage = {
       val incomingMarg = if(rightChildHasMessage == 1) {
         cachedUpwardMessage(rightChild.label) * parent.messageTo(this);
       } else {
         parent.messageTo(this);
       }
+      incomingMarg;
+    }
+
+    lazy val leftMessage = {
+      val incomingMarg = leftFactorMessage;
       edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(incomingMarg);
     }
 
-    lazy val rightMessage = {
+    lazy val rightFactorMessage = {
       val incomingMarg = if(leftChildHasMessage == 1) {
         cachedUpwardMessage(leftChild.label) * parent.messageTo(this);
       } else {
         parent.messageTo(this);
       }
+      incomingMarg;
+    }
+
+    lazy val rightMessage = {
+      val incomingMarg = rightFactorMessage;
       edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(incomingMarg);
     }
 
@@ -185,18 +219,24 @@ case class InsideOutside[F<:Factors](tree: Tree,
 
     def likelihood = marginal.partition;
 
-    lazy val leftMessage = {
-      globalLog.log(DEBUG)(("Root lm",label,tree.lchild.label))
+    lazy val leftFactorMessage = {
       if(rightChild.hasUpwardMessage)
-        edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(cachedUpwardMessage(rightChild.label) * parentMessage);
-      else edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(parentMessage);
+        cachedUpwardMessage(rightChild.label) * parentMessage;
+      else (parentMessage);
+    }
+
+    lazy val leftMessage = {
+      edgeFor(label,tree.lchild.label,alphabet).parentMarginalize(leftFactorMessage);
+    }
+
+    lazy val rightFactorMessage = {
+      if(leftChild.hasUpwardMessage)
+        cachedUpwardMessage(leftChild.label) * parentMessage;
+      else (parentMessage);
     }
 
     lazy val rightMessage = {
-      globalLog.log(DEBUG)(("Root rm",label,tree.rchild.label))
-      if(leftChild.hasUpwardMessage)
-        edgeFor(label,tree.rchild.label,alphabet).parentMarginalize(cachedUpwardMessage(leftChild.label) * parentMessage);
-      else edgeFor(label,tree.rchild.label,alphabet).parentMarginalize(parentMessage);
+      edgeFor(label,tree.rchild.label,alphabet).parentMarginalize(rightFactorMessage);
     }
 
     lazy val marginal = {
@@ -222,6 +262,13 @@ case class InsideOutside[F<:Factors](tree: Tree,
     }
 
     lazy val hasUpwardMessage = bottomWords.get(label).map(!_.isEmpty).getOrElse(false);
+
+    lazy val upwardFactorMessage = {
+      assert(hasUpwardMessage);
+      assert(bottomWords(label).size == 1);
+      val (word,score) = bottomWords(label).iterator.next;
+      marginalForWord(word,score);
+    }
 
     lazy val upwardMessage = {
       globalLog.log(DEBUG)("up" + (parent.label,label))

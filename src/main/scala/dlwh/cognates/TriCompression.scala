@@ -1,7 +1,5 @@
 package dlwh.cognates;
 
-import scala.collection.mutable.ArrayBuffer;
-
 import scalanlp.fst._;
 import scalanlp.util.Index;
 import scalanlp.counters.LogCounters._;
@@ -11,54 +9,41 @@ import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
 
 
-class TriCompression(klThreshold: Double, maxStates: Int, chars: Set[(Char,Char)]) {
-  
-  // Set up the semiring
-  val tgs = new TrigramSemiring(chars);
+class TriCompression[T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set[T], intBigrams: Set[(T,T)], beginningUnigram: T) {
   import TrigramSemiring._;
-  import tgs._;
-  import ring._;
-  
   require(maxStates >= 1);
   
-  private def computeDistance(auto: Transducer[Double,_,Char,Char]) = {
-    val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
-    (cost.totalProb,cost.decode);
-  }
-
-  private def marginalizeCounts(counts: LogPairedDoubleCounter[Bigram,(Char,Char)]) = {
-    val marginals = LogDoubleCounter[(Char,Char)];
-    val bigrams = LogPairedDoubleCounter[(Char,Char),(Char,Char)];
-    for( (Bigram(b1,b2),ctr) <- counts.rows;
+  private def marginalizeCounts(bigrams: LogPairedDoubleCounter[T,T]) = {
+    val marginals = LogDoubleCounter[T];
+    for( (b,ctr) <- bigrams.rows;
       (ch,v) <- ctr) {
-      if(b2 != (('#','#')) || ch != (('#','#'))) {
+      if(b != (('#','#')) || ch != (('#','#'))) {
         marginals(ch) = logSum(marginals(ch),v);
-        bigrams(b2,ch) = logSum(bigrams(b2,ch),v);
       }
     }
 
-    (marginals,bigrams);
+    marginals;
   }
   
   private sealed abstract class State {
-    val transitions: LogDoubleCounter[(Char,Char)];
+    val transitions: LogDoubleCounter[T];
     val score: Double;
-    def chars : Seq[(Char,Char)]
+    def chars : Seq[T]
   }
-  private case class BiState(bigram: Bigram, transitions: LogDoubleCounter[(Char,Char)], score: Double) extends State {
+  private case class BiState(bigram: Bigram[T], transitions: LogDoubleCounter[T], score: Double) extends State {
     def chars = Seq(bigram._1,bigram._2); 
   }
-  private case class UniState(ch: (Char,Char), transitions: LogDoubleCounter[(Char,Char)], score: Double) extends State {
+  private case class UniState(ch: T, transitions: LogDoubleCounter[T], score: Double) extends State {
     def chars = Seq(ch);
   }
-  private case class NullState(transitions: LogDoubleCounter[(Char,Char)], score: Double) extends State {
+  private case class NullState(transitions: LogDoubleCounter[T], score: Double) extends State {
     def chars = Seq.empty;
   }
 
   private def selectStates(maxStates:Int,
-                   marginal: LogDoubleCounter[(Char,Char)],
-                   bigrams: LogPairedDoubleCounter[(Char,Char),(Char,Char)],
-                   trigrams: LogPairedDoubleCounter[Bigram,(Char,Char)]) = {
+                   marginal: LogDoubleCounter[T],
+                   bigrams: LogPairedDoubleCounter[T,T],
+                   trigrams: LogPairedDoubleCounter[Bigram[T],T]) = {
     def orderStates(g1: State, g2: State) = {
       g1.score < g2.score
     }
@@ -69,13 +54,13 @@ class TriCompression(klThreshold: Double, maxStates: Int, chars: Set[(Char,Char)
     for {
       (history,ctr) <- bigrams.rows;
       kl = klDivergence(ctr,marginal)
-       () = println(history + " " + kl);
+       //() = println(history + " " + kl);
       if kl > klThreshold
     } {
       pq += UniState(history,ctr,kl);
     }
 
-    val result = scala.collection.mutable.Map[Seq[(Char,Char)],State]();
+    val result = scala.collection.mutable.Map[Seq[T],State]();
     while(result.size < maxStates-1 && !pq.isEmpty) {
       val oldState = pq.dequeue();
 
@@ -90,7 +75,7 @@ class TriCompression(klThreshold: Double, maxStates: Int, chars: Set[(Char,Char)
           bgTrans = trigrams(bg);
           // todo: state split
           kl = klDivergence(bgTrans,oldState.transitions)
-          () = println(bg + " " + kl);
+          //() = println(bg + " " + kl);
           if kl > klThreshold
         } {
           pq += BiState(bg,bgTrans,kl);
@@ -111,14 +96,29 @@ class TriCompression(klThreshold: Double, maxStates: Int, chars: Set[(Char,Char)
     Map.empty ++ result;
   }
 
-  def compress(ao: Transducer[Double,_,Char,Char]) = {
-    val (prob,counts) = computeDistance(ao);
-    val (marginal,bigrams) = marginalizeCounts(counts);
+  def compress(auto: Automaton[Double,_,T]):Automaton[Double,Int, T] = {
+    // Set up the semiring
+    val tgs = new TrigramSemiring[T](chars,intBigrams,beginningUnigram);
+    import tgs._;
+    import ring._;
 
+    println("Enter");
+    val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
+    println("Exit");
+    compress(cost.totalProb,cost.decode,cost.decodeBigrams);
+  }
+
+  def compress(prob: Double,
+               counts: LogPairedDoubleCounter[Bigram[T],T],
+               bigrams: LogPairedDoubleCounter[T,T]): Automaton[Double,Int,T] = {
+
+    val marginal = marginalizeCounts(bigrams);
     val selectedStates = selectStates(maxStates,marginal,bigrams,counts);
-    println(selectedStates);
+    //println(selectedStates);
 
-    val gramIndex = Index[Seq[(Char,Char)]]();
+    val gramIndex = Index[Seq[T]]();
+    // This must be entry 0!
+    // XXX TODO, well maybe we can be clever and not special case it.
     gramIndex.index(Seq.empty);
     for( a <- selectedStates.keysIterator) {
       gramIndex.index(a);
@@ -136,8 +136,8 @@ class TriCompression(klThreshold: Double, maxStates: Int, chars: Set[(Char,Char)
       else unigramState;
     }
     
-    val endingChars = encode('#','#');
-    def destinationFor(history: Seq[(Char,Char)], trans: (Char,Char)):Int = {
+    val endingChars = beginningUnigram;
+    def destinationFor(history: Seq[T], trans: T):Int = {
       if(trans == endingChars) {
         endState 
       } else {
@@ -150,26 +150,21 @@ class TriCompression(klThreshold: Double, maxStates: Int, chars: Set[(Char,Char)
     }
 
 
-    val unigramArcs = for {
+    val unigramArcs: Iterator[Arc[Double,Int,T]] = for {
       (ch2,w) <- marginal.iterator;
       idx2 = destinationFor(Seq.empty,ch2);
-      (decCh1,decCh2) = decode(ch2)
-      ch1real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh1
-      ch2real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh2
-    } yield Arc(unigramState,idx2,ch1real,ch2real,w-marginal.logTotal);
-
+      ch1real = if(ch2 == beginningUnigram) implicitly[Alphabet[T]].epsilon else ch2
+    } yield Arc(unigramState,idx2,ch1real,w-marginal.logTotal);
 
     val divArcs = for {
       (chars,state) <- selectedStates.iterator;
       idx1 = gramIndex(chars);
       (ch2,w) <- state.transitions.iterator
       idx2 = destinationFor(chars,ch2);
-      (decCh1,decCh2) = decode(ch2)
-      ch1real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh1
-      ch2real = if(decCh1 == '#' && decCh2 == '#') ao.inAlpha.epsilon else decCh2
-    } yield Arc(idx1,idx2,ch1real,ch2real,w-state.transitions.logTotal);
+      ch1real = if(ch2 == beginningUnigram) implicitly[Alphabet[T]].epsilon else ch2
+    } yield Arc(idx1,idx2,ch1real,w-state.transitions.logTotal);
 
-    val auto = Transducer.transducer(Map(startState->prob),Map(endState->0.0))(
+    val auto = Automaton.automaton(Map(startState->prob),Map(endState->0.0))(
       (unigramArcs ++ divArcs).toSeq :_*
     );
     auto

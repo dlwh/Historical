@@ -2,8 +2,6 @@ package dlwh.cognates;
 
 
 import scalanlp.stats.sampling._;
-import scalanlp.counters.Counters.PairedDoubleCounter;
-import scalanlp.counters.Counters.DoubleCounter;
 import scalanlp.counters.LogCounters._;
 import scalanlp.stats.sampling.Multinomial;
 import scalanlp.fst._;
@@ -42,30 +40,29 @@ class Gibbs(numGroups: Int= 1000, smoothing: Double=0.5) {
   }
 
   final case class State private (
-      tree: Tree,
-      groupAssignments: Map[Cognate,Group],
-      likelihood: Double,
-      tables: Seq[InsideOutside[TransducerFactors]],
-      factors: TransducerFactors,
-      occupiedTables: Int,
-      firstUnoccupiedTable:Int) {
+    tree: Tree,
+    groupAssignments: Map[Cognate,Group],
+    likelihood: Double,
+    tables: Seq[InsideOutside[TransducerFactors]],
+    factors: TransducerFactors,
+    occupiedTables: Int,
+    firstUnoccupiedTable:Int) {
 
 
     def this(tree: Tree, f: TransducerFactors) = this(
       tree=tree,
       groupAssignments = Map.empty,
-      likelihood= -1.0/0.0,
+      likelihood= Double.NegativeInfinity,
       tables= Seq.empty ++ Seq(emptyTable(tree,f)),
       factors=f,
       occupiedTables =0,
       firstUnoccupiedTable=0
     );
 
-
     def validTablesForLanguage(l: Language) = {
       val openTables = for {
         (io,g) <- tables.iterator.zipWithIndex
-        // only include the first unoccupied tables, and those occupied:w
+        // only include the first unoccupied tables, and those occupied
         if !io.isEmpty || g == firstUnoccupiedTable
         if isValidForLanguage(g,l)
       } yield {
@@ -90,9 +87,9 @@ class Gibbs(numGroups: Int= 1000, smoothing: Double=0.5) {
     }
 
     /**
-    * Forget that the word belongs to any group, so that he can come
-    * back to the restaurant and be reseated.
-    */
+     * Forget that the word belongs to any group, so that he can come
+     * back to the restaurant and be reseated.
+     */
     def forgetAssignment(word: Cognate) = {
       if(!groupAssignments.contains(word)) {
         this 
@@ -126,8 +123,8 @@ class Gibbs(numGroups: Int= 1000, smoothing: Double=0.5) {
 
 
     /**
-    * Put the customer at a table
-    */
+     * Put the customer at a table
+     */
     def assign(word: Cognate, group: Group) = {
       val io = tables(group);
 
@@ -207,5 +204,3 @@ object RomanceGibbs {
     }
   }
 }
-
-

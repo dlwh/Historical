@@ -1,6 +1,5 @@
 package dlwh.cognates;
 
-import scalanlp.math.Semiring;
 import scalanlp.math.Semiring.LogSpace._;
 import scalanlp.fst._;
 import scalanlp.util.Log._;
@@ -18,11 +17,12 @@ class BigramFactors(logSmoothing: Double, alphabet: Set[Char]) extends Factors {
   type EdgeFactor = BigramEdge
   def edgeFor(parent: Language, child: Language, alphabet: Set[Char]) = new EdgeFactor();
   def rootMarginal(alphabet: Set[Char]) = new Marginal(LogDoubleCounter[String]());
-  def marginalForWord(w: String, score: Double= 0.0) = new Marginal(extractBigrams(w,score));
+  def marginalForWord(word: String, score: Double= 0.0) = new Marginal(extractBigrams(word,score));
 
   class BigramEdge extends EdgeFactorBase {
     def childMarginalize(c: Marginal): Marginal = c;
     def parentMarginalize(c: Marginal): Marginal = c;
+    def withMarginals(a: Marginal, b: Marginal) = this;
   }
 
   private val totalSmoothing = logSmoothing + Math.log(alphabet.size);
@@ -43,8 +43,8 @@ class BigramFactors(logSmoothing: Double, alphabet: Set[Char]) extends Factors {
     def partition = logSum(counter.logTotal,totalSmoothing)
   }
 
-  def extractBigrams(w: String, score: Double) = {
-    val bigrams = for( a@(c1,c2) <- w.zip(w.drop(1))) yield { 
+  def extractBigrams(word: String, score: Double) = {
+    val bigrams = for( a@(c1,c2) <- word.zip(word.drop(1))) yield {
         (c1+""+c2,1.0)
     }
     val counts = Counters.aggregate(bigrams:_*);
