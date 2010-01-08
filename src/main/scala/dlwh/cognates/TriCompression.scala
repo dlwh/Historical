@@ -61,7 +61,8 @@ class TriCompression[T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set
     }
 
     val result = scala.collection.mutable.Map[Seq[T],State]();
-    while(result.size < maxStates-1 && !pq.isEmpty) {
+    result += (Seq.empty -> NullState(marginal,Double.PositiveInfinity));
+    while(result.size < maxStates && !pq.isEmpty) {
       val oldState = pq.dequeue();
 
       result += ((oldState.chars,oldState));
@@ -117,17 +118,12 @@ class TriCompression[T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set
     //println(selectedStates);
 
     val gramIndex = Index[Seq[T]]();
-    // This must be entry 0!
-    // XXX TODO, well maybe we can be clever and not special case it.
-    gramIndex.index(Seq.empty);
     for( a <- selectedStates.keysIterator) {
       gramIndex.index(a);
     }
 
     // a few useful states
-
-    val endState = -1;
-    val unigramState = 0;
+    val unigramState = gramIndex(Seq.empty);
     val startState = {
       if(selectedStates contains Seq(beginningUnigram))
         gramIndex(Seq(beginningUnigram))
@@ -138,34 +134,30 @@ class TriCompression[T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set
     
     val endingChars = beginningUnigram;
     def destinationFor(history: Seq[T], trans: T):Int = {
-      if(trans == endingChars) {
-        endState 
-      } else {
-        var whole = history ++ Seq(trans);
-        while(!gramIndex.contains(whole)) {
-          whole = whole.drop(1);
-        }
-        gramIndex(whole);
+      var whole = history ++ Seq(trans);
+      while(!gramIndex.contains(whole)) {
+        whole = whole.drop(1);
       }
+      gramIndex(whole);
     }
-
-
-    val unigramArcs: Iterator[Arc[Double,Int,T]] = for {
-      (ch2,w) <- marginal.iterator;
-      idx2 = destinationFor(Seq.empty,ch2);
-      ch1real = if(ch2 == beginningUnigram) implicitly[Alphabet[T]].epsilon else ch2
-    } yield Arc(unigramState,idx2,ch1real,w-marginal.logTotal);
 
     val divArcs = for {
       (chars,state) <- selectedStates.iterator;
       idx1 = gramIndex(chars);
       (ch2,w) <- state.transitions.iterator
       idx2 = destinationFor(chars,ch2);
-      ch1real = if(ch2 == beginningUnigram) implicitly[Alphabet[T]].epsilon else ch2
-    } yield Arc(idx1,idx2,ch1real,w-state.transitions.logTotal);
+      if (ch2 != beginningUnigram)
+    } yield Arc(idx1,idx2,ch2,w-state.transitions.logTotal);
 
-    val auto = Automaton.automaton(Map(startState->prob),Map(endState->0.0))(
-      (unigramArcs ++ divArcs).toSeq :_*
+    val finalWeights = for {
+      (chars, state) <- selectedStates
+      idx1 = gramIndex(chars);
+      finalScore = state.transitions(beginningUnigram);
+      if finalScore != Double.NegativeInfinity
+    } yield (idx1,finalScore - state.transitions.logTotal);
+
+    val auto = Automaton.automaton(Map(startState->prob),Map.empty ++ finalWeights)(
+      (divArcs).toSeq :_*
     );
     auto
   }
