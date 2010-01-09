@@ -37,7 +37,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
   def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
     //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
     val ed = (for( ed <- editDistances.get((parent,child)))
-              yield pruneToAlphabet(ed,alphabet)) getOrElse new EditDistance(-5,-6,alphabet);
+              yield pruneToAlphabet(ed,alphabet + implicitly[Alphabet[Char]].epsilon)) getOrElse new EditDistance(-5,-6,alphabet);
     new EdgeFactor(ed);
   }
 
@@ -81,7 +81,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
   }
 
   def prune(fsa: Psi, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val compression = new TriCompression[Char](0.01,15,interestingChars,intBigrams,'#');
+    val compression = new TriCompression[Char](1.0,15,interestingChars +  implicitly[Alphabet[Char]].epsilon,intBigrams,'#');
     compression.compress(fsa)
   }
 
@@ -130,7 +130,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
   private def pruneToAlphabet[S](ed: Transducer[Double,S,Char,Char], validCh: Set[Char]): Transducer[Double,S,Char,Char] = {
     new Transducer[Double,S,Char,Char] {
       def edgesMatching(s: S, ch: (Char,Char)) = {
-        ed.edgesMatching(s,ch).filter { case Arc(_,_,(a,b),_) => validCh(a) && validCh(b) }
+        ed.edgesMatching(s,ch).filter { case Arc(_,_,(a,b),_) => (validCh(a) && validCh(b)) }
       }
       val initialStateWeights = ed.initialStateWeights;
       def finalWeight(s:S) = ed.finalWeight(s: S);
