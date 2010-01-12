@@ -1,7 +1,4 @@
-Child node upwardfactor messages
-Alex's model learning
 Trigram Overlap marginals
 Trigram overlap mutation
 Trigram overlap learning
 State splitting for TriCompression
-refactor to not special-case unigram state

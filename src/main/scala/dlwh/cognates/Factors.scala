@@ -37,20 +37,21 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
   def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
     //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
     val ed = (for( ed <- editDistances.get((parent,child)))
-              yield pruneToAlphabet(ed,alphabet + implicitly[Alphabet[Char]].epsilon)) getOrElse new EditDistance(-5,-6,alphabet);
+              yield pruneToAlphabet(ed,alphabet)) getOrElse new EditDistance(-4,-4,alphabet);
     new EdgeFactor(ed);
   }
 
   def rootMarginal(alphabet: Set[Char]) = {
-    new Marginal(new DecayAutomaton(5.0,alphabet) : Psi, Set.empty: Set[Char], Set.empty);
+    new Marginal(new DecayAutomaton(5.0,alphabet) : Psi, 0, Set.empty: Set[Char], Set.empty);
   }
 
   def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
 
   class TransducerMarginal(val fsa: Psi,
+                           val length: Int,
                            val interestingChars: Set[Char],
                            val intBigrams: Set[(Char,(Char))]) extends MarginalBase {
-    def this(w: String, cost: Double) = this(Automaton.constant(w,cost), unigramsOfWord(w), bigramsOfWord(w) );
+    def this(w: String, cost: Double) = this(Automaton.constant(w,cost), w.length, unigramsOfWord(w), bigramsOfWord(w) );
 
     /**
     * Computes the product of two marginals by intersecting their automata
@@ -60,11 +61,11 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
       import Minimizer._;
       import ApproximatePartitioner._;
       val minned = minimize(inter.relabel);
-      val pruned = prune(minned,this.interestingChars ++ m.interestingChars,this.intBigrams ++ m.intBigrams);
-      new Marginal( pruned,this.interestingChars ++ m.interestingChars, this.intBigrams ++ m.intBigrams);
+      val pruned = prune(minned,length max m.length,this.interestingChars ++ m.interestingChars,this.intBigrams ++ m.intBigrams);
+      new Marginal( pruned,length max m.length,this.interestingChars ++ m.interestingChars, this.intBigrams ++ m.intBigrams);
     }
 
-    def normalize = new Marginal(fsa.pushWeights,interestingChars, intBigrams);
+    def normalize = new Marginal(fsa.pushWeights,length,interestingChars, intBigrams);
     
 
     /**
@@ -74,15 +75,21 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
       fsa.cost;
     }
 
+    override def toString = { "Marginal 3 Best: " + KBest.extractList(fsa,3)};
+
     /**
     * returns the log-normalized log probability of the word.
     */
     def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost - partition;
   }
 
-  def prune(fsa: Psi, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val compression = new TriCompression[Char](1.0,15,interestingChars +  implicitly[Alphabet[Char]].epsilon,intBigrams,'#');
-    compression.compress(fsa)
+  def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
+    val str = "Pre-Pruned 3 Best: " + KBest.extractList(fsa,3);
+    println(str);
+    //val compression = new TriCompression[Char](-100.0,15,interestingChars,intBigrams,'#');
+    val compression = new PosUniCompression[Char](length+5,'#');
+    val ret = compression.compress(fsa)
+    ret;
   }
 
   // parent to child (argument order)
@@ -94,7 +101,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
         import ApproximatePartitioner._;
         minimize(composed.relabel);
       }
-      new Marginal(minned, c.interestingChars, c.intBigrams);
+      new Marginal(minned, c.length, c.interestingChars, c.intBigrams);
     }
     def parentMarginalize(p: Marginal) = {
       val composed = (p.fsa.asTransducer >> fst).outputProjection.relabel;
@@ -103,7 +110,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
         import ApproximatePartitioner._;
         minimize(composed);
       }
-      new Marginal(minned, p.interestingChars, p.intBigrams);
+      new Marginal(minned, p.length, p.interestingChars, p.intBigrams);
     }
 
     def withMarginals(from: Marginal, to: Marginal) = {

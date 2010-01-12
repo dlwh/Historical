@@ -27,10 +27,15 @@ object RomanceFixed {
     val factors = new TransducerFactors(tree,alphabet);
     val finalFactors = (1 to 100).foldLeft(factors) { (factors,_) =>
       val fixed = new Fixed(tree, factors);
-      val ios = for{
-        cogs <- cognates;
-        io = fixed.inferenceOn(cogs)
-      } yield {
+      
+      val ios = for (cogs <- cognates) yield {
+        val preTree = tree map { l =>
+          val oneBest = cogs.find(_.language == l).map(_.word) getOrElse "<>";
+          l + " " + oneBest;
+        }
+        println(preTree);
+        val io = fixed.inferenceOn(cogs)
+
         val labeledTree = tree map { l =>
           val (oneBest,_) = KBest.extractList(io.marginalFor(l).fsa,1).head;
           l + " " + oneBest.mkString;

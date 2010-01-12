@@ -9,7 +9,7 @@ import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
 
 
-class TriCompression[T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set[T], intBigrams: Set[(T,T)], beginningUnigram: T) {
+class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set[T], intBigrams: Set[(T,T)], beginningUnigram: T) {
   import TrigramSemiring._;
   require(maxStates >= 1);
   
@@ -53,8 +53,8 @@ class TriCompression[T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set
 
     for {
       (history,ctr) <- bigrams.rows;
-      kl = klDivergence(ctr,marginal)
-       //() = println(history + " " + kl);
+      kl = klDivergence(ctr,marginal) * Math.exp( ctr.logTotal - marginal.logTotal);
+      () = println(history + " " + kl);
       if kl > klThreshold
     } {
       pq += UniState(history,ctr,kl);
@@ -68,15 +68,16 @@ class TriCompression[T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set
       result += ((oldState.chars,oldState));
 
       oldState match {
-        case UniState(ch,trans,_) if ch != (('#','#')) =>
+        case UniState(ch,trans,_) if ch != beginningUnigram =>
         // compute successors, enqueue them.
         for {
-          ch2 <- chars;
+          ch2 <- chars + beginningUnigram
           bg = Bigram(ch2,ch);
           bgTrans = trigrams(bg);
+          if bgTrans.size != 0
           // todo: state split
-          kl = klDivergence(bgTrans,oldState.transitions)
-          //() = println(bg + " " + kl);
+          kl = klDivergence(bgTrans,oldState.transitions) * Math.exp( bgTrans.logTotal - marginal.logTotal);
+          () = println(bg + " " + kl + " " + bgTrans.logTotal);
           if kl > klThreshold
         } {
           pq += BiState(bg,bgTrans,kl);
@@ -97,7 +98,7 @@ class TriCompression[T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set
     Map.empty ++ result;
   }
 
-  def compress(auto: Automaton[Double,_,T]):Automaton[Double,Int, T] = {
+  def compress(auto: Automaton[Double,_,T]):Automaton[Double,Seq[T], T] = {
     // Set up the semiring
     val tgs = new TrigramSemiring[T](chars,intBigrams,beginningUnigram);
     import tgs._;
@@ -111,7 +112,7 @@ class TriCompression[T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set
 
   def compress(prob: Double,
                counts: LogPairedDoubleCounter[Bigram[T],T],
-               bigrams: LogPairedDoubleCounter[T,T]): Automaton[Double,Int,T] = {
+               bigrams: LogPairedDoubleCounter[T,T]): Automaton[Double,Seq[T],T] = {
 
     val marginal = marginalizeCounts(bigrams);
     val selectedStates = selectStates(maxStates,marginal,bigrams,counts);
@@ -124,6 +125,7 @@ class TriCompression[T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set
 
     // a few useful states
     val unigramState = gramIndex(Seq.empty);
+    /*
     val startState = {
       if(selectedStates contains Seq(beginningUnigram))
         gramIndex(Seq(beginningUnigram))
@@ -131,30 +133,39 @@ class TriCompression[T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set
         gramIndex(Seq(beginningUnigram,beginningUnigram))
       else unigramState;
     }
+    */
     
+    val startState = {
+      if(selectedStates contains Seq(beginningUnigram))
+        (Seq(beginningUnigram))
+      else Seq.empty;
+    }
+
     val endingChars = beginningUnigram;
-    def destinationFor(history: Seq[T], trans: T):Int = {
+    def destinationFor(history: Seq[T], trans: T):Seq[T] = {
       var whole = history ++ Seq(trans);
       while(!gramIndex.contains(whole)) {
         whole = whole.drop(1);
       }
       gramIndex(whole);
+      whole
     }
 
     val divArcs = for {
       (chars,state) <- selectedStates.iterator;
-      idx1 = gramIndex(chars);
+    //  idx1 = gramIndex(chars);
       (ch2,w) <- state.transitions.iterator
       idx2 = destinationFor(chars,ch2);
       if (ch2 != beginningUnigram)
-    } yield Arc(idx1,idx2,ch2,w-state.transitions.logTotal);
+    //} yield Arc(idx1,idx2,ch2,w-state.transitions.logTotal);
+    } yield Arc(chars,idx2,ch2,w-state.transitions.logTotal);
 
     val finalWeights = for {
       (chars, state) <- selectedStates
       idx1 = gramIndex(chars);
       finalScore = state.transitions(beginningUnigram);
       if finalScore != Double.NegativeInfinity
-    } yield (idx1,finalScore - state.transitions.logTotal);
+    } yield (chars,finalScore - state.transitions.logTotal);
 
     val auto = Automaton.automaton(Map(startState->prob),Map.empty ++ finalWeights)(
       (divArcs).toSeq :_*
