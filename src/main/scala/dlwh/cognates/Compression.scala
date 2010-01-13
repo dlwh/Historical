@@ -64,3 +64,49 @@ class Compression(klThreshold: Double) {
     
   }
 }
+
+trait Compressor[State,T] {
+  def destinationFor(state: State, trans: T): State
+  def beginningUnigram: T
+}
+
+import scalanlp.fst.Arc;
+trait ArcCreator[S,T] { this : Compressor[S,T] =>
+  def arcsForCounter(state: S, ctr: LogDoubleCounter[T]): Iterator[Arc[Double,S,T]];
+  def finalWeight(state: S, ctr: LogDoubleCounter[T]): Double
+}
+
+trait NormalizedTransitions[S,T] extends ArcCreator[S,T] { this: Compressor[S,T] =>
+  def arcsForCounter(state: S, ctr: LogDoubleCounter[T]) = {
+    for{
+      (ch2,w) <- ctr.iterator
+      dest = destinationFor(state,ch2);
+      if (ch2 != beginningUnigram)
+    } yield Arc(state,dest,ch2,w-ctr.logTotal);
+  }
+
+    def finalWeight(state: S, ctr: LogDoubleCounter[T]): Double = {
+       ctr(beginningUnigram) - ctr.logTotal;
+    }
+}
+
+
+trait NormalizedByFirstChar[S,T] extends ArcCreator[S,(T,T)] { this: Compressor[S,(T,T)] =>
+  def arcsForCounter(state: S, ctr: LogDoubleCounter[(T,T)]) = {
+    val paired = LogPairedDoubleCounter[T,T]();
+    for( ((ch1,ch2),w) <- ctr) {
+      paired(ch1,ch2) = w;
+    }
+    for {
+      (ch1,ctr) <- paired.rows
+      (ch2,w) <- ctr.iterator
+      if ((ch1,ch2) != beginningUnigram)
+      dest = destinationFor(state,(ch1,ch2))
+    } yield Arc(state,dest,(ch1,ch2),w-ctr.logTotal);
+  }
+
+  def finalWeight(state: S, ctr: LogDoubleCounter[(T,T)]): Double = {
+    // XXX Todo: what to do with this?
+    ctr(beginningUnigram) - ctr.logTotal;
+  }
+}

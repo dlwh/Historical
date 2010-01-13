@@ -84,7 +84,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
     val str = "Pre-Pruned 3 Best: " + KBest.extractList(fsa,3);
     println(str);
     //val compression = new TriCompression[Char](-100.0,15,interestingChars,intBigrams,'#');
-    val compression = new PosUniCompression[Char](length+5,interestingChars,'#');
+    val compression = new PosUniCompression[Char](length+5,interestingChars,'#') with NormalizedTransitions[Int,Char];
     val ret = compression.compress(fsa)
     ret;
   }

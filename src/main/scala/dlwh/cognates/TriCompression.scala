@@ -9,7 +9,12 @@ import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
 
 
-class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Double, maxStates: Int, chars: Set[T], intBigrams: Set[(T,T)], beginningUnigram: T) {
+abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Double,
+                                                      maxStates: Int,
+                                                      chars: Set[T],
+                                                      intBigrams: Set[(T,T)],
+                                                      val beginningUnigram: T)
+                                                      extends Compressor[Seq[T],T] with ArcCreator[Seq[T],T] {
   import TrigramSemiring._;
   require(maxStates >= 1);
   
@@ -110,6 +115,20 @@ class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Double, maxSt
     compress(cost.totalProb,cost.decode,cost.decodeBigrams);
   }
 
+
+  val gramIndex = Index[Seq[T]]();
+
+
+  def destinationFor(history: Seq[T], trans: T):Seq[T] = {
+    var whole = history ++ Seq(trans);
+    while(!gramIndex.contains(whole)) {
+      whole = whole.drop(1);
+    }
+    gramIndex(whole);
+    whole
+  }
+
+
   def compress(prob: Double,
                counts: LogPairedDoubleCounter[Bigram[T],T],
                bigrams: LogPairedDoubleCounter[T,T]): Automaton[Double,Seq[T],T] = {
@@ -117,8 +136,6 @@ class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Double, maxSt
     val marginal = marginalizeCounts(bigrams);
     val selectedStates = selectStates(maxStates,marginal,bigrams,counts);
     //println(selectedStates);
-
-    val gramIndex = Index[Seq[T]]();
     for( a <- selectedStates.keysIterator) {
       gramIndex.index(a);
     }
@@ -142,28 +159,17 @@ class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Double, maxSt
     }
 
     val endingChars = beginningUnigram;
-    def destinationFor(history: Seq[T], trans: T):Seq[T] = {
-      var whole = history ++ Seq(trans);
-      while(!gramIndex.contains(whole)) {
-        whole = whole.drop(1);
-      }
-      gramIndex(whole);
-      whole
-    }
 
     val divArcs = for {
       (chars,state) <- selectedStates.iterator;
+      arc <- arcsForCounter(chars,state.transitions)
+    } yield arc;
     //  idx1 = gramIndex(chars);
-      (ch2,w) <- state.transitions.iterator
-      idx2 = destinationFor(chars,ch2);
-      if (ch2 != beginningUnigram)
-    //} yield Arc(idx1,idx2,ch2,w-state.transitions.logTotal);
-    } yield Arc(chars,idx2,ch2,w-state.transitions.logTotal);
-
+   
     val finalWeights = for {
       (chars, state) <- selectedStates
-      idx1 = gramIndex(chars);
-      finalScore = state.transitions(beginningUnigram);
+      //idx1 = gramIndex(chars);
+      finalScore = finalWeight(chars, state.transitions);
       if finalScore != Double.NegativeInfinity
     } yield (chars,finalScore - state.transitions.logTotal);
 
