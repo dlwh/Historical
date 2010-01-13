@@ -38,7 +38,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
     //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
     val ed = (for( ed <- editDistances.get((parent,child)))
               yield pruneToAlphabet(ed,alphabet)) getOrElse new EditDistance(-4,-4,alphabet);
-    new EdgeFactor(ed);
+    new EdgeFactor(ed,alphabet);
   }
 
   def rootMarginal(alphabet: Set[Char]) = {
@@ -65,9 +65,6 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
       new Marginal( pruned,length max m.length,this.interestingChars ++ m.interestingChars, this.intBigrams ++ m.intBigrams);
     }
 
-    def normalize = new Marginal(fsa.pushWeights,length,interestingChars, intBigrams);
-    
-
     /**
     * The log-normalizer of this automata
     */
@@ -87,13 +84,13 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
     val str = "Pre-Pruned 3 Best: " + KBest.extractList(fsa,3);
     println(str);
     //val compression = new TriCompression[Char](-100.0,15,interestingChars,intBigrams,'#');
-    val compression = new PosUniCompression[Char](length+5,'#');
+    val compression = new PosUniCompression[Char](length+5,interestingChars,'#');
     val ret = compression.compress(fsa)
     ret;
   }
 
   // parent to child (argument order)
-  class TransducerEdge(val fst: Transducer[Double,_,Char,Char]) extends EdgeFactorBase {
+  class TransducerEdge(val fst: Transducer[Double,_,Char,Char], alphabet: Set[Char]) extends EdgeFactorBase {
     def childMarginalize(c: Marginal) = {
       val composed = (fst >> c.fsa.asTransducer).inputProjection;
       val minned = {
@@ -101,7 +98,7 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
         import ApproximatePartitioner._;
         minimize(composed.relabel);
       }
-      new Marginal(minned, c.length, c.interestingChars, c.intBigrams);
+      new Marginal(minned, c.length, alphabet, c.intBigrams);
     }
     def parentMarginalize(p: Marginal) = {
       val composed = (p.fsa.asTransducer >> fst).outputProjection.relabel;
@@ -110,11 +107,11 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
         import ApproximatePartitioner._;
         minimize(composed);
       }
-      new Marginal(minned, p.length, p.interestingChars, p.intBigrams);
+      new Marginal(minned, p.length, alphabet, p.intBigrams);
     }
 
     def withMarginals(from: Marginal, to: Marginal) = {
-      new TransducerEdge(from.fsa.asTransducer >> fst >> to.fsa.asTransducer);
+      new TransducerEdge(from.fsa.asTransducer >> fst >> to.fsa.asTransducer, alphabet);
     }
   }
 

@@ -9,19 +9,19 @@ import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
 
 
-class PosUniCompression[@specialized("Char") T:Alphabet](maxLength: Int, beginningUnigram: T) {
+class PosUniCompression[@specialized("Char") T:Alphabet](maxLength: Int, chars: Set[T], beginningUnigram: T) {
   require(maxLength >= 1);
   
   def compress(auto: Automaton[Double,_,T]):Automaton[Double,Int, T] = {
     // Set up the semiring
-    val tgs = new PositionalUnigramSemiring(maxLength, beginningUnigram);
+    val tgs = new PositionalUnigramSemiring(maxLength, chars, beginningUnigram);
     import tgs._;
     import ring._;
 
     println("Enter");
     val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
     println("Exit");
-    compress(cost.totalProb,cost.counts);
+    compress(cost.totalProb,cost.decode);
   }
 
   def compress(prob: Double, counts: Seq[LogDoubleCounter[T]]): Automaton[Double,Int,T] = {
