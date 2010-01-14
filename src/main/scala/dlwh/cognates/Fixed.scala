@@ -25,7 +25,7 @@ object RomanceFixed {
     val tree = Tree.romance;
 
     val alphabet = Set.empty ++ cognates.iterator.flatMap(_.iterator).flatMap(_.word.iterator);
-    val factors = new TransducerFactors(tree,alphabet);
+    val factors = new TransducerFactors(tree,alphabet) with PosUniPruning;
     val finalFactors = (1 to 100).foldLeft(factors) { (factors,_) =>
       val fixed = new Fixed(tree, factors);
       
@@ -79,7 +79,7 @@ object RomanceFixed {
       // This isn't right.
       val transducers = Map.empty ++ accumulatedStats.mapValues ( ctr =>  tc.compress(0.0,trigrams,ctr));
 
-      new TransducerFactors(tree,alphabet,transducers);
+      new TransducerFactors(tree,alphabet,transducers) with PosUniPruning;
     }
   }
 }

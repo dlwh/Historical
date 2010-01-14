@@ -16,7 +16,7 @@ abstract class PosUniCompression[@specialized("Char") T:Alphabet](maxLength: Int
   
   def compress(auto: Automaton[Double,_,T]):Automaton[Double,Int, T] = {
     // Set up the semiring
-    val tgs = new PositionalUnigramSemiring(maxLength, chars, beginningUnigram);
+    val tgs = new PositionalUnigramSemiring(maxLength, chars, beginningUnigram, cheatOnEquals=true);
     import tgs._;
     import ring._;
 

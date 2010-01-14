@@ -3,6 +3,7 @@ package dlwh.cognates;
 import scalanlp.math.Semiring.LogSpace._;
 import scalanlp.fst._;
 import scalanlp.util.Log._;
+import scalanlp.math.Numerics._;
 
 import Types._;
 
@@ -28,8 +29,54 @@ trait Factors {
   def marginalForWord(w: String, score: Double=0.0): Marginal;
 }
 
-class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
-                        editDistances: Map[(Language,Language),Transducer[Double,_,Char,Char]]=Map.empty) extends Factors {
+trait MarginalPruning { this: TransducerFactors =>
+   def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Psi
+}
+
+trait PosUniPruning { this: TransducerFactors =>
+   def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
+    val compression = new PosUniCompression[Char](length+5,interestingChars,'#') with NormalizedTransitions[Int,Char];
+    val ret = compression.compress(fsa)
+    ret;
+  }
+}
+
+trait UniPruning { this: TransducerFactors =>
+   def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
+    val compression = new UniCompression[Char](interestingChars,'#') with NormalizedTransitions[Unit,Char];
+    val ret = compression.compress(fsa)
+    ret;
+  }
+}
+
+trait TriPruning { this: TransducerFactors =>
+   def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
+    val compression = new TriCompression[Char](-1000,15,interestingChars,intBigrams,'#') with NormalizedTransitions[Seq[Char],Char];
+    val ret = compression.compress(fsa)
+    ret;
+  }
+}
+
+
+trait BackedOffKBestPruning { this: TransducerFactors =>
+  val numBest = 100;
+  def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
+    val kbest : Seq[(Seq[Char],Double)] = KBest.extractList(fsa,numBest);
+    val trueCost = fsa.cost;
+    val totalCost = logSum(kbest.map(_._2));
+    assert(trueCost > totalCost);
+    val unigramCost = logDiff(totalCost,trueCost);
+    val comp = new UniCompression(interestingChars,'#')with NormalizedTransitions[Unit,Char];
+    val unigramModel : Automaton[Double,Int,Char] = comp.compress(fsa).scaleInitialWeights( unigramCost - trueCost).relabel;
+    import ApproximatePartitioner._;
+    kbest.foldLeft(unigramModel) { (fsa,stringscore) =>
+      Minimizer.minimize(unigramModel | Automaton.constant(stringscore._1,stringscore._2))
+    }
+  }
+}
+
+abstract class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
+                        editDistances: Map[(Language,Language),Transducer[Double,_,Char,Char]]=Map.empty) extends Factors with MarginalPruning {
   type Self = TransducerFactors;
   type Marginal = TransducerMarginal;
   type EdgeFactor = TransducerEdge;
@@ -61,6 +108,8 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
       import Minimizer._;
       import ApproximatePartitioner._;
       val minned = minimize(inter.relabel);
+      val str = "Pre-Pruned 3 Best: " + KBest.extractList(minned,3);
+      println(str);
       val pruned = prune(minned,length max m.length,this.interestingChars ++ m.interestingChars,this.intBigrams ++ m.intBigrams);
       new Marginal( pruned,length max m.length,this.interestingChars ++ m.interestingChars, this.intBigrams ++ m.intBigrams);
     }
@@ -78,15 +127,6 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
     * returns the log-normalized log probability of the word.
     */
     def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost - partition;
-  }
-
-  def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val str = "Pre-Pruned 3 Best: " + KBest.extractList(fsa,3);
-    println(str);
-    //val compression = new TriCompression[Char](-100.0,15,interestingChars,intBigrams,'#');
-    val compression = new PosUniCompression[Char](length+5,interestingChars,'#') with NormalizedTransitions[Int,Char];
-    val ret = compression.compress(fsa)
-    ret;
   }
 
   // parent to child (argument order)
@@ -115,15 +155,6 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
     }
   }
 
-  private def processTree(t: Tree):(Map[Language,Language],Seq[Language]) = t match {
-    case Ancestor(label,l,r) =>
-      val (lcMap,lcLangs) = processTree(l);
-      val (rcMap,rcLangs) = processTree(r);
-      val myM = Map(l.label->t.label,r.label->t.label) ++ lcMap ++ rcMap;
-      (myM, rcLangs ++ lcLangs);
-    case Child(l) => (Map.empty,Seq(l));
-  }
-
   private def bigramsOfWord(s: String): Set[(Char,Char)] = {
     Set.empty ++ (s.take(s.length-1) zip s.drop(1));
   }
@@ -141,5 +172,4 @@ class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
     }
   }
 
-  private val (parents,languages) = processTree(t);
 }

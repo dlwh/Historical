@@ -105,7 +105,7 @@ abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Doub
 
   def compress(auto: Automaton[Double,_,T]):Automaton[Double,Seq[T], T] = {
     // Set up the semiring
-    val tgs = new TrigramSemiring[T](chars,intBigrams,beginningUnigram);
+    val tgs = new TrigramSemiring[T](chars,intBigrams,beginningUnigram,cheatOnEquals=true);
     import tgs._;
     import ring._;
 
