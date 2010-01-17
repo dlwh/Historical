@@ -11,6 +11,9 @@ import Automaton._;
 
 abstract class UniCompression[@specialized("Char") T:Alphabet](chars: Set[T],
                                                                val beginningUnigram: T) extends Compressor[Unit,T] with ArcCreator[Unit,T] {
+
+  protected def alphabet = implicitly[Alphabet[T]];
+
   def compress(auto: Automaton[Double,_,T]):Automaton[Double,Unit, T] = {
     // Set up the semiring
     val tgs = new UnigramSemiring(chars, beginningUnigram);

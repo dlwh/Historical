@@ -2,6 +2,7 @@ package dlwh.cognates;
 
 import scalanlp.fst._;
 import scalanlp.util.Index;
+import scala.collection.mutable.ArrayBuffer
 import scalanlp.counters.LogCounters._;
 import scalanlp.math.Numerics._;
 
@@ -68,6 +69,7 @@ class Compression(klThreshold: Double) {
 trait Compressor[State,T] {
   def destinationFor(state: State, trans: T): State
   def beginningUnigram: T
+  protected def alphabet: Alphabet[T];
 }
 
 import scalanlp.fst.Arc;
@@ -92,21 +94,32 @@ trait NormalizedTransitions[S,T] extends ArcCreator[S,T] { this: Compressor[S,T]
 
 
 trait NormalizedByFirstChar[S,T] extends ArcCreator[S,(T,T)] { this: Compressor[S,(T,T)] =>
+  private val eps = alphabet.epsilon._1;
+
   def arcsForCounter(state: S, ctr: LogDoubleCounter[(T,T)]) = {
     val paired = LogPairedDoubleCounter[T,T]();
+
+    val insertWeights = new ArrayBuffer[Double]();
     for( ((ch1,ch2),w) <- ctr) {
       paired(ch1,ch2) = w;
+      if(ch1 == eps)
+        insertWeights += w;
     }
+
+    val extraNormalizer = Math.log(1-Math.exp(logSum(insertWeights)-ctr.logTotal));
     for {
-      (ch1,ctr) <- paired.rows
-      (ch2,w) <- ctr.iterator
+      (ch1,inner) <- paired.rows
+      trueTotal = if(ch1 == eps) paired.logTotal else inner.logTotal - extraNormalizer;
+      (ch2,w) <- inner.iterator
       if ((ch1,ch2) != beginningUnigram)
       dest = destinationFor(state,(ch1,ch2))
-    } yield Arc(state,dest,(ch1,ch2),w-ctr.logTotal);
+    } yield Arc(state,dest,(ch1,ch2),w-trueTotal);
   }
 
   def finalWeight(state: S, ctr: LogDoubleCounter[(T,T)]): Double = {
-    // XXX Todo: what to do with this?
-    ctr(beginningUnigram) - ctr.logTotal;
+    val insertWeights = for ( ((a,b),w) <- ctr if a == eps) yield w;
+    val score = logSum(insertWeights.toSeq);
+
+    Math.log(1 - Math.exp(score-ctr.logTotal));
   }
 }

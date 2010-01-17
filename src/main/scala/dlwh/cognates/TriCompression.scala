@@ -17,6 +17,8 @@ abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Doub
                                                       extends Compressor[Seq[T],T] with ArcCreator[Seq[T],T] {
   import TrigramSemiring._;
   require(maxStates >= 1);
+
+  protected def alphabet = implicitly[Alphabet[T]];
   
   private def marginalizeCounts(bigrams: LogPairedDoubleCounter[T,T]) = {
     val marginals = LogDoubleCounter[T];
@@ -110,7 +112,7 @@ abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Doub
     import ring._;
 
     println("Enter");
-    val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
+    val cost = auto.reweight(promote[Any] _, promoteOnlyWeight _ ).cost;
     println("Exit");
     compress(cost.totalProb,cost.decode,cost.decodeBigrams);
   }

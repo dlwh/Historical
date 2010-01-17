@@ -13,6 +13,8 @@ abstract class PosUniCompression[@specialized("Char") T:Alphabet](maxLength: Int
                                                                   chars: Set[T],
                                                                   val beginningUnigram: T) extends Compressor[Int,T] with ArcCreator[Int,T] {
   require(maxLength >= 1);
+
+  protected def alphabet = implicitly[Alphabet[T]];
   
   def compress(auto: Automaton[Double,_,T]):Automaton[Double,Int, T] = {
     // Set up the semiring
