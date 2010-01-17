@@ -51,7 +51,7 @@ trait UniPruning { this: TransducerFactors =>
 
 trait TriPruning { this: TransducerFactors =>
    def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val compression = new TriCompression[Char](-1000,15,interestingChars,intBigrams,'#') with NormalizedTransitions[Seq[Char],Char];
+    val compression = new TriCompression[Char](0.0001,15,interestingChars,intBigrams,'#') with NormalizedTransitions[Seq[Char],Char];
     val ret = compression.compress(fsa)
     ret;
   }
@@ -59,19 +59,20 @@ trait TriPruning { this: TransducerFactors =>
 
 
 trait BackedOffKBestPruning { this: TransducerFactors =>
-  val numBest = 100;
+  val numBest = 300;
   def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
     val kbest : Seq[(Seq[Char],Double)] = KBest.extractList(fsa,numBest);
     val trueCost = fsa.cost;
     val totalCost = logSum(kbest.map(_._2));
     assert(trueCost > totalCost);
-    val unigramCost = logDiff(totalCost,trueCost);
-    val comp = new UniCompression(interestingChars,'#')with NormalizedTransitions[Unit,Char];
+    val unigramCost = logDiff(trueCost,totalCost);
+    val comp = new UniCompression(interestingChars,'#') with NormalizedTransitions[Unit,Char];
     val unigramModel : Automaton[Double,Int,Char] = comp.compress(fsa).scaleInitialWeights( unigramCost - trueCost).relabel;
     import ApproximatePartitioner._;
-    kbest.foldLeft(unigramModel) { (fsa,stringscore) =>
-      Minimizer.minimize(unigramModel | Automaton.constant(stringscore._1,stringscore._2))
+    val result = kbest.foldLeft(unigramModel) { (fsa,stringscore) =>
+      Minimizer.minimize(fsa | Automaton.constant(stringscore._1,stringscore._2))
     }
+    result;
   }
 }
 
@@ -84,12 +85,12 @@ abstract class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
   def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
     //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
     val ed = (for( ed <- editDistances.get((parent,child)))
-              yield pruneToAlphabet(ed,alphabet)) getOrElse new EditDistance(-4,-4,alphabet);
+              yield pruneToAlphabet(ed,alphabet + implicitly[Alphabet[Char]].epsilon)) getOrElse new EditDistance(-4,-4,alphabet);
     new EdgeFactor(ed,alphabet);
   }
 
   def rootMarginal(alphabet: Set[Char]) = {
-    new Marginal(new DecayAutomaton(5.0,alphabet) : Psi, 0, Set.empty: Set[Char], Set.empty);
+    new Marginal(new DecayAutomaton(alphabet.size+ 3.0, alphabet) : Psi, 0, Set.empty: Set[Char], Set.empty);
   }
 
   def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
@@ -108,8 +109,6 @@ abstract class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
       import Minimizer._;
       import ApproximatePartitioner._;
       val minned = minimize(inter.relabel);
-      val str = "Pre-Pruned 3 Best: " + KBest.extractList(minned,3);
-      println(str);
       val pruned = prune(minned,length max m.length,this.interestingChars ++ m.interestingChars,this.intBigrams ++ m.intBigrams);
       new Marginal( pruned,length max m.length,this.interestingChars ++ m.interestingChars, this.intBigrams ++ m.intBigrams);
     }
