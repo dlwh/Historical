@@ -14,7 +14,7 @@ object Cognates {
 
   def readCognates(file: String, languages: Seq[String])={
     val stream = this.getClass.getClassLoader().getResourceAsStream(file);
-    val src = Source.fromInputStream(stream)(Codec.UTF8).getLines().drop(1);
+    val src = Source.fromInputStream(stream)(Codec.UTF8).getLines().filter(!_.startsWith("#"));
     val cognates = (for(line <- src) yield {
       for( ((w,c),l) <- line.split(' ').zipWithIndex.toSeq zip languages) 
         yield Cognate(w,l);
