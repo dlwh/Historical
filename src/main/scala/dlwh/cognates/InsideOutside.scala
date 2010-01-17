@@ -17,18 +17,18 @@ case class InsideOutside[F<:Factors](tree: Tree,
   private val root = new RootNode(tree.asInstanceOf[Ancestor]); // whatever
 
   def cachedUpwardMessage(from: Language): Marginal = nodes(from) match {
-    case n:NonRootNode =>  val r = n.upwardMessage; println("Up from " + from); println(r); r
-    case _ => error("Shouldn'tree be here"); 
+    case n:NonRootNode =>  val r = n.upwardMessage;  r
+    case _ => error("Shouldn't be here"); 
   }
 
   def cachedLeftMessage(from: Language): Marginal = nodes(from) match {
     case n:NonChildNode => n.leftMessage;
-    case _ => error("Shouldn'tree be here"); 
+    case _ => error("Shouldn't be here"); 
   }
 
   def cachedRightMessage(from: Language): Marginal = nodes(from) match {
     case n:NonChildNode => n.rightMessage;
-    case _ => error("Shouldn'tree be here"); 
+    case _ => error("Shouldn't be here"); 
   }
 
   def edgeMarginal(from: Language, to: Language) = {
