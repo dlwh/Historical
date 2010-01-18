@@ -169,7 +169,7 @@ class Gibbs(numGroups: Int= 1000, smoothing: Double=0.5) {
 
   private def initialState(words: Seq[Cognate], tree: Tree, alphabet: Set[Char]) = {
     val groupAssignments = new muta.HashMap[Cognate,Group]();
-    val factors = new TransducerFactors(tree,alphabet);
+    val factors = new TransducerFactors(tree,alphabet) with PosUniPruning;
     new State(tree,factors);
   }
 }

@@ -38,46 +38,50 @@ object RomanceFixed {
         val io = fixed.inferenceOn(cogs)
 
         val labeledTree = tree map { l =>
-          val (oneBest,_) = KBest.extractList(io.marginalFor(l).fsa,1).head;
+          println("Marg for " + l);
+          System.out.flush();
+          val marg = io.marginalFor(l).fsa
+          println("Fleshing out " + l);
+          System.out.flush();
+          val (oneBest,_) = try { KBest.extractList(marg,1).head; } catch { case e => ("<FAIL>".toSeq,Double.NegativeInfinity) }
           l + " " + oneBest.mkString;
         }
         println(cogs);
+        System.out.flush();
         println(labeledTree);
         io
       }
 
+      val allPairs = for { 
+        a <- alphabet + implicitly[Alphabet[Char]].epsilon;
+        b <- alphabet + implicitly[Alphabet[Char]].epsilon
+      } yield (a,b);
+      
       val edgesToLearn = tree.edges.toSeq;
       val trigramStats = for{
         io <- ios
         (fromL,toL) <- edgesToLearn.iterator
       } yield {
-        val ring = new TrigramSemiring[(Char,Char)]( alphabet.map { a => (a,a)}, Set.empty, ('#','#') );
-        import ring._;
+        val uRing = new UnigramSemiring[(Char,Char)]( allPairs, ('#','#'), cheatOnEquals= true );
+        import uRing._;
         val trans = io.edgeMarginal(fromL, toL);
         val cost = trans.fst.reweight(promote _, promoteOnlyWeight _ ).cost;
 
-        val ctr = LogPairedDoubleCounter[(Char,Char),(Char,Char)]();
-        for( (k1,k2,v) <- cost.decodeBigrams.triples) {
-          ctr(k1,k2) = logSum(ctr(k1,k2),v);
-        }
-        (fromL,toL) -> ctr
+        (fromL,toL) -> cost.decode
       }
 
       import collection.mutable.{Map=>MMap}
       type APair = (Char,Char)
-      val accumulatedStats = MMap[(Language,Language),LogPairedDoubleCounter[APair,APair]]();
+      val accumulatedStats = MMap[(Language,Language),LogDoubleCounter[(Char,Char)]]();
       for ( (lpair,ctr) <- trigramStats)  {
-        val inner = accumulatedStats.getOrElseUpdate(lpair,LogPairedDoubleCounter());
-        for( (k1,k2,v) <- ctr.triples) {
-          inner(k1,k2) = logSum(inner(k1,k2),v);
+        val inner = accumulatedStats.getOrElseUpdate(lpair,LogDoubleCounter());
+        for( ( t, v) <- ctr) {
+          inner(t) = logSum(inner(t),v);
         }
       }
 
-      import TrigramSemiring._;
-      val trigrams = LogPairedDoubleCounter[Bigram[(Char,Char)],(Char,Char)]();
-      val tc = new TriCompression[(Char,Char)](1.0, 5,alphabet.map { a => (a,a)}, Set.empty, ('#','#') ) with NormalizedByFirstChar[Seq[(Char,Char)],Char];
-      // This isn't right.
-      val transducers = Map.empty ++ accumulatedStats.mapValues ( ctr =>  tc.compress(0.0,trigrams,ctr));
+      val tc = new UniCompression[(Char,Char)](allPairs, ('#','#') ) with NormalizedByFirstChar[Unit,Char];
+      val transducers = Map.empty ++ accumulatedStats.mapValues ( ctr =>  tc.compress(0.0,ctr));
 
       new TransducerFactors(tree,alphabet,transducers) with PosUniPruning;
     }

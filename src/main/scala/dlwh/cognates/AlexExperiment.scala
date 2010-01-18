@@ -11,9 +11,9 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
   require(alpha < 1 && alpha >= 0.5);
   require(batchSize >= 1);
 
-  val initialMatchCounts = 100.0;
-  val initialSubCounts = 5.0
-  val initialInsCounts = 2.0;
+  val initialMatchCounts = 80.0;
+  val initialSubCounts = 5.0;
+  val initialInsCounts = 1.0;
 
   private val alphabet = Set.empty ++ cognates.iterator.flatMap(_.iterator).flatMap(_.word.iterator);
   private val eps = implicitly[Alphabet[Char]].epsilon;
@@ -38,7 +38,13 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
       val (batch,iter) = batchgroup;
       val ios = mkInsideOutsides(factors,batch);
       val newStatistics = gatherStatistics(ios);
-      interpolate(statistics,newStatistics,eta(iter));
+      val inter = interpolate(statistics,newStatistics,eta(iter));
+      println(inter.mapValues{ a =>
+        val ctr = LogPairedDoubleCounter[Char,Char]();
+        ctr := a
+        logNormalizeRows(ctr);
+      });
+      inter
     }
 
     finalStatistics
@@ -64,11 +70,8 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
       val io = fixed.inferenceOn(cogs)
 
       val labeledTree = tree map { l =>
-        println("Marg for " + l);
-        System.out.flush();
+        System.out.println(l);
         val marg = io.marginalFor(l).fsa
-        println("Fleshing out " + l);
-        System.out.flush();
         val best = oneBest(marg).str.mkString
         l + " " + best + " " + marg.cost
       }
@@ -83,8 +86,8 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
 
   def oneBest(a: Psi) = {
     import scalanlp.math.Semiring.LogSpace._;
-    val ring = new OneBestSemiring[Char,Double];
-    import ring._;
+    val obring = new OneBestSemiring[Char,Double];
+    import obring.{ring,promote,promoteOnlyWeight};
     a.reweight(promote _, promoteOnlyWeight _ ).cost
   }
 
@@ -93,8 +96,8 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
       io <- ios
       (fromL,toL) <- edgesToLearn.iterator
     } yield {
-      val ring = new UnigramSemiring[(Char,Char)]( allPairs, ('#','#'), cheatOnEquals= true );
-      import ring._;
+      val uRing = new UnigramSemiring[(Char,Char)]( allPairs, ('#','#'), cheatOnEquals= true );
+      import uRing._;
       val trans = io.edgeMarginal(fromL, toL);
       val cost = trans.fst.reweight(promote _, promoteOnlyWeight _ ).cost;
 
@@ -139,11 +142,12 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
       counts(a->b) = logCost;
     }
 
-    val ctr = logNormalize(counts);
+    val newCounts = logNormalize(counts);
+
 
     val trigramStats = for{
       (fromL,toL) <- edgesToLearn.iterator
-    } yield (fromL,toL) -> ctr;
+    } yield (fromL,toL) -> newCounts;
 
     Map.empty ++ trigramStats;
   }
