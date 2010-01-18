@@ -22,10 +22,8 @@ abstract class PosUniCompression[@specialized("Char") T:Alphabet](maxLength: Int
     import tgs._;
     import ring._;
 
-    println("Enter");
     try {
       val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
-      println("Exit");
       compress(cost.totalProb,cost.decode);
     } catch {
       case e => println(tgs.charIndex); throw e
