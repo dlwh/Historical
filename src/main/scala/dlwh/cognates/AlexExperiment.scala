@@ -29,7 +29,7 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
   def eta(iter: Int) = Math.pow(iter+2,-alpha);
 
   def run = {
-    val initialStatistics = mkInitialStatistics;
+    val initialStatistics = initialIteration;
 
     val batches = mkBatches;
 
@@ -39,11 +39,15 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
       val ios = mkInsideOutsides(factors,batch);
       val newStatistics = gatherStatistics(ios);
       val inter = interpolate(statistics,newStatistics,eta(iter));
-      println(inter.mapValues{ a =>
-        val ctr = LogPairedDoubleCounter[Char,Char]();
-        ctr := a
-        logNormalizeRows(ctr);
-      });
+      for( (languagePair,ctr1) <- inter.iterator) {
+        println(languagePair + " =>{");
+        for( (context,ctr2) <- ctr1) {
+          println(context + "->");
+          val ctr = LogPairedDoubleCounter[(Char,Char),(Char,Char)]();
+          println(logNormalizeRows(ctr));
+        }
+        println("}");
+      };
       inter
     }
 
@@ -96,28 +100,28 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
       io <- ios
       (fromL,toL) <- edgesToLearn.iterator
     } yield {
-      val uRing = new UnigramSemiring[(Char,Char)]( allPairs, ('#','#'), cheatOnEquals= true );
+      val uRing = new BigramSemiring[(Char,Char)]( allPairs, ('#','#'), cheatOnEquals= true );
       import uRing._;
       val trans = io.edgeMarginal(fromL, toL);
       val cost = trans.fst.reweight(promote _, promoteOnlyWeight _ ).cost;
 
-      (fromL,toL) -> cost.decode
+      (fromL,toL) -> cost.counts
     }
 
     import collection.mutable.{Map=>MMap}
     type APair = (Char,Char)
-    val stats = MMap[(Language,Language),LogDoubleCounter[(Char,Char)]]();
+    val stats = MMap[(Language,Language),LogPairedDoubleCounter[(Char,Char),(Char,Char)]]();
     for ( (lpair,ctr) <- trigramStats)  {
-      val inner = stats.getOrElseUpdate(lpair,LogDoubleCounter());
+      val inner = stats.getOrElseUpdate(lpair,LogPairedDoubleCounter());
       for( ( t, v) <- ctr) {
         inner(t) = logSum(inner(t),v);
       }
     }
 
-    Map.empty ++ stats.mapValues( (a: LogDoubleCounter[(Char,Char)]) => logNormalize(a) );
+    Map.empty ++ stats.mapValues( (a: LogPairedDoubleCounter[(Char,Char),(Char,Char)]) => logNormalizeRows(a) );
   }
 
-  private type Statistics = Map[(Language,Language),LogDoubleCounter[(Char,Char)]];
+  private type Statistics = Map[(Language,Language),LogPairedDoubleCounter[(Char,Char),(Char,Char)]];
 
   def interpolate(a: Statistics, b: Statistics, eta: Double) = {
     val logEta = Math.log(eta);
@@ -132,28 +136,15 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
     newStats;
   }
 
-  def mkInitialStatistics = {
-    val counts = LogDoubleCounter[(Char,Char)]();
-    for {
-      (a,b) <- allPairs
-      count = if(a == b) initialMatchCounts else if(a == eps || b == eps) initialInsCounts else initialSubCounts
-      logCost = Math.log(count)
-    } {
-      counts(a->b) = logCost;
-    }
-
-    val newCounts = logNormalize(counts);
-
-
-    val trigramStats = for{
-      (fromL,toL) <- edgesToLearn.iterator
-    } yield (fromL,toL) -> newCounts;
-
-    Map.empty ++ trigramStats;
+  def initialIteration = {
+    val factors = new TransducerFactors(tree,alphabet) with PosUniPruning;
+    val ios = mkInsideOutsides(factors,cognates);
+    val initialStatistics =  gatherStatistics(ios);
+    initialStatistics
   }
 
-  def mkFactors(statistics: Map[(Language,Language),LogDoubleCounter[(Char,Char)]]) = {
-    val tc = new UniCompression[(Char,Char)](allPairs, ('#','#') ) with NormalizedByFirstChar[Unit,Char];
+  def mkFactors(statistics: Statistics) = {
+    val tc = new BiCompression[(Char,Char)](0.0,20,allPairs, ('#','#') ) with NormalizedByFirstChar[Option[(Char,Char)],Char];
     val transducers = Map.empty ++ statistics.mapValues ( ctr =>  tc.compress(0.0,ctr));
 
     new TransducerFactors(tree,alphabet,transducers) with PosUniPruning;
