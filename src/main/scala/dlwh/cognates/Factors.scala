@@ -85,12 +85,12 @@ abstract class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
   def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
     //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
     val ed = (for( ed <- editDistances.get((parent,child)))
-              yield pruneToAlphabet(ed,alphabet + implicitly[Alphabet[Char]].epsilon)) getOrElse new EditDistance(-4,-4,alphabet);
+              yield pruneToAlphabet(ed,alphabet + implicitly[Alphabet[Char]].epsilon)) getOrElse new EditDistance(-3,-5,alphabet);
     new EdgeFactor(ed,alphabet);
   }
 
   def rootMarginal(alphabet: Set[Char]) = {
-    new Marginal(new DecayAutomaton(alphabet.size+ 3.0, alphabet) : Psi, 0, Set.empty: Set[Char], Set.empty);
+    new Marginal(new PoissonAutomaton(alphabet.size+ 3.0,alphabet.size * 2, alphabet) : Psi, 0, Set.empty: Set[Char], Set.empty);
   }
 
   def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
