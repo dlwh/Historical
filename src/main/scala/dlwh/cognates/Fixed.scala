@@ -11,9 +11,8 @@ import Types._;
 
 class Fixed(val tree: Tree, factors: TransducerFactors) {
   def inferenceOn(cogs: Seq[Cognate]) = {
-    val initialIO = new InsideOutside(tree,factors,Map.empty withDefaultValue Map.empty);
-    val io = cogs.foldLeft(initialIO) ( (io,cog) => io.include(cog.language,cog.word,0.0));
-    io;
+    val initialIO = new InsideOutside(tree,factors,Map.empty ++ (cogs map (cog => (cog.language,cog.word))));
+    initialIO
   }
 
 }

@@ -11,4 +11,5 @@ object Types {
   type Psi = Automaton[Double,_,Char];
 
   def trace[T](x: T) = { println(x); x }
+  def TODO = error("TODO");
 }

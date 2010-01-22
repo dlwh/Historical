@@ -96,7 +96,7 @@ class Gibbs(numGroups: Int= 1000, smoothing: Double=0.5) {
       } else {
         val group = groupAssignments(word);
         val io = tables(group);
-        val newIO = io.remove(word);
+        val newIO = io.remove(word.language);
         val newTables = tables.updated(group,newIO);
         val newGroups = groupAssignments - word;
 
@@ -130,7 +130,7 @@ class Gibbs(numGroups: Int= 1000, smoothing: Double=0.5) {
 
       val wasEmpty = io.numOccupants == 0;
 
-      var newTables = tables.updated(group,io.include(word.language,word.word,0.0));
+      var newTables = tables.updated(group,io.include(word.language,word.word));
       val newGroups = groupAssignments + (word -> group);
 
       assert(!wasEmpty || group == firstUnoccupiedTable);
@@ -163,7 +163,7 @@ class Gibbs(numGroups: Int= 1000, smoothing: Double=0.5) {
   }
 
   private def emptyTable(tree : Tree, f: TransducerFactors) = {
-    new InsideOutside(tree,f,Map.empty withDefaultValue Map.empty);
+    new InsideOutside(tree,f,Map.empty);
   }
 
 

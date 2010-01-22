@@ -3,8 +3,135 @@ package dlwh.cognates;
 import Types._;
 import scalanlp.util.Log._;
 
-case class InsideOutside[F<:Factors](tree: Tree, 
-                         factors: F,
+class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Language,Word]=Map.empty) {
+  import factors._;
+  val alphabet = Set.empty ++ (for( word <- bottomWords.valuesIterator;
+                      ch <- word.iterator
+                     ) yield ch)
+
+  def edgeMarginal(from: Language, to: Language): EdgeFactor = {
+    edges( (from,to)).edgeMarginal;
+  }
+
+  def marginalFor(s: Language):Marginal = {
+    val marg = nodes(s).marginal;
+    marg
+  }
+
+  def reconstruction(s: Language):Marginal = {
+    val marg = nodes(s).reconstructedMarginal;
+    marg;
+  }
+
+  // Include this word as as base word for this language
+  def include(language: Language, word: Word) = {
+    new InsideOutside(tree,factors,bottomWords + ((language,word)));
+  }
+
+  // Remove the word associated with this language
+  def remove(language: Language) = {
+    new InsideOutside(tree,factors,bottomWords - language);
+  }
+
+
+  lazy val likelihood = {
+    root.get.likelihood;
+  }
+
+  def likelihoodWith(word: Cognate) = {
+    val incl = include(word.language,word.word);
+    incl.likelihood - likelihood
+  }
+
+  def isEmpty = bottomWords.isEmpty;
+  def numOccupants = bottomWords.size;
+  def numOccupants(l: Language) = if(bottomWords.contains(l)) 1 else 0;
+
+  private val root = buildTree(tree);
+  root foreach { root =>
+    root.parentMessage = Some(() => rootMarginal(alphabet));
+  }
+
+  private lazy val nodes = root.get.descendentNodes;
+  private lazy val edges = root.get.descendentEdges;
+
+  private class Edge(val child: Node) {
+    var parent:Node = _;
+    lazy val edgeMarginal:EdgeFactor = myEdge.withMarginals(incomingParentMessage, child.upwardMessage);
+
+    lazy val upwardMessage:Marginal = myEdge.childMarginalize(child.upwardMessage);
+    lazy val downwardMessage: Marginal = myEdge.parentMarginalize(incomingParentMessage);
+
+    private lazy val incomingParentMessage = parent.downwardMessage(this);
+    private lazy val myEdge = edgeFor(parent.language,child.language,alphabet);
+  }
+
+  private case class Node(language: Language, word: Option[Word], children: Seq[Edge], var parentMessage: Option[()=>Marginal]=None) {
+    def descendentNodes:Map[Language,Node] = {
+      Map.empty + ((language,this)) ++ children.flatMap(_.child.descendentNodes);
+    }
+
+    def descendentEdges:Map[(Language,Language),Edge] = {
+      val myEdges = children.map ( e => ((language,e.child.language),e));
+      val childEdges = children.flatMap(_.child.descendentEdges);
+      Map.empty ++ childEdges ++ myEdges;
+    }
+
+    lazy val marginal: Marginal = {
+      parentMessage.map(_.apply()).foldLeft(upwardMessage)(_*_);
+    }
+
+    lazy val upwardMessage:Marginal = {
+      val incoming = children.iterator.map(_.upwardMessage);
+      val wordMessage = word.iterator.map(w => marginalForWord(w,0.0));
+      (wordMessage ++ incoming).reduceLeft(_*_);
+    }
+
+    lazy val reconstructedMarginal: Marginal = {
+      val incoming = children.iterator.map(_.upwardMessage) ++ parentMessage.iterator.map(_.apply());
+      incoming.reduceLeft(_*_);
+    }
+
+    lazy val likelihood: Double = marginal.partition;
+
+    def downwardMessage(to: Edge):Marginal = {
+      val parent = parentMessage.iterator.map(_.apply());
+      val outgoingChildren = children.iterator.filterNot(to eq).map(_.upwardMessage);
+      val wordMessage = word.iterator.map(w => marginalForWord(w,0.0));
+      (wordMessage ++ parent ++ outgoingChildren).reduceLeft(_*_);
+    }
+  }
+
+  private def buildTree(tree: Tree): Option[Node] = tree match {
+    case Child(label) => 
+      for(word <- bottomWords.get(label)) yield {
+        val node = new Node(label,Some(word),Seq.empty);
+        node
+      }
+    case Ancestor(label,lchild,rchild) =>
+      val lNode = buildTree(lchild);
+      val rNode = buildTree(rchild);
+      val word = bottomWords.get(label);
+      val children = (lNode.iterator ++ rNode.iterator);
+      if(children.hasNext || !word.isEmpty) {
+        val node:Node = new Node(label, word, children map {n =>
+            val e:Edge = new Edge(n);
+            n.parentMessage = Some( ()=>e.downwardMessage);
+            e
+          } toSeq);
+        node.children.foreach { _.parent = node};
+        Some(node);
+      } else {
+        None;
+      }
+  }
+
+}
+
+/*
+
+class InsideOutside2[F<:Factors](tree: Tree,
+                         val factors: F,
                          bottomWords: Map[Language,Map[Word,Double]]) { outer =>
   import factors._;
                          
@@ -41,9 +168,8 @@ case class InsideOutside[F<:Factors](tree: Tree,
       require(t.label == f.rightChild.label);
       f.rightFactorMessage;
     }
-    val toMessage = t.upwardFactorMessage;
-
     val edge = edgeFor(from,to,alphabet);
+    val toMessage = t.upwardFactorMessage;
     edge.withMarginals(fromMessage,toMessage);
   }
 
@@ -63,7 +189,7 @@ case class InsideOutside[F<:Factors](tree: Tree,
 
   // Include this word as as base word for this language
   def include(language: Language, word: Word, score: Double) = {
-    val newBottomWords = bottomWords + (language -> bottomWords(language).+( (word,score))) withDefaultValue(Map.empty);
+    val newBottomWords = bottomWords + Tuple2(language,  bottomWords(language).+( (word,score))) withDefaultValue(Map.empty);
     if(alphabet !=  (alphabet ++ word))  {
       new InsideOutside(tree,factors,newBottomWords)
     } else {
@@ -95,7 +221,7 @@ case class InsideOutside[F<:Factors](tree: Tree,
   private trait Node {
     def label: Language;
     def marginal: Marginal;
-    nodes += (label -> this);
+    nodes += Tuple2(label,this);
   }
 
   private trait NonRootNode extends Node {
@@ -317,3 +443,5 @@ object InsideOutside {
     }
   }
 }
+
+*/
