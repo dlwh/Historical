@@ -41,9 +41,9 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
       val inter = interpolate(statistics,newStatistics,eta(iter));
       for( (languagePair,ctr1) <- inter.iterator) {
         println(languagePair + " => {");
-        for( (context,ctr2) <- ctr1) {
+        for( (context,ctr2) <- ctr1.rows) {
           println(context + "->");
-          println(logNormalizeRows(ctr2));
+          println(logNormalize(ctr2));
         }
         println("}");
       };
