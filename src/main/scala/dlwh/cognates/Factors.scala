@@ -90,7 +90,7 @@ abstract class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
   }
 
   def rootMarginal(alphabet: Set[Char]) = {
-    new Marginal(new PoissonAutomaton(alphabet.size+ 3.0,alphabet.size * 2, alphabet) : Psi, 0, Set.empty: Set[Char], Set.empty);
+    new Marginal(new DecayAutomaton(alphabet.size+ 3.0,alphabet) : Psi, 0, Set.empty: Set[Char], Set.empty);
   }
 
   def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);

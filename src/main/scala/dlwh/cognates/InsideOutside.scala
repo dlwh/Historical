@@ -9,8 +9,8 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
                       ch <- word.iterator
                      ) yield ch)
 
-  def edgeMarginal(from: Language, to: Language): EdgeFactor = {
-    edges( (from,to)).edgeMarginal;
+  def edgeMarginal(from: Language, to: Language): Option[EdgeFactor] = {
+    edges( (from,to)).map(_.edgeMarginal);
   }
 
   def marginalFor(s: Language):Option[Marginal] = {

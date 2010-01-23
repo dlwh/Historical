@@ -99,12 +99,12 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
   def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]) = {
     val trigramStats = for{
       io <- ios
-      pair@ (fromL,toL) <- edgesToLearn.iterator
+      pair@ (fromL,toL) <- edgesToLearn.iterator;
+      trans <- io.edgeMarginal(fromL, toL).iterator
     } yield {
       val uRing = new BigramSemiring[(Char,Char)]( allPairs, ('#','#'), cheatOnEquals= true );
       import uRing._;
       println(pair);
-      val trans = io.edgeMarginal(fromL, toL);
       val cost = trans.fst.reweight(promote _, promoteOnlyWeight _ ).cost;
 
       (fromL,toL) -> cost.counts

@@ -26,7 +26,7 @@ abstract class PosUniCompression[@specialized("Char") T:Alphabet](maxLength: Int
       val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
       compress(cost.totalProb,cost.decode);
     } catch {
-      case e => println(tgs.charIndex); throw e
+      case e => println(tgs.charIndex); println(auto); throw e
     }
   }
 
