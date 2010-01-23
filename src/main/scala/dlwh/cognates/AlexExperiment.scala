@@ -40,11 +40,10 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
       val newStatistics = gatherStatistics(ios);
       val inter = interpolate(statistics,newStatistics,eta(iter));
       for( (languagePair,ctr1) <- inter.iterator) {
-        println(languagePair + " =>{");
+        println(languagePair + " => {");
         for( (context,ctr2) <- ctr1) {
           println(context + "->");
-          val ctr = LogPairedDoubleCounter[(Char,Char),(Char,Char)]();
-          println(logNormalizeRows(ctr));
+          println(logNormalizeRows(ctr2));
         }
         println("}");
       };
