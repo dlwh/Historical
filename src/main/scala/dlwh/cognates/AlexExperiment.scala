@@ -75,9 +75,10 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
 
       val labeledTree = tree map { l =>
         System.out.println(l);
-        val marg = io.marginalFor(l).fsa
-        val best = oneBest(marg).str.mkString
-        l + " " + best + " " + marg.cost
+        val best = for( marg <- io.reconstruction(l);
+                        best = oneBest(marg.fsa).str.mkString
+                      ) yield (best,marg.fsa.cost);
+        l + " " + best;
       }
       println(cogs);
       System.out.flush();
@@ -98,10 +99,11 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
   def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]) = {
     val trigramStats = for{
       io <- ios
-      (fromL,toL) <- edgesToLearn.iterator
+      pair@ (fromL,toL) <- edgesToLearn.iterator
     } yield {
       val uRing = new BigramSemiring[(Char,Char)]( allPairs, ('#','#'), cheatOnEquals= true );
       import uRing._;
+      println(pair);
       val trans = io.edgeMarginal(fromL, toL);
       val cost = trans.fst.reweight(promote _, promoteOnlyWeight _ ).cost;
 

@@ -39,7 +39,7 @@ object RomanceFixed {
         val labeledTree = tree map { l =>
           println("Marg for " + l);
           System.out.flush();
-          val marg = io.marginalFor(l).fsa
+          val marg = io.marginalFor(l).get.fsa
           println("Fleshing out " + l);
           System.out.flush();
           val (oneBest,_) = try { KBest.extractList(marg,1).head; } catch { case e => ("<FAIL>".toSeq,Double.NegativeInfinity) }

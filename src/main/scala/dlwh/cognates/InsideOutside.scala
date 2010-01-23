@@ -13,14 +13,12 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
     edges( (from,to)).edgeMarginal;
   }
 
-  def marginalFor(s: Language):Marginal = {
-    val marg = nodes(s).marginal;
-    marg
+  def marginalFor(s: Language):Option[Marginal] = {
+    nodes.get(s).map(_.marginal);
   }
 
-  def reconstruction(s: Language):Marginal = {
-    val marg = nodes(s).reconstructedMarginal;
-    marg;
+  def reconstruction(s: Language):Option[Marginal] = {
+    nodes.get(s).map(_.reconstructedMarginal);
   }
 
   // Include this word as as base word for this language
