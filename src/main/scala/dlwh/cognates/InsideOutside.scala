@@ -31,10 +31,13 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
     new InsideOutside(tree,factors,bottomWords - language);
   }
 
+  def wordForLanguage(language:Language):Option[Word] = bottomWords.get(language);
 
   lazy val likelihood = {
     root.get.likelihood;
   }
+
+  def assignments = bottomWords.map{ case(l,v) => Cognate(l,v)};
 
   def likelihoodWith(word: Cognate) = {
     val incl = include(word.language,word.word);
