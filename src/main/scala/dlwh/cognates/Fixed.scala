@@ -60,10 +60,10 @@ object RomanceFixed {
       val trigramStats = for{
         io <- ios
         (fromL,toL) <- edgesToLearn.iterator
+        trans <- io.edgeMarginal(fromL, toL).iterator
       } yield {
         val uRing = new UnigramSemiring[(Char,Char)]( allPairs, ('#','#'), cheatOnEquals= true );
         import uRing._;
-        val trans = io.edgeMarginal(fromL, toL);
         val cost = trans.fst.reweight(promote _, promoteOnlyWeight _ ).cost;
 
         (fromL,toL) -> cost.decode

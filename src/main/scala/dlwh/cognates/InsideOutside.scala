@@ -55,7 +55,7 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
 
   private class Edge(val child: Node) {
     var parent:Node = _;
-    lazy val edgeMarginal:EdgeFactor = myEdge.withMarginals(incomingParentMessage, child.upwardMessage);
+    def edgeMarginal:EdgeFactor = myEdge.withMarginals(incomingParentMessage, child.upwardMessage);
 
     lazy val upwardMessage:Marginal = myEdge.childMarginalize(child.upwardMessage);
     lazy val downwardMessage: Marginal = myEdge.parentMarginalize(incomingParentMessage);

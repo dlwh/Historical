@@ -12,4 +12,10 @@ object Types {
 
   def trace[T](x: T) = { println(x); x }
   def TODO = error("TODO");
+  def memoryString = {
+    val r = Runtime.getRuntime;
+    val free = r.freeMemory / (1024 * 1024);
+    val total = r.totalMemory / (1024 * 1024);
+    ((total - free) + "M used; " + free  + "M free; " + total  + "M total");
+  }
 }

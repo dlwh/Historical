@@ -6,6 +6,8 @@ import scalala.Scalala._;
 import scalanlp.counters.LogCounters._;
 import scalanlp.math.Numerics._;
 import Types._;
+import scalanlp.util.Log._;
+
 
 class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.7, batchSize: Int = 3, nIter:Int = 100) {
   require(alpha < 1 && alpha >= 0.5);
@@ -82,6 +84,9 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
       println(cogs);
       System.out.flush();
       println(labeledTree);
+      globalLog.log(INFO)("GC in" + memoryString);
+      System.gc();
+      globalLog.log(INFO)("GC out" + memoryString);
       io
     }
 
@@ -101,10 +106,22 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
       pair@ (fromL,toL) <- edgesToLearn.iterator;
       trans <- io.edgeMarginal(fromL, toL).iterator
     } yield {
+      val alphabet = io.alphabet;
+      val allPairs = for {
+        a <- alphabet + eps;
+        b <- alphabet + eps;
+        if a != eps || b != eps
+      } yield (a,b);
+
+      globalLog.log(INFO)("BG in" + memoryString);
       val uRing = new BigramSemiring[(Char,Char)]( allPairs, ('#','#'), cheatOnEquals= true );
       import uRing._;
       println(pair);
       val cost = trans.fst.reweight(promote _, promoteOnlyWeight _ ).cost;
+      globalLog.log(INFO)("BG out" + memoryString);
+      globalLog.log(INFO)("GC2 in" + memoryString);
+      System.gc();
+      globalLog.log(INFO)("GC2 out" + memoryString);
 
       (fromL,toL) -> cost.counts
     }
@@ -147,8 +164,11 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
   def mkFactors(statistics: Statistics) = {
     val tc = new BiCompression[(Char,Char)](0.0,20,allPairs, ('#','#') ) with NormalizedByFirstChar[Option[(Char,Char)],Char];
     val transducers = Map.empty ++ statistics.mapValues ( ctr =>  tc.compress(0.0,ctr));
+    globalLog.log(INFO)("Trans in " + memoryString);
 
-    new TransducerFactors(tree,alphabet,transducers) with PosUniPruning;
+    val factors = new TransducerFactors(tree,alphabet,transducers) with PosUniPruning;
+    globalLog.log(INFO)("Trans out " + memoryString);
+    factors
   }
 }
 

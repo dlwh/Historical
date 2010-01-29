@@ -105,11 +105,13 @@ abstract class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
     * Computes the product of two marginals by intersecting their automata
     */
     def *(m: Marginal) = {
+      globalLog.log(INFO)("* in " + memoryString);
       val inter = fsa & m.fsa
       import Minimizer._;
       import ApproximatePartitioner._;
       val minned = minimize(inter.relabel);
       val pruned = prune(minned,length max m.length,this.interestingChars ++ m.interestingChars,this.intBigrams ++ m.intBigrams);
+      globalLog.log(INFO)("* out " + memoryString);
       new Marginal( pruned,length max m.length,this.interestingChars ++ m.interestingChars, this.intBigrams ++ m.intBigrams);
     }
 
