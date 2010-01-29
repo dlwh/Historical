@@ -19,6 +19,8 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
 
   private val alphabet = Set.empty ++ cognates.iterator.flatMap(_.iterator).flatMap(_.word.iterator);
   private val eps = implicitly[Alphabet[Char]].epsilon;
+  val transCompr = new BiCompression[(Char,Char)](0.0,20, ('#','#') ) with NormalizedByFirstChar[Option[(Char,Char)],Char];
+  type Statistics = Map[(Language,Language),transCompr.Statistics];
 
   private val edgesToLearn = tree.edges.toSeq;
 
@@ -40,6 +42,7 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
       val (batch,iter) = batchgroup;
       val ios = mkInsideOutsides(factors,batch);
       val newStatistics = gatherStatistics(ios);
+      val e = eta(iter);
       val inter = interpolate(statistics,newStatistics,eta(iter));
       for( (languagePair,ctr1) <- inter.iterator) {
         println(languagePair + " => {");
@@ -139,18 +142,10 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
     Map.empty ++ stats.mapValues( (a: LogPairedDoubleCounter[(Char,Char),(Char,Char)]) => logNormalizeRows(a) );
   }
 
-  private type Statistics = Map[(Language,Language),LogPairedDoubleCounter[(Char,Char),(Char,Char)]];
-
   def interpolate(a: Statistics, b: Statistics, eta: Double) = {
-    val logEta = Math.log(eta);
     val newStats = for( (langs,as) <- a; bs = b(langs)) yield {
-      val c = (as + Math.log(1 - eta)) value;
-      for( (k,v) <- bs) {
-        c(k) = logSum(c(k),v + logEta);
-      }
-      langs -> c
+      langs -> transCompr.interpolate(as,1-eta, bs,eta);
     }
-
     newStats;
   }
 
@@ -162,9 +157,8 @@ class AlexExperiment(tree: Tree, cognates: Seq[Seq[Cognate]], alpha: Double = 0.
   }
 
   def mkFactors(statistics: Statistics) = {
-    val tc = new BiCompression[(Char,Char)](0.0,20,allPairs, ('#','#') ) with NormalizedByFirstChar[Option[(Char,Char)],Char];
-    val transducers = Map.empty ++ statistics.mapValues ( ctr =>  tc.compress(0.0,ctr));
     globalLog.log(INFO)("Trans in " + memoryString);
+    val transducers = Map.empty ++ statistics.mapValues ( ctr =>  transCompr.compress(0.0,ctr));
 
     val factors = new TransducerFactors(tree,alphabet,transducers) with PosUniPruning;
     globalLog.log(INFO)("Trans out " + memoryString);

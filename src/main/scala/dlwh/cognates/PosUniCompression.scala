@@ -4,30 +4,41 @@ import scalanlp.fst._;
 import scalanlp.util.Index;
 import scalanlp.counters.LogCounters._;
 import scalanlp.math.Numerics._;
+import scalala.Scalala._;
 import scala.collection.mutable.PriorityQueue;
 import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
 
 
-abstract class PosUniCompression[@specialized("Char") T:Alphabet](maxLength: Int,
-                                                                  chars: Set[T],
-                                                                  val beginningUnigram: T) extends Compressor[Int,T] with ArcCreator[Int,T] {
+abstract class PosUniCompression[T:Alphabet](maxLength: Int, val beginningUnigram: T) extends Compressor[Int,T] with ArcCreator[Int,T] {
   require(maxLength >= 1);
 
   protected def alphabet = implicitly[Alphabet[T]];
-  
-  def compress(auto: Automaton[Double,_,T]):Automaton[Double,Int, T] = {
-    // Set up the semiring
-    val tgs = new PositionalUnigramSemiring(maxLength, chars, beginningUnigram, cheatOnEquals=true);
+
+  type Statistics = Seq[LogDoubleCounter[T]];
+
+  def gatherStatistics(validChars: Set[T], auto: Automaton[Double,_,T]):(Statistics,Double) = {
+    val tgs = new PositionalUnigramSemiring(maxLength, validChars, beginningUnigram, cheatOnEquals=true);
     import tgs._;
     import ring._;
+    val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
+    (cost.decode,cost.totalProb);
+  }
 
-    try {
-      val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
-      compress(cost.totalProb,cost.decode);
-    } catch {
-      case e => println(tgs.charIndex); println(auto); throw e
+  def interpolate(stats1: Statistics, eta1: Double, stats2: Statistics, eta2 :Double):Statistics = {
+    val logEta = Math.log(eta2);
+    for ( (a,b) <- stats1 zip stats2) yield {
+      val c = (a + Math.log(eta1)) value;
+      for( (k,v) <- b) {
+        c(k) = logSum(c(k),v + logEta);
+      }
+      c
     }
+  }
+  
+  def compress(chars: Set[T], auto: Automaton[Double,_,T]):Automaton[Double,Int, T] = {
+    val (stats,cost) = gatherStatistics(chars,auto);
+    compress(cost,stats);
   }
 
   def destinationFor(i: Int, t: T) = i + 1;

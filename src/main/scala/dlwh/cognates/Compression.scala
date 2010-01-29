@@ -6,16 +6,31 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.PriorityQueue
 import scalanlp.counters.LogCounters._;
 import scalanlp.math.Numerics._;
+import scalala.Scalala._;
+
+import Types._;
 
 trait Compressor[State,T] {
   def destinationFor(state: State, trans: T): State
   def beginningUnigram: T
   protected def alphabet: Alphabet[T];
+  type Statistics
+  /**
+   * @return statistics and the total probability accumulated.
+   */
+  def gatherStatistics(validChars: Set[T], auto: Automaton[Double,_,T]):(Statistics,Double)
+  def interpolate(stats1: Statistics, eta1: Double, stats2: Statistics, eta2:Double):Statistics
+
+  final def compress(auto: Automaton[Double,_,T], validChars: Set[T]):Automaton[Double,State,T] = {
+    val stats = gatherStatistics(validChars,auto);
+    compress(stats._2,stats._1);
+  }
+
+  def compress(totalProb: Double, stats: Statistics): Automaton[Double,State,T];
 }
 
-abstract class BiCompression[@specialized("Char") T:Alphabet](klThreshold: Double,
+abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
                                                       maxStates: Int,
-                                                      chars: Set[T],
                                                       val beginningUnigram: T)
                                                       extends Compressor[Option[T],T] with ArcCreator[Option[T],T] {
   import BigramSemiring._;
@@ -77,21 +92,29 @@ abstract class BiCompression[@specialized("Char") T:Alphabet](klThreshold: Doubl
     Map.empty ++ result;
   }
 
-  def compress(auto: Automaton[Double,_,T]):Automaton[Double,Option[T], T] = {
+  type Statistics = LogPairedDoubleCounter[T,T];
+
+  def interpolate(a: Statistics, eta1:Double, b: Statistics, eta2: Double) = {
+    val logEta = log(eta2);
+    val c = (a + Math.log(eta1)) value;
+    for( (k,v) <- b) {
+      c(k) = logSum(c(k),v + logEta);
+    }
+    c
+  }
+
+  def gatherStatistics(chars: Set[T], auto: Automaton[Double,_,T]): (Statistics,Double) = {
     // Set up the semiring
     val tgs = new BigramSemiring[T](chars,beginningUnigram,cheatOnEquals=true);
     import tgs._;
     import ring._;
-
     println("Enter");
     val cost = auto.reweight(promote[Any] _, promoteOnlyWeight _ ).cost;
     println("Exit");
-    compress(cost.totalProb,cost.counts);
+    (cost.counts,cost.totalProb);
   }
 
-
   val gramIndex = Index[Option[T]]();
-
 
   override def destinationFor(s: Option[T], trans: T):Option[T] = {
     var whole = Some(trans);
@@ -102,8 +125,7 @@ abstract class BiCompression[@specialized("Char") T:Alphabet](klThreshold: Doubl
     }
   }
 
-  def compress(prob: Double,
-               bigrams: LogPairedDoubleCounter[T,T]): Automaton[Double,Option[T],T] = {
+  override def compress(prob: Double, bigrams: Statistics): Automaton[Double,Option[T],T] = {
 
     val marginal = marginalizeCounts(bigrams);
     val selectedStates = selectStates(maxStates,marginal,bigrams);

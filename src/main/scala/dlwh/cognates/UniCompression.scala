@@ -7,25 +7,31 @@ import scalanlp.math.Numerics._;
 import scala.collection.mutable.PriorityQueue;
 import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
+import scalala.Scalala._;
 
 
-abstract class UniCompression[@specialized("Char") T:Alphabet](chars: Set[T],
-                                                               val beginningUnigram: T) extends Compressor[Unit,T] with ArcCreator[Unit,T] {
+abstract class UniCompression[@specialized("Char") T:Alphabet](val beginningUnigram: T) extends Compressor[Unit,T] with ArcCreator[Unit,T] {
 
   protected def alphabet = implicitly[Alphabet[T]];
 
-  def compress(auto: Automaton[Double,_,T]):Automaton[Double,Unit, T] = {
-    // Set up the semiring
+  type Statistics = LogDoubleCounter[T];
+
+  def gatherStatistics(chars: Set[T], auto: Automaton[Double,_,T]) = {
     val tgs = new UnigramSemiring(chars, beginningUnigram);
     import tgs._;
     import ring._;
 
-    try {
-      val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
-      compress(cost.totalProb,cost.decode);
-    } catch {
-      case e => println(tgs.charIndex); throw e
+    val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
+    (cost.decode,cost.totalProb);
+  }
+
+  def interpolate(a: Statistics, eta1: Double, b: Statistics, eta2: Double) = {
+    val logEta = Math.log(eta2);
+    val c = (a + Math.log(eta1)) value;
+    for( (k,v) <- b) {
+      c(k) = logSum(c(k),v + logEta);
     }
+    c
   }
 
   def destinationFor(i: Unit, t: T) = i;

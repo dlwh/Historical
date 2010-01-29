@@ -11,7 +11,6 @@ import Automaton._;
 
 abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Double,
                                                       maxStates: Int,
-                                                      chars: Set[T],
                                                       intBigrams: Set[(T,T)],
                                                       val beginningUnigram: T)
                                                       extends Compressor[Seq[T],T] with ArcCreator[Seq[T],T] {
@@ -48,15 +47,16 @@ abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Doub
   }
 
   private def selectStates(maxStates:Int,
-                   marginal: LogDoubleCounter[T],
-                   bigrams: LogPairedDoubleCounter[T,T],
-                   trigrams: LogPairedDoubleCounter[Bigram[T],T]) = {
+                           marginal: LogDoubleCounter[T],
+                           bigrams: LogPairedDoubleCounter[T,T],
+                           trigrams: LogPairedDoubleCounter[Bigram[T],T]) = {
     def orderStates(g1: State, g2: State) = {
       g1.score < g2.score
     }
     implicit val stateOrdering = Ordering.fromLessThan(orderStates _ )
 
     val pq = new PriorityQueue[State]();
+    val chars = Set.empty ++ (for( (k,v) <- bigrams.activeDomain.iterator; a <- 1 to 2 iterator) yield if (a == 1) k else v);
 
     for {
       (history,ctr) <- bigrams.rows;
@@ -105,16 +105,21 @@ abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Doub
     Map.empty ++ result;
   }
 
-  def compress(auto: Automaton[Double,_,T]):Automaton[Double,Seq[T], T] = {
-    // Set up the semiring
+  type Statistics = (LogPairedDoubleCounter[Bigram[T],T],LogPairedDoubleCounter[T,T]);
+
+  def gatherStatistics(chars: Set[T], auto: Automaton[Double,_,T]): (Statistics,Double) = {
     val tgs = new TrigramSemiring[T](chars,intBigrams,beginningUnigram,cheatOnEquals=true);
     import tgs._;
     import ring._;
-
     println("Enter");
     val cost = auto.reweight(promote[Any] _, promoteOnlyWeight _ ).cost;
     println("Exit");
-    compress(cost.totalProb,cost.decode,cost.decodeBigrams);
+    ( (cost.decode,cost.decodeBigrams),cost.totalProb);
+  }
+
+  def compress(chars: Set[T], auto: Automaton[Double,_,T]):Automaton[Double,Seq[T], T] = {
+    val (stats@(trig,big),cost) = gatherStatistics(chars,auto);
+    compress(cost,stats);
   }
 
 
@@ -131,10 +136,8 @@ abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Doub
   }
 
 
-  def compress(prob: Double,
-               counts: LogPairedDoubleCounter[Bigram[T],T],
-               bigrams: LogPairedDoubleCounter[T,T]): Automaton[Double,Seq[T],T] = {
-
+  def compress(prob: Double, stats: Statistics):Automaton[Double,Seq[T],T] = {
+    val (counts,bigrams) = stats;
     val marginal = marginalizeCounts(bigrams);
     val selectedStates = selectStates(maxStates,marginal,bigrams,counts);
     //println(selectedStates);
