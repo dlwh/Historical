@@ -79,7 +79,7 @@ object RomanceFixed {
         }
       }
 
-      val tc = new UniCompression[(Char,Char)](allPairs, ('#','#') ) with NormalizedByFirstChar[Unit,Char];
+      val tc = new UniCompression[(Char,Char)]( ('#','#') ) with NormalizedByFirstChar[Unit,Char];
       val transducers = Map.empty ++ accumulatedStats.mapValues ( ctr =>  tc.compress(0.0,ctr));
 
       new TransducerFactors(tree,alphabet,transducers) with PosUniPruning;

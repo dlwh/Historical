@@ -117,12 +117,6 @@ abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Doub
     ( (cost.decode,cost.decodeBigrams),cost.totalProb);
   }
 
-  def compress(chars: Set[T], auto: Automaton[Double,_,T]):Automaton[Double,Seq[T], T] = {
-    val (stats@(trig,big),cost) = gatherStatistics(chars,auto);
-    compress(cost,stats);
-  }
-
-
   val gramIndex = Index[Seq[T]]();
 
 

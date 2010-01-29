@@ -35,28 +35,29 @@ trait MarginalPruning { this: TransducerFactors =>
 
 trait PosUniPruning { this: TransducerFactors =>
    def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val compression = new PosUniCompression[Char](length+5,interestingChars,'#') with NormalizedTransitions[Int,Char];
-    val ret = compression.compress(fsa)
+    val compression = new PosUniCompression[Char](length+5,'#') with NormalizedTransitions[Int,Char];
+    val ret = compression.compress( fsa, interestingChars)
     ret;
   }
 }
 
 trait UniPruning { this: TransducerFactors =>
    def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val compression = new UniCompression[Char](interestingChars,'#') with NormalizedTransitions[Unit,Char];
-    val ret = compression.compress(fsa)
+    val compression = new UniCompression[Char]('#') with NormalizedTransitions[Unit,Char];
+    val ret = compression.compress(fsa,interestingChars)
     ret;
   }
 }
 
+/*
 trait TriPruning { this: TransducerFactors =>
    def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val compression = new TriCompression[Char](0.0001,15,interestingChars,intBigrams,'#') with NormalizedTransitions[Seq[Char],Char];
-    val ret = compression.compress(fsa)
+    val compression = new TriCompression[Char](0.0001,15,intBigrams,'#') with NormalizedTransitions[Seq[Char],Char];
+    val ret = compression.compress(fsa,interestingChars)
     ret;
   }
 }
-
+*/
 
 trait BackedOffKBestPruning { this: TransducerFactors =>
   val numBest = 300;
@@ -66,8 +67,8 @@ trait BackedOffKBestPruning { this: TransducerFactors =>
     val totalCost = logSum(kbest.map(_._2));
     assert(trueCost > totalCost);
     val unigramCost = logDiff(trueCost,totalCost);
-    val comp = new UniCompression(interestingChars,'#') with NormalizedTransitions[Unit,Char];
-    val unigramModel : Automaton[Double,Int,Char] = comp.compress(fsa).scaleInitialWeights( unigramCost - trueCost).relabel;
+    val comp = new UniCompression('#') with NormalizedTransitions[Unit,Char];
+    val unigramModel : Automaton[Double,Int,Char] = comp.compress(fsa,interestingChars).scaleInitialWeights( unigramCost - trueCost).relabel;
     import ApproximatePartitioner._;
     val result = kbest.foldLeft(unigramModel) { (fsa,stringscore) =>
       Minimizer.minimize(fsa | Automaton.constant(stringscore._1,stringscore._2))
