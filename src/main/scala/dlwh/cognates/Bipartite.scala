@@ -60,9 +60,9 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alph
       println("GC2 out" + memoryString);
       for ( i <- 0 until current.length ) {
         println(current(i).word);
-        affinities(i)(j) = marg(current(i).word);
-        assert(!affinities(i)(j).isNaN);
-        println(current(i).word,affinities(i)(j));
+        affinities(j)(i) = marg(current(i).word);
+        assert(!affinities(j)(i).isNaN);
+        println(current(i).word,affinities(j)(i));
       }
     }
     val (changes,score) = CompetitiveLinking.extractMatching(affinities.map(x => x:Seq[Double]).toSeq);
