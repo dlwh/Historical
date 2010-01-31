@@ -7,6 +7,7 @@ import scalala.Scalala._;
 import scalanlp.counters.LogCounters._;
 import scalanlp.math.Numerics._;
 import Types._;
+import scalanlp.util.Index
 import scalanlp.util.Log._;
 import scalanlp.optimize.CompetitiveLinking;
 
@@ -153,10 +154,35 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alph
 
 
 object RunBipartite {
+
+  def permutationAccuracy(a: Seq[Int], b: Seq[Int]) = {
+    var numRight = 0;
+    var numWrong = 0;
+    for( (aa,bb) <- a zip b) {
+      if(aa == bb) numRight += 1;
+      else numWrong += 1;
+    }
+    numRight * 1.0 / a.length;
+  }
+
+  def doPermutations(indices: Map[Language,Seq[Int]])  = {
+    for( (l1,a) <- indices;
+        (l2,b) <- indices.dropWhile(_._1!= l1).drop(1)
+       ) yield ( (l1,l2),permutationAccuracy(a,b));
+  }
+
+  def indexGold(cogs: Seq[Seq[Cognate]]) = {
+    val map = (for( (group,i) <- cogs.zipWithIndex; c <- group) yield (c,i)) toMap;
+    map;
+  }
+
+
   def main(args: Array[String]) {
     val languages = args(1).split(",");
     val dataset = new Dataset(args(0),languages);
-    val data = dataset.cognates.flatten;
+    val gold = dataset.cognates;
+    val goldIndices = indexGold(gold);
+    val data = gold.flatten;
     val randomized = Rand.permutation(data.length).draw().map(data);
     val iter = new Bipartite(dataset.tree, randomized, Set.empty ++ languages).iterations;
     for( state <- iter.take(1000)) {
@@ -165,7 +191,9 @@ object RunBipartite {
         val cognates = for(l <- languages) yield state.permutations(l)(g);
         println(cognates.mkString(","));
       }
-      println(state.likelihood);
+      println("Likelihood" + state.likelihood);
+      val accuracies = doPermutations(state.permutations.mapValues(_ map goldIndices).toMap);
+      println(accuracies);
     }
   }
 }

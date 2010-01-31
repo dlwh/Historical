@@ -35,7 +35,7 @@ trait MarginalPruning { this: TransducerFactors =>
 
 trait PosUniPruning { this: TransducerFactors =>
    def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val compression = new PosUniCompression[Char](length+5,'#') with NormalizedTransitions[Int,Char];
+    val compression = new PosUniCompression[Char](length+7,'#') with NormalizedTransitions[Int,Char];
     val ret = compression.compress( fsa, fullAlphabet)
     assert(!ret.cost.isNaN)
     assert(!ret.cost.isInfinite);
@@ -88,7 +88,7 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
   def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
     //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
     val ed = (for( ed <- editDistances.get((parent,child)))
-              yield ed) getOrElse new EditDistance(-3,-5,fullAlphabet);
+              yield ed) getOrElse new EditDistance(-10,-10,fullAlphabet);
     new EdgeFactor(ed,alphabet);
   }
 
