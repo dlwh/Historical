@@ -53,17 +53,13 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alph
     println(language);
     for ( j <- 0 until current.length) {
       println("GC1 in" + memoryString);
-      System.gc();
-      println("GC1 out" + memoryString);
       val marg = makeIO(s,otherLanguages,j).marginalFor(language).get;
-      println("GC2 in" + memoryString);
+      println("mid in" + memoryString);
       System.gc();
       println("GC2 out" + memoryString);
       for ( i <- 0 until current.length ) {
-        println(current(i).word);
         affinities(j)(i) = marg(current(i).word);
         assert(!affinities(j)(i).isNaN);
-        println(current(i).word,affinities(j)(i));
       }
     }
     val (changes,score) = CompetitiveLinking.extractMatching(affinities.map(x => x:Seq[Double]).toSeq);
