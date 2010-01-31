@@ -34,7 +34,7 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
   def wordForLanguage(language:Language):Option[Word] = bottomWords.get(language);
 
   lazy val likelihood = {
-    root.get.likelihood;
+    root.likelihood;
   }
 
   def assignments = bottomWords.map{ case(l,v) => Cognate(l,v)};
@@ -49,17 +49,16 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
   def numOccupants(l: Language) = if(bottomWords.contains(l)) 1 else 0;
 
   private val root = buildTree(tree);
-  root foreach { root =>
-    root.parentMessage = Some(() => rootMarginal(alphabet));
-  }
+  root.parentMessage = Some(() => rootMarginal(alphabet));
 
-  private lazy val nodes = root.get.descendentNodes;
-  private lazy val edges = root.get.descendentEdges;
+  private lazy val nodes = root.descendentNodes;
+  private lazy val edges = root.descendentEdges;
 
   private class Edge(val child: Node) {
     var parent:Node = _;
     def edgeMarginal:EdgeFactor = myEdge.withMarginals(incomingParentMessage, child.upwardMessage);
 
+    def hasUpwardMessage = child.hasUpwardMessage;
     lazy val upwardMessage:Marginal = myEdge.childMarginalize(child.upwardMessage);
     lazy val downwardMessage: Marginal = myEdge.parentMarginalize(incomingParentMessage);
 
@@ -79,17 +78,27 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
     }
 
     lazy val marginal: Marginal = {
-      parentMessage.map(_.apply()).foldLeft(upwardMessage)(_*_);
+      if(!hasUpwardMessage) parentMessage.get.apply();
+      else parentMessage.map(_.apply()).foldLeft(upwardMessage)(_*_);
     }
 
+    def hasUpwardMessage:Boolean = !word.isEmpty || children.exists(_.hasUpwardMessage);
+
     lazy val upwardMessage:Marginal = {
-      val incoming = children.iterator.map(_.upwardMessage);
+      assert(hasUpwardMessage);
+      val incoming = children.iterator.withFilter(_.hasUpwardMessage).map(_.upwardMessage);
       val wordMessage = word.iterator.map(w => marginalForWord(w,0.0));
-      (wordMessage ++ incoming).reduceLeft(_*_);
+      if(children.isEmpty) wordMessage.next
+      else if(word.isEmpty) incoming.reduceLeft(_*_)
+      else {
+        val r = incoming.reduceLeft(_*_);
+        val newCost = r(word.get);
+        marginalForWord(word.get,newCost);
+      }
     }
 
     lazy val reconstructedMarginal: Marginal = {
-      val incoming = children.iterator.map(_.upwardMessage) ++ parentMessage.iterator.map(_.apply());
+      val incoming = children.iterator.filter(_.hasUpwardMessage).map(_.upwardMessage) ++ parentMessage.iterator.map(_.apply());
       incoming.reduceLeft(_*_);
     }
 
@@ -97,34 +106,35 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
 
     def downwardMessage(to: Edge):Marginal = {
       val parent = parentMessage.iterator.map(_.apply());
-      val outgoingChildren = children.iterator.filterNot(to eq).map(_.upwardMessage);
-      val wordMessage = word.iterator.map(w => marginalForWord(w,0.0));
-      (wordMessage ++ parent ++ outgoingChildren).reduceLeft(_*_);
+      val outgoingChildren = children.iterator.filter(c => to != c && c.hasUpwardMessage).map(_.upwardMessage);
+      val nonWordMessages = parent ++ outgoingChildren;
+      if(!nonWordMessages.hasNext) marginalForWord(word.get,0.0)
+      else if(word.isEmpty) nonWordMessages.reduceLeft(_*_)
+      else {
+        val r = nonWordMessages.reduceLeft(_*_);
+        val newCost = r(word.get);
+        marginalForWord(word.get,newCost);
+      }
     }
   }
 
-  private def buildTree(tree: Tree): Option[Node] = tree match {
+  private def buildTree(tree: Tree): Node = tree match {
     case Child(label) => 
-      for(word <- bottomWords.get(label)) yield {
-        val node = new Node(label,Some(word),Seq.empty);
-        node
-      }
+      val word = bottomWords.get(label)
+      val node = new Node(label,word,Seq.empty);
+      node
     case Ancestor(label,lchild,rchild) =>
       val lNode = buildTree(lchild);
       val rNode = buildTree(rchild);
       val word = bottomWords.get(label);
-      val children = (lNode.iterator ++ rNode.iterator);
-      if(children.hasNext || !word.isEmpty) {
-        val node:Node = new Node(label, word, children map {n =>
-            val e:Edge = new Edge(n);
-            n.parentMessage = Some( ()=>e.downwardMessage);
-            e
-          } toSeq);
-        node.children.foreach { _.parent = node};
-        Some(node);
-      } else {
-        None;
-      }
+      val children = Seq(lNode,rNode);
+      val node:Node = new Node(label, word, children map {n =>
+          val e:Edge = new Edge(n);
+          n.parentMessage = Some( ()=>e.downwardMessage);
+          e
+      });
+      node.children.foreach { _.parent = node};
+      node
   }
 
 }

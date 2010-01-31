@@ -48,13 +48,17 @@ abstract class PosUniCompression[T:Alphabet](maxLength: Int, val beginningUnigra
     // 1 is always just #
     val arcs = for {
       (ctr,i) <- counts.iterator.drop(1).zipWithIndex;
+      if ctr.logTotal > Double.NegativeInfinity;
       arc <- arcsForCounter(i,ctr)
+      _ = assert(!arc.weight.isNaN)
     } yield arc;
 
 
     val endingWeights = for {
-      (ctr,i) <- counts.iterator.drop(1).zipWithIndex
+      (ctr,i) <- counts.iterator.drop(1).zipWithIndex;
+      if ctr.logTotal > Double.NegativeInfinity;
       w = finalWeight(i,ctr);
+      _ = assert(!w.isNaN)
       if w != Double.NegativeInfinity
     } yield (i,w);
 

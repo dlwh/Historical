@@ -36,7 +36,9 @@ trait MarginalPruning { this: TransducerFactors =>
 trait PosUniPruning { this: TransducerFactors =>
    def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
     val compression = new PosUniCompression[Char](length+5,'#') with NormalizedTransitions[Int,Char];
-    val ret = compression.compress( fsa, interestingChars)
+    val ret = compression.compress( fsa, fullAlphabet)
+    assert(!ret.cost.isNaN)
+    assert(!ret.cost.isInfinite);
     ret;
   }
 }
@@ -77,7 +79,7 @@ trait BackedOffKBestPruning { this: TransducerFactors =>
   }
 }
 
-abstract class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
+abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
                         editDistances: Map[(Language,Language),Transducer[Double,_,Char,Char]]=Map.empty) extends Factors with MarginalPruning {
   type Self = TransducerFactors;
   type Marginal = TransducerMarginal;
@@ -86,12 +88,12 @@ abstract class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
   def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
     //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
     val ed = (for( ed <- editDistances.get((parent,child)))
-              yield pruneToAlphabet(ed,alphabet + implicitly[Alphabet[Char]].epsilon)) getOrElse new EditDistance(-3,-5,alphabet);
+              yield ed) getOrElse new EditDistance(-3,-5,fullAlphabet);
     new EdgeFactor(ed,alphabet);
   }
 
   def rootMarginal(alphabet: Set[Char]) = {
-    new Marginal(new DecayAutomaton(alphabet.size+ 3.0,alphabet) : Psi, 0, Set.empty: Set[Char], Set.empty);
+    new Marginal(new DecayAutomaton(8,fullAlphabet) : Psi, 0, Set.empty: Set[Char], Set.empty);
   }
 
   def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
@@ -106,13 +108,16 @@ abstract class TransducerFactors(t: Tree, fullAlphabet: Set[Char],
     * Computes the product of two marginals by intersecting their automata
     */
     def *(m: Marginal) = {
-      globalLog.log(INFO)("* in " + memoryString);
+      //globalLog.log(INFO)("* in " + memoryString);
       val inter = fsa & m.fsa
       import Minimizer._;
       import ApproximatePartitioner._;
-      val minned = minimize(inter.relabel);
+      val minned = minimize(inter.relabel).filterArcs(_.weight != Double.NegativeInfinity);
+      //println(this.fsa); println("in2" + m.fsa);
+      //println("minned" + minned);
       val pruned = prune(minned,length max m.length,this.interestingChars ++ m.interestingChars,this.intBigrams ++ m.intBigrams);
-      globalLog.log(INFO)("* out " + memoryString);
+      //println("out" + pruned);
+      //globalLog.log(INFO)("* out " + memoryString);
       new Marginal( pruned,length max m.length,this.interestingChars ++ m.interestingChars, this.intBigrams ++ m.intBigrams);
     }
 

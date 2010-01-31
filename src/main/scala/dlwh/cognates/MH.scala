@@ -33,9 +33,13 @@ class MH(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alpha: Doub
 
   def eta(iter: Int) = Math.pow(iter+2,-alpha);
 
-  type Table = InsideOutside[TransducerFactors];
+  case class Table(members: Map[Language,Word], factors: TransducerFactors) {
+    lazy val likelihood = io.likelihood;
+    def io = new InsideOutside(tree,factors,members);
+    def remove(l: Language) = this.copy(members = this.members - l);
+    def include(l: Language, w: Word) = this.copy(members = this.members.updated(l,w));
+  }
 
-  def initialAssignments: Seq[Map[Language,Word]] = TODO;
   def proposeSwap(assignments: Seq[Table], current: Int) = {
     Rand.choose(assignments zipWithIndex).filter(_._2 != current).get;
   }
@@ -52,10 +56,13 @@ class MH(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alpha: Doub
     def likelihood = ios.iterator.map(_.likelihood).reduceLeft(_+_);
 
     def evaluateSwap(language: Language, from: Int, to: Int):Option[State] = {
+      globalLog.log(INFO)("GC in" + memoryString);
+      System.gc();
+      globalLog.log(INFO)("GC out" + memoryString);
       val fromIO = ios(from);
-      val fromWord = fromIO.wordForLanguage(language);
+      val fromWord = fromIO.members.get(language);
       val toIO = ios(to);
-      val toWord = toIO.wordForLanguage(language);
+      val toWord = toIO.members.get(language);
       val newFrom = {
         val pruned = fromIO.remove(language)
         if(!toWord.isEmpty) pruned.include(language,toWord.get);
@@ -68,20 +75,25 @@ class MH(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alpha: Doub
         else pruned;
       }
 
+      println("Considering " + fromIO.members  +" vs. "+ toIO.members + " for lang" + language);
       val old = fromIO.likelihood + toIO.likelihood + prior(fromIO) + prior(toIO);
       val new_ = newFrom.likelihood + newTo.likelihood + prior(newFrom) + prior(newTo);
       if( new_ - old > Math.log(Rand.uniform.get))  {
         var newAssignments = assignments;
         fromWord foreach { w => 
-          newAssignments = assignments.updated(Cognate(language,w),to);
+          newAssignments = assignments.updated(Cognate(w,language),to);
         }
         toWord foreach { w =>
-          newAssignments = assignments.updated(Cognate(language,w),from);
+          newAssignments = assignments.updated(Cognate(w,language),from);
         }
-        assert(newAssignments.size == assignments.size);
+        assert(newAssignments.size == assignments.size,(newAssignments.size,assignments.size));
         val newTables = ios.updated(from,newFrom).updated(to,newTo);
+        println("Success!")
         Some(this.copy(assignments = newAssignments, ios = newTables));
-      } else None
+      } else {
+        println("Failure");
+        None
+      }
     }
 
     def step(word: Cognate) = {
@@ -107,8 +119,8 @@ class MH(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alpha: Doub
       }
       assignments(w) = nG;
     }
-    val ios = for( set <- tables) yield set.foldLeft(new InsideOutside(tree,factors))( (io,w) => io.include(w.language,w.word));
-    State(Map.empty ++ assignments,ios,factors);
+    val ios = for( set <- tables) yield set.foldLeft(new Table(Map.empty,factors))( (t,c) => t.include(c.language,c.word));
+    State(Map.empty ++ assignments, ios, factors);
   }
 
   def iterations = {
@@ -188,7 +200,7 @@ object RunMH {
     val randomized = Rand.permutation(data.length).draw().map(data);
     val iter = new MH(dataset.tree, randomized, Set.empty ++ args(1).split(",")).iterations;
     for( state <- iter.take(1000)) {
-      state.ios.map(_.assignments) foreach println;
+      state.ios.map(_.members) foreach println;
     }
   }
 }
