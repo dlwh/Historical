@@ -6,11 +6,13 @@ import scalanlp.counters.LogCounters._;
 import scalanlp.math.Numerics._;
 import scalala.Scalala._;
 import scala.collection.mutable.PriorityQueue;
+import scala.reflect.OptManifest;
 import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
 
 
-abstract class PosUniCompression[T:Alphabet](maxLength: Int, val beginningUnigram: T) extends Compressor[Int,T] with ArcCreator[Int,T] {
+abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(implicit alpha: Alphabet[T], implicit man:
+                                      OptManifest[T]) extends Compressor[Int,T] with ArcCreator[Int,T] {
   require(maxLength >= 1);
 
   protected def alphabet = implicitly[Alphabet[T]];
