@@ -49,19 +49,22 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alph
   def step(s: State, language: Language):State = (for( current <- s.permutations.get(language)) yield {
     import s._;
     val otherLanguages = permutations - language;
-    val affinities = Array.ofDim[Double](current.length,current.length);
     println(language);
-    for ( j <- 0 until current.length) {
-      println("GC1 in" + memoryString);
+    val tasks = for ( j <- 0 until current.length) yield { () =>
       val marg = makeIO(s,otherLanguages,j).marginalFor(language).get;
-      println("mid in" + memoryString);
-      System.gc();
-      println("GC2 out" + memoryString);
+      val aff = new Array[Double](current.length);
       for ( i <- 0 until current.length ) {
-        affinities(j)(i) = marg(current(i).word);
-        assert(!affinities(j)(i).isNaN);
+        aff(i) = marg(current(i).word);
+        assert(!aff(i).isNaN);
       }
+      (j,aff);
     }
+
+    val affinities = new Array[Array[Double]](current.length);
+    TaskExecutor.doTasks(tasks) foreach { case (j,aff) =>
+      affinities(j) = aff;
+    }
+
     val (changes,score) = CompetitiveLinking.extractMatching(affinities.map(x => x:Seq[Double]).toSeq);
     // repermute our current permutation
     val newPermute = changes map current toSeq;
