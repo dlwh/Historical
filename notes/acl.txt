@@ -1,0 +1,15 @@
+1) PosUnigrams. Really really slow. Need help with logadds and such. Maybe scaling(?)
+2) It's essential to do a "baby-steps" approach:
+   Add in Spanish, then Italian, then Portuguese, then Latin. (or whatever)
+
+    >> Really fast way to get a good initialization
+
+   Otherwise, there's an attraction for Italian to go to whatever
+   Latin is, and Portuguese to go to whatever Spanish is, and there's
+   not enough forcing the others to go anywhere.
+3) Parallelized to run on N cores. Embarrassingly parallel
+
+4) Metrics:
+  Pairwise accuracy, will add in "full accuracy" soon.
+
+5) Likelihoods are wrong. Not sure if it's because of the message compressions, or some other bug.
