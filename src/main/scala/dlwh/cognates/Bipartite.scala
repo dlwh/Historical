@@ -12,7 +12,7 @@ import scalanlp.util.Log._;
 import scalanlp.optimize.CompetitiveLinking;
 
 
-class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alpha: Double = 0.7, batchSize: Int = 3, nIter:Int = 100) {
+class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], alpha: Double = 0.7, batchSize: Int = 3, nIter:Int = 100) {
   require(alpha < 1 && alpha >= 0.5);
   require(batchSize >= 1);
 
@@ -46,7 +46,8 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alph
 
   case class State(permutations: Map[Language,Seq[Cognate]], factors: TransducerFactors, likelihood:Double = Double.NegativeInfinity);
 
-  def step(s: State, language: Language):State = (for( current <- s.permutations.get(language)) yield {
+  def step(s: State, language: Language):State = {
+    val current = s.permutations.get(language) getOrElse cognates.filter(_.language == language);
     import s._;
     val otherLanguages = permutations - language;
     println(language);
@@ -69,7 +70,7 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alph
     // repermute our current permutation
     val newPermute = changes map current toSeq;
     s.copy(permutations = otherLanguages + (language -> newPermute), likelihood = score);
-  }) getOrElse(s);
+  }
 
   def initialState(words :Seq[Cognate], factors: TransducerFactors): State = {
     val map = Map.empty ++ words.groupBy(_.language)
@@ -78,8 +79,8 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Set[String], alph
   def initialFactors = new TransducerFactors(tree,alphabet) with PosUniPruning;
 
   def iterations = {
-    val state = initialState(cognates,initialFactors);
-    val lang= Iterator.continually { languages.iterator } flatten;
+    val state = initialState(cognates.filter(_.language == languages(0)),initialFactors);
+    val lang= Iterator.continually { languages.iterator.drop(1) ++ Iterator.single(languages(0)) } flatten;
     scanLeft(lang,state)(step(_,_));
   }
 
@@ -183,11 +184,11 @@ object RunBipartite {
     val goldIndices = indexGold(gold);
     val data = gold.flatten;
     val randomized = Rand.permutation(data.length).draw().map(data);
-    val iter = new Bipartite(dataset.tree, randomized, Set.empty ++ languages).iterations;
+    val iter = new Bipartite(dataset.tree, randomized, languages).iterations;
     for( state <- iter.take(1000)) {
       val numGroups = state.permutations.valuesIterator.map(_.length).reduceLeft(_ max _);
       for(g <- 0 until numGroups) {
-        val cognates = for(l <- languages) yield state.permutations(l)(g);
+        val cognates = for(cogs <- state.permutations.valuesIterator) yield cogs(g);
         println(cognates.mkString(","));
       }
       println("Likelihood" + state.likelihood);
