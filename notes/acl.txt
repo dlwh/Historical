@@ -13,3 +13,19 @@
   Pairwise accuracy, will add in "full accuracy" soon.
 
 5) Likelihoods are wrong. Not sure if it's because of the message compressions, or some other bug.
+
+6) How should the baseline work? Pass messages of dice scores?
+
+
+Current pairwise accuracies:
+After first 4 iterations:
+ Map((Portuguese,Spanish) -> 0.8082191780821918, (Latin,Spanish) -> 0.4554794520547945, (Latin,Portuguese) -> 0.4452054794520548, (Italian,Latin) -> 0.5, (Italian,Spanish) -> 0.7174657534246576, (Italian,Portuguese) -> 0.6678082191780822)
+
+Later:
+Map((Portuguese,Spanish) -> 0.7602739726027398, (Latin,Spanish) -> 0.464041095890411, (Latin,Portuguese) -> 0.4349315068493151, (Italian,Latin) -> 0.5102739726027398, (Italian,Spanish) -> 0.57534246575342 Italian,Portuguese) -> 0.5308219178082192)4
+
+I want 4/6 to be > 60%, and i don't want performance to go down.
+
+Earlier work on a different task (detecting words in dictionaries):
+without semantics: 0.633 (Average Precision)
+with semantics (i.e. english language glosses + wordnet) 0.826 (Average precision)
