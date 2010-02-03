@@ -1,10 +1,10 @@
 %
-% File naaclhlt2009.tex
+% File acl2010.tex
 %
 % Contact: nasmith@cs.cmu.edu
 
-\documentclass[11pt]{article}
-\usepackage{naaclhlt2009}
+\documentclass[11pt,a4paper]{article}
+\usepackage{acl2010}
 \usepackage{times}
 \usepackage{amsfonts}
 \usepackage{amssymb}
@@ -12,9 +12,9 @@
 \usepackage{multirow}
 \usepackage{enumerate}
 \usepackage{latexsym}
-\setlength\titlebox{6.5cm}    % Expanding the titlebox
+%\setlength\titlebox{6.5cm}    % Expanding the titlebox
 
-\title{}
+\title{Reconstruction of Historical Cognate Groups Using Finite State Automata}
 
 \author{}
 
@@ -104,6 +104,23 @@ always shrink enough states. In section XXX, we discuss approaches
 to ``lossy'' minimization that produce automata that are not exactly
 the same, but are typically much smaller.
 
+\section{Datasets}
+
+In our experiments, we focus on two datasets. One is an automatically
+generated word list of XXX (\#) cognate words from three Romance
+languages (Portuguese, Italian and Spanish), as well as their common
+ancestor Latin. (XXX more on where this came from). The other is a
+hand-curated list of cognates words from Austronesian languages.
+Both datasets are transcribed as IPA (Romance automatically,
+Austronesian manually). (XXX More on who curated it ,etc)
+
+Beyond the differences in human supervision, there are several
+important differences between the datasets. First, the Oceanic
+dataset is comprised of many more languages (XXX), but it is much
+sparser: the Romance dataset has a word for every language in each
+cognate group, while the Oceanic dataset has only XXX of possible
+entries attested.
+
 \section{Model}
 
 In this section we present a generative model of the derivation of
@@ -127,33 +144,62 @@ With these principles in mind, we define a generative model of the cognate group
       \item Choose a root word form $a_{g\mathrm{ROOT}}$ from an automaton $\phi^0$.
       \item For each interior child $d$ with ancestor $a$:
         \begin{enumerate}
-          \item Generate ancestral word $a_{gd} \sim \phi_{a,d}(a_{ga},a_{gd})$.
+          \item Generate ancestral word $a_{gd} \sim p(\cdot|\phi_{a,d},a_{ga},a_{gd})$.
         \end{enumerate}
     \end{enumerate}
   \item For each word position $i$ in language $\ell$:
     \begin{enumerate}
-      \item Choose a cognate group $z_{\ell i}$ uniformly at random. (XXX: will probably want a DP over this)
-      \item Choose $w_{\ell i} \sim \phi_{Pa(\ell),\ell}(a_{z_{\ell i}Pa(\ell)},w_{\ell i})$.
+      \item Choose a cognate group $z_{\ell i}$ uniformly at random. 
+      \item Choose $w_{\ell i} \sim p(\cdot|\phi_{Pa(\ell),\ell},a_{z_{\ell i}Pa(\ell)},w_{\ell i})$.
     \end{enumerate}
 \end{enumerate}
 
-In our setting, we observe only the binary tree topology and the words in each language, but not their ancestral forms, the groups they belong to, or the transducers that
-govern how the words evolve.  In order to
-estimate these parameters we use a variant of ``collapsed'' simulated annealing (XXX cite), in which we explicitly sample only the cognate group to which each word belongs. 
-We estimate the parameters for the transducers $\phi$ based on these samples, which we discuss in section XXX.
+In our setting, we observe only the binary tree topology and the
+words in each language, but (typically) not their ancestral forms,
+the groups they belong to, nor the transducers that govern how the
+words evolve. 
 
-The parameters XXX
+\section{Inference}
+
+In our setting, we are given a set of languages and a list of words
+in each language, and our objective is to determine which words are
+cognate with each other words. In the romance dataset, we have the
+additional constraint that each cognate group supports exactly one
+word from each language. In effect, in the Romance dataset the 
+inference task is reduced to finding a permutation of the respective
+word lists to maximize the log probability of the observed words:
 \begin{equation}
   \begin{split}
-    p(\vec w, \vec z, &\vec a, \mathbf{\phi}) = (\prod_\ell \prod_i p(w_{\ell
-    i}|z_{\ell i},a_{g_{\ell i}Pa(\ell)},\phi_{Pa(\ell),\ell})p(z_{\ell i}))\\
-      & (\prod_g p(\vec a_g|\mathbf{\phi}) ) p(\mathbf{\phi})
+    \vec{\pi} = \arg\!\max_{\vec \pi} \sum_{g} p(\vec w_{(\ell,\pi_\ell(i))}|\vec \phi,\vec \pi)
    \end{split}
  \end{equation}
+Maximizing this equation directly is (XXX I believe it's NP hard,
+but I should check), and so instead we use a coordinate ascent
+algorithm to iteratively maximize one permutation while holding the
+others fixed:
+\begin{equation}
+  \begin{split}
+    \pi_\ell = \arg\!\max_{\pi_\ell} \sum_{g} p(\vec w_{(\ell,\pi_\ell(i))}|\vec \phi,\vec \pi_{-\ell},\pi_\ell)
+  \end{split}
+\end{equation}
+Each iteration is then actually an instance of bipartite graph
+matching, with the words in one language one set of nodes, and the
+current cognate groups in the other languages the other set of
+nodes, and the edge weights between these nodes are the conditional
+probability of each word belonging to each cognate group. Given these
+weights, we use the greedy Competitive Linking (XXX cite) algorithm
+to find an approximate maximizer.
 
- XXX
+One important note is initialization. In our early experiments we
+found that choosing a random starting configuration usually led to
+rather poor local optima. Instead, we started with empty trees, and
+added one language in per iteration until all languages were added,
+and then continued iterations on the full tree.
 
-\section{Message Approximation}
+\subsection{Message Approximation}
+
+Under the iterative bipartite algorithm, inference in each tree
+computes the marginal distribution at
 
 Unfortunately, the maximal number of states in a message in each
 cognate group is exponential in the number of words assigned to
@@ -168,7 +214,10 @@ Previous authors have focused on a combination of n-best lists and
 unigram back-off models. (XXX cite eisner) In our setting, n-best
 lists seem inadequate: a 10,000-best list for a typical message
 only accounts for 50\% of message log perplexity. (XXX probably
-should run experiments for comparison.)
+should run experiments for comparison.) That is, the posterior
+marginals in our model are fairly flat.
+
+XXX this is old:
 
 We consider a different approach based on state splitting. Intuitively,
 we should prefer to use a unigram model over words unless there is
@@ -195,7 +244,12 @@ Once we consider bigrams, we could continue by splitting bigram
 states, therefore creating trigram states, and so on. In our experiments,
 we tried XXX, and found that 
 
-\subsection{Transducer Estimation}
+XXX end old stuff
+
+\section{Learning}
+
+Thus far we have treated the transducer parameters $\phi$ as given.
+In practice, we have  
 
 Estimating the parameters to each transducer can be performed
 analogously to the message approximation algorithm presented in the
@@ -207,8 +261,78 @@ across all cognate groups. We follow a similar approach to the
 approach described for messages, but we must tally expected ``alignment
 n-grams'' rather than character n-grams.
 
-XXX possibly featurize.
-
 \section{Experiments}
+
+\subsection{Baseline}
+
+\subsection{Experiment 1: Romance}
+
+XXX some text
+
+
+For evaluation, we report two metrics. The first is pairwise accuracy
+for each pair of languages averaged across pairs. The other
+is accuracy measured in terms of the number of correctly and
+completely reconstructed cognate groups. 
+
+Table \ref{tbl:exp1} shows the results under various configurations. XXX
+
+\begin{table}
+  \begin{tabular}{|c|c|c|c|}
+    Transducers & Messages & Pair Acc. & Rec. Acc.\\
+    \hline
+    \hline
+    Levenshtein&Unigrams & & \\
+    Levenshtein&Pos. Unigrams & & \\
+    Levenshtein&Bigrams & & \\
+    Levenshtein&K-Best & & \\
+    \hline
+    Learned&Unigrams & & \\
+    Learned&Pos. Unigrams & & \\
+    Learned&Bigrams & & \\
+    Learned&K-Best & & \\
+  \end{tabular}
+  \caption{Accuracies for reconstructing cognate groups. Levenshtein
+  refers to fixed parameter edit distance transducers with
+  deletion/insertion and substitution costs set to XXX, respectively.
+  Learned refers to automatically learned edit distances.}
+  \label{tbl:exp1}
+\end{table}
+
+\subsection{Experiment 2: Austronesian}
+
+\subsection{Experiment 3: Reconstructions}
+
+
+\section{Previous Work}
+XXX expand and cite:
+
+1) The reconstruction engine: a computer implementation of the
+comparative method\\
+  A deterministic approach from 1994 designed to help linguists look
+at reconstructions. Closer to Alex's stuff. \\
+2) Automatic Detection of Orthographic Cues for Cognate Recognition (2006) \\
+  Given a list of english/german words (translations of each other),
+are they cognate? Pretty crappy paper.\\
+3) Identifying Cognates by Phonetic and Semantic Similarity \\
+  The most similar. Given a list of multiple words from four Native
+American languages, sort out which words are cognate. Uses their
+English glosses to look up WordNet distance in addition to phonetic
+distances. Phonetic distances are measured either using DICE on
+bigrams, Longest Common Subsequence, and then a kind of edit distance
+on phone classes (that was earlier work he borrowed. ALINE) *DICE on
+bigrams and LCS look like good baselines.*\\
+  -- This approach was geared towards precision/recall, and in some
+sense is the real task. I'll see if I can find the data. \\
+4)  Combining Evidence in Cognate Identification (2004) \\
+  A very similar paper to (3). Uses ALINE to do phonetic comparisons.
+Doesn't compute proto-projections like we do. Direct comparison of
+words. Performance in the 50-65\% Average Precision range.\\
+5) Minimally Supervised Morphological Analysis by Multimodal Alignment (2000) \\
+  Basically does what Eisner and his student did on pairwise entries,
+so no graphical model.\\
+6) Semi-Supervised Learning of Partial Cognates using Bilingual Bootstrapping
+  Basically context driven. Different task, but probably worth mentioning.
+
 \section{Conclusion}
 \end{document}
