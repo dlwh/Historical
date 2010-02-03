@@ -11,6 +11,7 @@ import scalanlp.counters.LogCounters._;
 
 import Types._;
 
+/*
 class BigramFactors(logSmoothing: Double, alphabet: Set[Char]) extends Factors {
   type Self = BigramFactors
   type Marginal = BigramMarginal
@@ -54,3 +55,5 @@ class BigramFactors(logSmoothing: Double, alphabet: Set[Char]) extends Factors {
     lc
   }
 }
+
+*/
