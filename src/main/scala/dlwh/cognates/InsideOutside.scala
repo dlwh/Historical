@@ -79,7 +79,12 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
 
     lazy val marginal: Marginal = {
       val marg = if(!hasUpwardMessage) parentMessage.get.apply();
-      else parentMessage.map(_.apply()).foldLeft(upwardMessage)(_*_);
+      else {
+        val parent = parentMessage.map(_.apply()).iterator;
+        val incoming = children.iterator.withFilter(_.hasUpwardMessage).map(_.upwardMessage);
+        val wordMessage  = word.iterator.map(marginalForWord(_,0.0));
+        product(parent ++ incoming ++ wordMessage toSeq);
+      }
       assert(marg.partition <= 1E-5);
       marg;
     }
@@ -91,17 +96,7 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
       val incoming = children.iterator.withFilter(_.hasUpwardMessage).map(_.upwardMessage);
       val wordMessage = word.iterator.map(w => marginalForWord(w,0.0));
       if(children.isEmpty) wordMessage.next
-      else if(word.isEmpty) incoming.reduceLeft(_*_)
-      else {
-        val r = incoming.reduceLeft(_*_);
-        try {
-          val newCost = r(word.get);
-          assert(!newCost.isInfinite);
-          marginalForWord(word.get,newCost);
-        } catch {
-          case e => println(language + " is the problem"); throw e;
-        }
-      }
+      else (wordMessage ++ incoming) reduceLeft(_ * _);
     }
 
     lazy val reconstructedMarginal: Marginal = {
@@ -115,13 +110,15 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
       val parent = parentMessage.iterator.map(_.apply());
       val outgoingChildren = children.iterator.filter(c => to != c && c.hasUpwardMessage).map(_.upwardMessage);
       val nonWordMessages = parent ++ outgoingChildren;
-      if(!nonWordMessages.hasNext) marginalForWord(word.get,0.0)
+      val marg = if(!nonWordMessages.hasNext) marginalForWord(word.get,0.0)
       else if(word.isEmpty) nonWordMessages.reduceLeft(_*_)
       else {
         val r = nonWordMessages.reduceLeft(_*_);
         val newCost = r(word.get);
         marginalForWord(word.get,newCost);
       }
+      assert(marg.partition  <= 1E-5)
+      marg
     }
   }
 

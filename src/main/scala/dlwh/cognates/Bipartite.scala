@@ -37,10 +37,8 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], al
 
   def makeIO(s:State, otherLanguages: Map[Language,Seq[Cognate]], j: Int) = {
     val words = Map.empty ++ otherLanguages.iterator.map { case (l,seq) => (l,seq(j).word) }
-    println("looking for a new friend for" + words);
+    println("looking for a new friend for " + words);
     val io = new InsideOutside(tree, s.factors, words);
-    assert(!io.likelihood.isNaN);
-    assert(!io.likelihood.isInfinite);
     io;
   }
 
@@ -91,7 +89,7 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], al
     val map = Map.empty ++ words.groupBy(_.language)
     State(map, factors);
   }
-  def initialFactors = new TransducerFactors(tree,alphabet) with PosUniPruning;
+  def initialFactors = new TransducerFactors(tree,alphabet) with UniPruning with SafePruning;
 
   def iterations = {
     val state = initialState(cognates.filter(_.language == languages(0)),initialFactors);
@@ -154,7 +152,7 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], al
     globalLog.log(INFO)("Trans in " + memoryString);
     val transducers = Map.empty ++ statistics.mapValues ( ctr =>  transCompr.compress(0.0,ctr));
 
-    val factors = new TransducerFactors(tree,alphabet,transducers) with PosUniPruning;
+    val factors = new TransducerFactors(tree,alphabet,transducers) with UniPruning with SafePruning;
     globalLog.log(INFO)("Trans out " + memoryString);
     factors
   }

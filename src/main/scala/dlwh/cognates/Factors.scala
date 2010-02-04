@@ -33,22 +33,35 @@ trait MarginalPruning { this: TransducerFactors =>
    def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Psi
 }
 
-trait PosUniPruning { this: TransducerFactors =>
-   def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val compression = new PosUniCompression[Char](length+7,'#') with NormalizedTransitions[Int,Char];
-    val ret = compression.compress( fsa, fullAlphabet)
-    assert(!ret.cost.isNaN)
-    assert(!ret.cost.isInfinite);
-    ret;
+trait CompressionPruning extends MarginalPruning { this: TransducerFactors =>
+   def compressor(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char];
+   def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Psi = {
+     val compression = compressor(fsa,length,interestingChars,intBigrams);
+     val ret = compression.compress( fsa, fullAlphabet)
+     ret;
   }
 }
 
-trait UniPruning { this: TransducerFactors =>
-   def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val compression = new UniCompression[Char]('#') with NormalizedTransitions[Unit,Char];
-    val ret = compression.compress(fsa,interestingChars)
-    ret;
+trait PosUniPruning extends CompressionPruning { this: TransducerFactors =>
+  def compressor(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char] = {
+    val compression = new PosUniCompression[Char](length+7,'#') with NormalizedTransitions[Int,Char];
+    compression
   }
+}
+
+trait UniPruning extends CompressionPruning { this: TransducerFactors =>
+   def compressor(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char] = {
+    val compression = new UniCompression[Char]('#') with NormalizedTransitions[Unit,Char];
+    compression;
+  }
+}
+
+trait SafePruning extends CompressionPruning { this: TransducerFactors =>
+   abstract override def compressor(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char] = {
+     val inner = super.compressor(fsa,length,interestingChars,intBigrams);
+     val discount = new DecayAutomaton(length,interestingChars).arcCost;
+     new SafeCompressor(inner,discount);
+   }
 }
 
 /*
@@ -106,6 +119,7 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
     val bigs = ms.foldLeft(Set[(Char,Char)]()) { _ ++ _.intBigrams };
     val pruned = prune(minned,length, chars, bigs);
     //globalLog.log(INFO)("* out " + memoryString);
+    println(pruned);
     new Marginal( pruned,length,chars,bigs);
   }
 
