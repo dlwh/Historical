@@ -11,7 +11,7 @@ import scalanlp.counters.LogCounters._;
 
 import Types._;
 
-class BigramFactors(logSmoothing: Double, alphabet: Set[Char]) extends Factors {
+class BigramFactors extends Factors {
   type Self = BigramFactors
   type Marginal = BigramMarginal
   type EdgeFactor = BigramEdge
@@ -25,8 +25,6 @@ class BigramFactors(logSmoothing: Double, alphabet: Set[Char]) extends Factors {
     def parentMarginalize(c: Marginal): Marginal = c;
     def withMarginals(a: Marginal, b: Marginal) = this;
   }
-
-  private val totalSmoothing = logSmoothing + Math.log(alphabet.size);
 
   class BigramMarginal(val bigrams: Set[(Char,Char)]) extends MarginalBase {
     def *(other: Marginal) = {

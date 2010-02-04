@@ -85,7 +85,6 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
         val wordMessage  = word.iterator.map(marginalForWord(_,0.0));
         product(parent ++ incoming ++ wordMessage toSeq);
       }
-      assert(marg.partition <= 1E-5);
       marg;
     }
 
@@ -117,7 +116,6 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
         val newCost = r(word.get);
         marginalForWord(word.get,newCost);
       }
-      assert(marg.partition  <= 1E-5)
       marg
     }
   }

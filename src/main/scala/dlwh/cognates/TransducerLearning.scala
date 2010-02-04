@@ -1,6 +1,7 @@
 package dlwh.cognates
 
 import scalanlp.fst.Alphabet;
+import scalanlp.fst.Transducer
 import scalanlp.util.Log._;
 import Types._;
 
@@ -12,16 +13,15 @@ trait TransducerLearning {
   type Statistics = Map[(Language,Language),transducerCompressor.Statistics];
   private val edgesToLearn = tree.edges.toSeq;
 
-  def mkFactors(statistics: Statistics):TransducerFactors = {
+  def mkTransducers(statistics: Statistics):Map[(Language,Language),Transducer[Double,_,Char,Char]] = {
     globalLog.log(INFO)("Trans in " + memoryString);
-    val transducers = Map.empty ++ statistics.mapValues ( ctr =>  transducerCompressor.compress(0.0,ctr));
-
-    val factors = new TransducerFactors(tree,alphabet,transducers) with UniPruning with SafePruning;
-    globalLog.log(INFO)("Trans out " + memoryString);
-    factors
+    val transducers:Map[(Language,Language),Transducer[Double,_,Char,Char]] = {
+      Map.empty ++ statistics.mapValues ( ctr =>  transducerCompressor.compress(0.0,ctr):Transducer[Double,_,Char,Char]);
+    }
+    transducers
   }
 
-  def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]) = {
+  def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]): Statistics = {
     val trigramStats = for{
       io <- ios
       pair@ (fromL,toL) <- edgesToLearn.iterator;

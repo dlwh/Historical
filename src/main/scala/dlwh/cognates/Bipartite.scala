@@ -11,18 +11,9 @@ import scalanlp.util.Index
 import scalanlp.util.Log._;
 import scalanlp.optimize.CompetitiveLinking;
 
-
-class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language],
-                alpha: Double = 0.7, batchSize: Int = 3, nIter:Int = 100) extends TransducerLearning {
-  require(alpha < 1 && alpha >= 0.5);
-  require(batchSize >= 1);
-
-  val initialMatchCounts = 80.0;
-  val initialSubCounts = 5.0;
-  val initialInsCounts = 1.0;
-
-  val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
-  private val eps = implicitly[Alphabet[Char]].epsilon;
+abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) {
+  type MFactors <: Factors
+  case class State(permutations: Map[Language,Seq[Cognate]], factors: MFactors, likelihood:Double = Double.NegativeInfinity);
 
   def makeIO(s:State, otherLanguages: Map[Language,Seq[Cognate]], j: Int) = {
     val words = Map.empty ++ otherLanguages.iterator.map { case (l,seq) => (l,seq(j).word) }
@@ -31,9 +22,14 @@ class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]
     io;
   }
 
-  case class State(permutations: Map[Language,Seq[Cognate]], factors: TransducerFactors, likelihood:Double = Double.NegativeInfinity);
+  def initialFactors: MFactors
 
-  def step(s: State, language: Language):State = {
+  def initialState(words :Seq[Cognate], factors: MFactors): State = {
+    val map = Map.empty ++ words.groupBy(_.language)
+    State(map, factors);
+  }
+
+  final def step(s: State, language: Language):State = {
     val current = s.permutations.get(language) getOrElse cognates.filter(_.language == language);
     import s._;
     val otherLanguages = permutations - language;
@@ -57,28 +53,10 @@ class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]
     // repermute our current permutation
     val newPermute = changes map current toSeq;
     val newS = s.copy(permutations = otherLanguages + (language -> newPermute), likelihood = score);
-    learnFactors(newS)
+    nextAction(newS)
   }
 
-  def learnFactors(s: State):State = {
-    var ll = 0.0;
-    val numGroups = s.permutations.valuesIterator.next.length;
-    val ios = for(i <- 0 until numGroups iterator) yield {
-      val io = makeIO(s,s.permutations,i);
-      ll += io.likelihood;
-      io;
-    }
-
-    val stats = gatherStatistics(ios);
-    val newFactors = mkFactors(stats);
-    s.copy(factors = newFactors, likelihood = ll);
-  }
-
-  def initialState(words :Seq[Cognate], factors: TransducerFactors): State = {
-    val map = Map.empty ++ words.groupBy(_.language)
-    State(map, factors);
-  }
-  def initialFactors = new TransducerFactors(tree,alphabet) with UniPruning with SafePruning;
+  protected def nextAction(state: State): State = state;
 
   def iterations = {
     val state = initialState(cognates.filter(_.language == languages(0)),initialFactors);
@@ -96,20 +74,48 @@ class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]
     }
   }
 
-  def oneBest(a: Psi) = {
-    import scalanlp.math.Semiring.LogSpace._;
-    val obring = new OneBestSemiring[Char,Double];
-    import obring.{ring,promote,promoteOnlyWeight};
-    a.reweight(promote _, promoteOnlyWeight _ ).cost
-  }
+}
 
-
-
+class BaselineBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) extends Bipartite(tree,cognates,languages) {
+  override type MFactors = BigramFactors;
+  override def initialFactors: MFactors = new BigramFactors;
 }
 
 
-object RunBipartite {
+class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) extends Bipartite(tree,cognates,languages) with TransducerLearning {
+  val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
 
+  type MFactors = TransducerFactors
+  val transducerCompressor = new UniCompression(('#','#')) with NormalizedByFirstChar[Unit,Char];
+
+  override def nextAction(s: State) = learnFactors(s);
+
+  def learnFactors(s: State):State = {
+    var ll = 0.0;
+    val numGroups = s.permutations.valuesIterator.next.length;
+    val ios = for(i <- 0 until numGroups iterator) yield {
+      val io = makeIO(s,s.permutations,i);
+      ll += io.likelihood;
+      io;
+    }
+
+    val stats = gatherStatistics(ios);
+    val newFactors = mkFactors(stats);
+    s.copy(factors = newFactors, likelihood = ll);
+  }
+
+  def initialFactors = new TransducerFactors(tree,alphabet) with UniPruning with SafePruning;
+
+  def mkFactors(statistics: Statistics):TransducerFactors = {
+    val transducers = mkTransducers(statistics);
+    val factors = new TransducerFactors(tree,alphabet,transducers) with UniPruning with SafePruning;
+    globalLog.log(INFO)("Trans out " + memoryString);
+    factors
+  }
+
+}
+
+object Accuracy {
   def permutationAccuracy(a: Seq[Int], b: Seq[Int]) = {
     var numRight = 0;
     var numWrong = 0;
@@ -132,6 +138,14 @@ object RunBipartite {
   }
 
 
+}
+
+
+trait BipartiteRunner {
+  import Accuracy._;
+
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String]): Bipartite
+
   def main(args: Array[String]) {
     val languages = args(1).split(",");
     val dataset = new Dataset(args(0),languages);
@@ -139,7 +153,7 @@ object RunBipartite {
     val goldIndices = indexGold(gold);
     val data = gold.flatten;
     val randomized = Rand.permutation(data.length).draw().map(data);
-    val iter = new Bipartite(dataset.tree, randomized, languages).iterations;
+    val iter = bip(dataset.tree, randomized, languages).iterations;
     for( state <- iter.take(1000)) {
       val numGroups = state.permutations.valuesIterator.map(_.length).reduceLeft(_ max _);
       for(g <- 0 until numGroups) {
@@ -151,4 +165,14 @@ object RunBipartite {
       println(accuracies);
     }
   }
+}
+
+object RunBipartite extends BipartiteRunner {
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String]) = new TransBipartite(tree,cogs,languages);
+
+}
+
+object RunBaseline extends BipartiteRunner {
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String]) = new BaselineBipartite(tree,cogs,languages);
+
 }
