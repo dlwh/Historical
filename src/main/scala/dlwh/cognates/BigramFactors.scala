@@ -11,14 +11,14 @@ import scalanlp.counters.LogCounters._;
 
 import Types._;
 
-/*
 class BigramFactors(logSmoothing: Double, alphabet: Set[Char]) extends Factors {
   type Self = BigramFactors
   type Marginal = BigramMarginal
   type EdgeFactor = BigramEdge
   def edgeFor(parent: Language, child: Language, alphabet: Set[Char]) = new EdgeFactor();
-  def rootMarginal(alphabet: Set[Char]) = new Marginal(LogDoubleCounter[String]());
-  def marginalForWord(word: String, score: Double= 0.0) = new Marginal(extractBigrams(word,score));
+  def rootMarginal(alphabet: Set[Char]) = new Marginal(Set.empty);
+  def marginalForWord(word: String, score: Double= 0.0) = new Marginal(extractBigrams(word));
+  def product(ms: Seq[Marginal]) = ms.reduceLeft(_*_);
 
   class BigramEdge extends EdgeFactorBase {
     def childMarginalize(c: Marginal): Marginal = c;
@@ -28,32 +28,20 @@ class BigramFactors(logSmoothing: Double, alphabet: Set[Char]) extends Factors {
 
   private val totalSmoothing = logSmoothing + Math.log(alphabet.size);
 
-  class BigramMarginal(private val counter: LogDoubleCounter[String]) extends MarginalBase {
+  class BigramMarginal(val bigrams: Set[(Char,Char)]) extends MarginalBase {
     def *(other: Marginal) = {
-      new BigramMarginal(counter + other.counter value);
+      new BigramMarginal(this.bigrams ++ other.bigrams);
     }
 
     def apply(w: String) = {
-      var score = 0.0;
-      for( (gram,count) <- extractBigrams(w,score)) {
-        score += count * (counter(gram) - partition);
-      }
-      score
+      val wB = extractBigrams(w);
+      2.0 * (wB & this.bigrams size) / (wB.size + bigrams.size);
     }
 
-    def partition = logSum(counter.logTotal,totalSmoothing)
+    def partition = bigrams.size toDouble;
   }
 
-  def extractBigrams(word: String, score: Double) = {
-    val bigrams = for( a@(c1,c2) <- word.zip(word.drop(1))) yield {
-        (c1+""+c2,1.0)
-    }
-    val counts = Counters.aggregate(bigrams:_*);
-    val lc = LogCounters.logNormalize(counts);
-    lc.default = logSum(lc.default,logSmoothing);
-    lc -= score
-    lc
+  def extractBigrams(word: String) = {
+    Set.empty ++ (word.take(word.length-1) zip word.drop(1))
   }
 }
-
-*/

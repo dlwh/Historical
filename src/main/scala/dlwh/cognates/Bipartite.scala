@@ -12,7 +12,8 @@ import scalanlp.util.Log._;
 import scalanlp.optimize.CompetitiveLinking;
 
 
-class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], alpha: Double = 0.7, batchSize: Int = 3, nIter:Int = 100) {
+class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language],
+                alpha: Double = 0.7, batchSize: Int = 3, nIter:Int = 100) extends TransducerLearning {
   require(alpha < 1 && alpha >= 0.5);
   require(batchSize >= 1);
 
@@ -20,20 +21,8 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], al
   val initialSubCounts = 5.0;
   val initialInsCounts = 1.0;
 
-  private val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
+  val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
   private val eps = implicitly[Alphabet[Char]].epsilon;
-  val transCompr = new UniCompression[(Char,Char)]( ('#','#') ) with NormalizedByFirstChar[Unit,Char];
-  type Statistics = Map[(Language,Language),transCompr.Statistics];
-
-  private val edgesToLearn = tree.edges.toSeq;
-
-  private val allPairs = for {
-    a <- alphabet + eps;
-    b <- alphabet + eps;
-    if a != eps || b != eps
-  } yield (a,b);
-
-  def eta(iter: Int) = Math.pow(iter+2,-alpha);
 
   def makeIO(s:State, otherLanguages: Map[Language,Seq[Cognate]], j: Int) = {
     val words = Map.empty ++ otherLanguages.iterator.map { case (l,seq) => (l,seq(j).word) }
@@ -114,48 +103,8 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], al
     a.reweight(promote _, promoteOnlyWeight _ ).cost
   }
 
-  def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]) = {
-    val trigramStats = for{
-      io <- ios
-      pair@ (fromL,toL) <- edgesToLearn.iterator;
-      trans <- io.edgeMarginal(fromL, toL).iterator
-    } yield {
-      val allPairs = for {
-        a <- alphabet + eps;
-        b <- alphabet + eps;
-        if a != eps || b != eps
-      } yield (a,b);
 
-      val cost = transCompr.gatherStatistics(allPairs,trans.fst);
 
-      (fromL,toL) -> cost._1;
-    }
-
-    import collection.mutable.{Map=>MMap}
-    val stats = MMap[(Language,Language),transCompr.Statistics]();
-    for ( (lpair,ctr) <- trigramStats)  {
-      stats(lpair) = stats.get(lpair).map(transCompr.interpolate(_,1,ctr,1)).getOrElse(ctr);
-    }
-
-    Map.empty ++ stats;
-  }
-
-  def interpolate(a: Statistics, b: Statistics, eta: Double) = {
-    val newStats = for( (langs,as) <- a; bs = b(langs)) yield {
-      langs -> transCompr.interpolate(as,1-eta,bs,eta);
-    }
-
-    newStats;
-  }
-
-  def mkFactors(statistics: Statistics) = {
-    globalLog.log(INFO)("Trans in " + memoryString);
-    val transducers = Map.empty ++ statistics.mapValues ( ctr =>  transCompr.compress(0.0,ctr));
-
-    val factors = new TransducerFactors(tree,alphabet,transducers) with UniPruning with SafePruning;
-    globalLog.log(INFO)("Trans out " + memoryString);
-    factors
-  }
 }
 
 
