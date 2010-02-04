@@ -13,7 +13,7 @@ import Types._;
 trait Compressor[State,T] {
   def destinationFor(state: State, trans: T): State
   def beginningUnigram: T
-  protected def alphabet: Alphabet[T];
+  def alphabet: Alphabet[T];
   type Statistics
   /**
    * @return statistics and the total probability accumulated.
@@ -29,6 +29,26 @@ trait Compressor[State,T] {
   def compress(totalProb: Double, stats: Statistics): Automaton[Double,State,T];
 }
 
+class SafeCompressor[State,T](val inner: Compressor[State,T], discount: Double) extends Compressor[State,T] {
+  import scalanlp.math.Semiring.LogSpace._;
+  def destinationFor(state: State, trans: T) = inner.destinationFor(state,trans);
+  def beginningUnigram: T = inner.beginningUnigram;
+  def alphabet = inner.alphabet;
+  type Statistics = inner.Statistics;
+  def interpolate(x: Statistics, eta1: Double, stats2: Statistics, eta2: Double): Statistics = inner.interpolate(x,eta1,stats2,eta2);
+
+  def gatherStatistics(validChars: Set[T], auto: Automaton[Double,_,T]): (Statistics,Double) = {
+    val reweighted = auto.reweight( {arc => if(arc.label == alphabet.epsilon) arc.weight else arc.weight + discount }, identity );
+    inner.gatherStatistics(validChars,reweighted);
+  }
+
+  def compress(totalProb: Double, stats: Statistics): Automaton[Double,State,T] = {
+    val unc = inner.compress(totalProb, stats);
+    unc.reweight ( {arc => if(arc.label == alphabet.epsilon) arc.weight else arc.weight - discount }, identity );
+  }
+
+}
+
 abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
                                                       maxStates: Int,
                                                       val beginningUnigram: T)
@@ -36,7 +56,7 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
   import BigramSemiring._;
   require(maxStates >= 1);
 
-  protected def alphabet = implicitly[Alphabet[T]];
+  def alphabet = implicitly[Alphabet[T]];
   
   private def marginalizeCounts(bigrams: LogPairedDoubleCounter[T,T]) = {
     val marginals = LogDoubleCounter[T];
