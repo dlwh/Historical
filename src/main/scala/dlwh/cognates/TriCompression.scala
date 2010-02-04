@@ -17,7 +17,7 @@ abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Doub
   import TrigramSemiring._;
   require(maxStates >= 1);
 
-  protected def alphabet = implicitly[Alphabet[T]];
+  def alphabet = implicitly[Alphabet[T]];
   
   private def marginalizeCounts(bigrams: LogPairedDoubleCounter[T,T]) = {
     val marginals = LogDoubleCounter[T];

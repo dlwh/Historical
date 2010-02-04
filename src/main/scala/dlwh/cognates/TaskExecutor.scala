@@ -8,7 +8,7 @@ package dlwh.cognates
 import scala.actors.Futures._;
 
 object TaskExecutor {
-  def doTasks[A](tasks: Collection[()=>A]):Collection[A] = {
+  def doTasks[A](tasks: Iterable[()=>A]):Iterable[A] = {
     tasks.toList.map(f => future( f() )) map ( _ apply () );
   }
 }

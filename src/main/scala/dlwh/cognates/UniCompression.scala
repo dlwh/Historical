@@ -12,7 +12,7 @@ import scalala.Scalala._;
 
 abstract class UniCompression[@specialized("Char") T:Alphabet](val beginningUnigram: T) extends Compressor[Unit,T] with ArcCreator[Unit,T] {
 
-  protected def alphabet = implicitly[Alphabet[T]];
+  def alphabet = implicitly[Alphabet[T]];
 
   type Statistics = LogDoubleCounter[T];
 

@@ -15,7 +15,7 @@ abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(imp
                                       OptManifest[T]) extends Compressor[Int,T] with ArcCreator[Int,T] {
   require(maxLength >= 1);
 
-  protected def alphabet = implicitly[Alphabet[T]];
+  def alphabet = implicitly[Alphabet[T]];
 
   type Statistics = Seq[LogDoubleCounter[T]];
 
