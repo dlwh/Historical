@@ -10,7 +10,7 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
                      ) yield ch)
 
   def edgeMarginal(from: Language, to: Language): Option[EdgeFactor] = {
-    edges.get( (from,to)).map(_.edgeMarginal);
+    edges.get( (from,to)).filter(_.hasUpwardMessage).map(_.edgeMarginal);
   }
 
   def marginalFor(s: Language):Option[Marginal] = {
@@ -78,8 +78,10 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
     }
 
     lazy val marginal: Marginal = {
-      if(!hasUpwardMessage) parentMessage.get.apply();
+      val marg = if(!hasUpwardMessage) parentMessage.get.apply();
       else parentMessage.map(_.apply()).foldLeft(upwardMessage)(_*_);
+      assert(marg.partition <= 1E-5);
+      marg;
     }
 
     def hasUpwardMessage:Boolean = !word.isEmpty || children.exists(_.hasUpwardMessage);
@@ -92,8 +94,13 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
       else if(word.isEmpty) incoming.reduceLeft(_*_)
       else {
         val r = incoming.reduceLeft(_*_);
-        val newCost = r(word.get);
-        marginalForWord(word.get,newCost);
+        try {
+          val newCost = r(word.get);
+          assert(!newCost.isInfinite);
+          marginalForWord(word.get,newCost);
+        } catch {
+          case e => println(language + " is the problem"); throw e;
+        }
       }
     }
 

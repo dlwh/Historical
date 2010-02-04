@@ -69,7 +69,22 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], al
     val (changes,score) = CompetitiveLinking.extractMatching(affinities.map(x => x:Seq[Double]).toSeq);
     // repermute our current permutation
     val newPermute = changes map current toSeq;
-    s.copy(permutations = otherLanguages + (language -> newPermute), likelihood = score);
+    val newS = s.copy(permutations = otherLanguages + (language -> newPermute), likelihood = score);
+    learnFactors(newS)
+  }
+
+  def learnFactors(s: State):State = {
+    var ll = 0.0;
+    val numGroups = s.permutations.valuesIterator.next.length;
+    val ios = for(i <- 0 until numGroups iterator) yield {
+      val io = makeIO(s,s.permutations,i);
+      ll += io.likelihood;
+      io;
+    }
+
+    val stats = gatherStatistics(ios);
+    val newFactors = mkFactors(stats);
+    s.copy(factors = newFactors, likelihood = ll);
   }
 
   def initialState(words :Seq[Cognate], factors: TransducerFactors): State = {
@@ -107,20 +122,13 @@ class Bipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], al
       pair@ (fromL,toL) <- edgesToLearn.iterator;
       trans <- io.edgeMarginal(fromL, toL).iterator
     } yield {
-      val alphabet = io.alphabet;
       val allPairs = for {
         a <- alphabet + eps;
         b <- alphabet + eps;
         if a != eps || b != eps
       } yield (a,b);
 
-      globalLog.log(INFO)("BG in" + memoryString);
-      println(pair);
       val cost = transCompr.gatherStatistics(allPairs,trans.fst);
-      globalLog.log(INFO)("BG out" + memoryString);
-      globalLog.log(INFO)("GC2 in" + memoryString);
-      System.gc();
-      globalLog.log(INFO)("GC2 out" + memoryString);
 
       (fromL,toL) -> cost._1;
     }

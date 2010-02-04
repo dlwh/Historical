@@ -23,7 +23,7 @@ trait Factors {
   }
 
   type Marginal <: MarginalBase
-
+  def product(ms: Seq[Marginal]):Marginal;
   def edgeFor(parent: Language, child:Language, alphabet: Set[Char]): EdgeFactor;
   def rootMarginal(alphabet: Set[Char]): Marginal;
   def marginalForWord(w: String, score: Double=0.0): Marginal;
@@ -96,6 +96,19 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
     new Marginal(new DecayAutomaton(8,fullAlphabet) : Psi, 0, Set.empty: Set[Char], Set.empty);
   }
 
+  def product(ms: Seq[Marginal]):Marginal = if(ms.length == 1) ms.head else {
+    val inter = ms.map(_.fsa).reduceLeft(_ & _);
+    import Minimizer._;
+    import ApproximatePartitioner._;
+    val minned = minimize(inter.relabel).filterArcs(_.weight != Double.NegativeInfinity);
+    val length = ms.map(_.length).max;
+    val chars = ms.foldLeft(Set[Char]()) { _ ++ _.interestingChars };
+    val bigs = ms.foldLeft(Set[(Char,Char)]()) { _ ++ _.intBigrams };
+    val pruned = prune(minned,length, chars, bigs);
+    //globalLog.log(INFO)("* out " + memoryString);
+    new Marginal( pruned,length,chars,bigs);
+  }
+
   def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
 
   class TransducerMarginal(val fsa: Psi,
@@ -107,19 +120,7 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
     /**
     * Computes the product of two marginals by intersecting their automata
     */
-    def *(m: Marginal) = {
-      //globalLog.log(INFO)("* in " + memoryString);
-      val inter = fsa & m.fsa
-      import Minimizer._;
-      import ApproximatePartitioner._;
-      val minned = minimize(inter.relabel).filterArcs(_.weight != Double.NegativeInfinity);
-      //println(this.fsa); println("in2" + m.fsa);
-      //println("minned" + minned);
-      val pruned = prune(minned,length max m.length,this.interestingChars ++ m.interestingChars,this.intBigrams ++ m.intBigrams);
-      //println("out" + pruned);
-      //globalLog.log(INFO)("* out " + memoryString);
-      new Marginal( pruned,length max m.length,this.interestingChars ++ m.interestingChars, this.intBigrams ++ m.intBigrams);
-    }
+    def *(m: Marginal) = product(Seq(this,m));
 
     /**
     * The log-normalizer of this automata
