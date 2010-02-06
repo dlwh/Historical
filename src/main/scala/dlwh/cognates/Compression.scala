@@ -191,23 +191,9 @@ trait NormalizedTransitions[S,T] extends ArcCreator[S,T] { this: Compressor[S,T]
     } yield Arc(state,dest,ch2,w-normalizer);
   }
 
-  def finalWeight(state: S, ctr: LogDoubleCounter[T]): Double = {
-    ctr(beginningUnigram) - ctr.logTotal;
-  }
-}
-
-trait NoNormalization[S,T] extends ArcCreator[S,T] { this: Compressor[S,T] =>
-  def arcsForCounter(state: S, ctr: LogDoubleCounter[T]) = {
-    for{
-      (ch2,w) <- ctr.iterator
-      dest = destinationFor(state,ch2);
-      if (ch2 != beginningUnigram)
-    } yield Arc(state,dest,ch2,w);
-  }
-
-  def finalWeight(state: S, ctr: LogDoubleCounter[T]): Double = {
-    ctr(beginningUnigram);
-  }
+    def finalWeight(state: S, ctr: LogDoubleCounter[T]): Double = {
+       ctr(beginningUnigram) - ctr.logTotal;
+    }
 }
 
 
