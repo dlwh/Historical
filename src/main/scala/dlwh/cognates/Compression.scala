@@ -202,11 +202,13 @@ trait ArcCreator[S,T] { this : Compressor[S,T] =>
 
 trait NormalizedTransitions[S,T] extends ArcCreator[S,T] { this: Compressor[S,T] =>
   def arcsForCounter(state: S, ctr: LogDoubleCounter[T]) = {
+    val normalizer = ctr.logTotal;
+    assert(!normalizer.isNaN)
     for{
       (ch2,w) <- ctr.iterator
       dest = destinationFor(state,ch2);
       if (ch2 != beginningUnigram)
-    } yield Arc(state,dest,ch2,w-ctr.logTotal);
+    } yield Arc(state,dest,ch2,w-normalizer);
   }
 
     def finalWeight(state: S, ctr: LogDoubleCounter[T]): Double = {

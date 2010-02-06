@@ -41,7 +41,7 @@ abstract class UniCompression[@specialized("Char") T:Alphabet](val beginningUnig
     // 1 is always just #
     val arcs = arcsForCounter( (), counts);
 
-    val endingWeights = ( () -> finalWeight(() ,counts));
+    val endingWeights = ( () -> finalWeight( () ,counts));
     val startState = ();
 
     val auto = Automaton.automaton(Map(startState->prob),Map.empty + endingWeights)(
