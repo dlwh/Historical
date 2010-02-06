@@ -51,7 +51,7 @@ trait PosUniPruning extends CompressionPruning { this: TransducerFactors =>
 
 trait UniPruning extends CompressionPruning { this: TransducerFactors =>
    def compressor(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char] = {
-    val compression = new UniCompression[Char]('#') with NormalizedTransitions[Unit,Char];
+    val compression = new SafeUniCompression('#',length + 4);
     compression;
   }
 }

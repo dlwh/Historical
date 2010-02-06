@@ -104,11 +104,11 @@ class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language
     s.copy(factors = newFactors, likelihood = ll);
   }
 
-  def initialFactors = new TransducerFactors(tree,alphabet) with UniPruning with SafePruning;
+  def initialFactors = new TransducerFactors(tree,alphabet) with UniPruning
 
   def mkFactors(statistics: Statistics):TransducerFactors = {
     val transducers = mkTransducers(statistics);
-    val factors = new TransducerFactors(tree,alphabet,transducers) with UniPruning with SafePruning;
+    val factors = new TransducerFactors(tree,alphabet,transducers) with UniPruning
     globalLog.log(INFO)("Trans out " + memoryString);
     factors
   }
