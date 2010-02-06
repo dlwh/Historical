@@ -56,14 +56,6 @@ trait UniPruning extends CompressionPruning { this: TransducerFactors =>
   }
 }
 
-trait SafePruning extends CompressionPruning { this: TransducerFactors =>
-   abstract override def compressor(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char] = {
-     val inner = super.compressor(fsa,length,interestingChars,intBigrams);
-     val discount = new DecayAutomaton(length,interestingChars).arcCost;
-     new SafeCompressor(inner,discount);
-   }
-}
-
 /*
 trait TriPruning { this: TransducerFactors =>
    def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {

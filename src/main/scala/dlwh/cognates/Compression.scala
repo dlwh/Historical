@@ -29,26 +29,6 @@ trait Compressor[State,T] {
   def compress(totalProb: Double, stats: Statistics): Automaton[Double,State,T];
 }
 
-class SafeCompressor[State,T](val inner: Compressor[State,T], discount: Double) extends Compressor[State,T] {
-  import scalanlp.math.Semiring.LogSpace._;
-  def destinationFor(state: State, trans: T) = inner.destinationFor(state,trans);
-  def beginningUnigram: T = inner.beginningUnigram;
-  def alphabet = inner.alphabet;
-  type Statistics = inner.Statistics;
-  def interpolate(x: Statistics, eta1: Double, stats2: Statistics, eta2: Double): Statistics = inner.interpolate(x,eta1,stats2,eta2);
-
-  def gatherStatistics(validChars: Set[T], auto: Automaton[Double,_,T]): (Statistics,Double) = {
-    val reweighted = auto.reweight( {arc => if(arc.label == alphabet.epsilon) arc.weight else arc.weight + discount }, identity );
-    inner.gatherStatistics(validChars,reweighted);
-  }
-
-  def compress(totalProb: Double, stats: Statistics): Automaton[Double,State,T] = {
-    val unc = inner.compress(totalProb, stats);
-    unc.reweight ( {arc => if(arc.label == alphabet.epsilon) arc.weight else arc.weight - discount }, identity );
-  }
-
-}
-
 abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
                                                       maxStates: Int,
                                                       val beginningUnigram: T)
@@ -211,9 +191,23 @@ trait NormalizedTransitions[S,T] extends ArcCreator[S,T] { this: Compressor[S,T]
     } yield Arc(state,dest,ch2,w-normalizer);
   }
 
-    def finalWeight(state: S, ctr: LogDoubleCounter[T]): Double = {
-       ctr(beginningUnigram) - ctr.logTotal;
-    }
+  def finalWeight(state: S, ctr: LogDoubleCounter[T]): Double = {
+    ctr(beginningUnigram) - ctr.logTotal;
+  }
+}
+
+trait NoNormalization[S,T] extends ArcCreator[S,T] { this: Compressor[S,T] =>
+  def arcsForCounter(state: S, ctr: LogDoubleCounter[T]) = {
+    for{
+      (ch2,w) <- ctr.iterator
+      dest = destinationFor(state,ch2);
+      if (ch2 != beginningUnigram)
+    } yield Arc(state,dest,ch2,w);
+  }
+
+  def finalWeight(state: S, ctr: LogDoubleCounter[T]): Double = {
+    ctr(beginningUnigram);
+  }
 }
 
 
