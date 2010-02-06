@@ -1,8 +1,3 @@
-%
-% File acl2010.tex
-%
-% Contact: nasmith@cs.cmu.edu
-
 \documentclass[11pt,a4paper]{article}
 \usepackage{acl2010}
 \usepackage{times}
@@ -14,7 +9,7 @@
 \usepackage{latexsym}
 %\setlength\titlebox{6.5cm}    % Expanding the titlebox
 
-\title{Reconstruction of Historical Cognate Groups Using Finite State Automata}
+\title{Reconstruction of Historical Cognate Groups with Weighted Transducers}
 
 \author{}
 
@@ -23,20 +18,82 @@
 \begin{document}
 \maketitle
 \begin{abstract}
+  \normalsize
+  A central problem in historical linguistics is the identification
+  of related ``cognate'' words. We present a generative model for
+  the automatic reconstruction of these cognate groups that mimics
+  the phylogenetic relationships between languages. Our model uses
+  weighted transducers to represent distributions over unobserved
+  forms as well as the transformations from ancestor word to daughter
+  word. We also present a novel method for simplifying the complex
+  automata created during inference to counteract the otherwise
+  exponential growth of message sizes. We test our model on two
+  datasets where we significantly outperform a baseline approach.
+  Finally, we demonstrate that these automatically reconstructed
+  groups can be used to faithfully reconstruct ancestral words.
 \end{abstract}
 \section{Introduction}
+
+The crowning achievement of historical linguistics has long been
+the Comparative Method (XXX cite some historical linguist), by which
+linguists take assembled cognate words derived from a common ancestor
+word to deduce the phonological and morphological changes that
+explains the differences between them. For example, (XXX need to
+find a good example).Typically, the Comparative Method requires
+the linguist to make qualitative judgments regarding the relative
+likelihood of certain sound changes.
+
+More recently, statistical methods have been introduced to provide
+greater robustness and automation to the Comparative Method. (XXX cite
+Alex, and anyone pre Alex). 
+
+All these methods, however, assume that the cognate words are already
+given. Unfortunately, this is not always an easy task, since the
+underlying morphological and phonological changes can obscure
+relationships between words.  More difficult still are the ``spurious''
+relationships between words that by chance or do to linguistic
+universals. For example, both Mandarin and English \textit{/mama/}
+(XXX probably find a better example) are phonologically quite similar
+and have identical meanings, though few if any linguists would posit
+a link between the two languages.
+
+In this paper we present a new generative model for the automatic
+reconstruction of cognate groups given a family tree of languages
+and word lists from those languages. Each word is generated from
+its ``parent word'' by means of automatically learned transformations
+inspired by the methods developed by linguists for the comparative
+method. We present an iterative algorithm using bipartite graph matching
+to fit the model to data.
+
+Our model encodes distributions over strings as weighted finite
+state automata ( XXX cite Mohri). Weighted automata have been
+successfully applied to speech processing ( XXX cite Mohri) and
+more recently to morphology (cite Dreyer and Eisner).  We present
+a new method for automatically compressing the automata that are
+generated as messages during inference that can take into account
+prior information about the expected outcome of inference.
+
+Finally, we evaluate our model on two datasets. One is an automatically
+transcribed collection of words from Portuguese, Spanish, Italian
+and Latin, and the other is a manually curated of Austronesian
+languages with many more (XXX how many) languages but much sparser
+coverage. XXX something more?
+
 \section{Background}
+
+In this section, we present a summary of the algorithms and
+representations used for handling weighted finite state transducers,
+which we will be using extensively in this paper. For more detailed
+treatment, we direct readers to (XXX cite Mohri) or (XXX cite Dreyer
+and Eisner).
+
 \subsection{Weighted Automata}
 
-We encode distributions over strings as weighted finite state
-automata ( XXX cite Mohri). Weighted automata have been successfully
-applied to speech processing ( XXX cite Mohri) and more recently
-to morphology (cite Dreyer and Eisner). Informally, a weighted
-automaton encodes a distribution over strings (or pairs of strings)
-as weighted paths through a graph. Each edge in the graph has a
-label (a single character, or the empty character) and a weight.
-The weight of a string is then the sum of all paths through the
-graph that accept a string.
+Informally, a weighted automaton encodes a distribution over strings
+(or pairs of strings) as weighted paths through a directed graph.
+Each edge in the graph has a label (a single character, or the empty
+character) and a weight. The weight of a string is then the sum
+of all paths through the graph that accept a string.
 
 More specifically, a weighted transducer assigns weights from a set
 $S$ to pairs of strings with characters in alphabets $\Sigma$ and
@@ -66,16 +123,17 @@ labels are always the same thing.
 
 In our setting, we are primarily concerned with transducers and
 acceptors over the log semiring. In this case, a transducer assigns
-a (possibly unnormalized) log-probability to pairs of strings, and
-an acceptor similarly assigns log-probabilities to single strings.
+a log-score to pairs of strings, and an acceptor similarly assigns
+log-scores to single strings. These scores may or may not be
+log probabilities.
 
 \subsection{Transducer Operations}
 
 For our purposes we are concerned with three fundamental operations
 on weighted transducers, all explained in more depth in (XXX cite
-Mohri) The first is computing the sum of all paths through a
+Mohri). The first is computing the sum of all paths through a
 transducer, which corresponds to computing the partition function
-of the distribution. This operation can be performed in worst case
+of a distribution. This operation can be performed in worst case
 cubic time (using a generalization of the Floyd-Warshall Algorithm),
 though for acyclic or feed-forward transducers this can be improved
 dramatically by using a generalization of Djisktra's algorithm, the
@@ -83,7 +141,7 @@ Bellman-Ford algorithm or other related algorithms.
 
 The second is the composition of two transducers. Intuitively,
 composition creates a new transducer that takes the output from one
-automata and process it through the other transducer and returns
+automata, processes it through the other transducer, and then returns
 the output of that transducer. That is, consider two transducers
 $T_1$ and $T_2$. $T_1$ has input alphabet $\Sigma$ and output
 alphabet $\Delta$, while $T_2$ has input alphabet $\Delta$ and
@@ -99,12 +157,14 @@ produces $O(nm)$ states, where $n$ and $m$ are the number of states
 in each transducer. Repeated compositions compound the problem:
 iterated composition of $k$ transducers produces $O(n^k)$ states.
 Minimization alleviates this problem by collapsing indistinguishable
-states into a single state.  Unfortunately, minimization does not
-always shrink enough states. In section XXX, we discuss approaches
+states into a single state. Unfortunately, minimization does not
+always collapse enough states. In section XXX, we discuss approaches
 to ``lossy'' minimization that produce automata that are not exactly
 the same, but are typically much smaller.
 
 \section{Datasets}
+
+(XXX This section should probably be moved and/or split)
 
 In our experiments, we focus on two datasets. One is an automatically
 generated word list of XXX (\#) cognate words from three Romance
@@ -185,10 +245,13 @@ others fixed:
 Each iteration is then actually an instance of bipartite graph
 matching, with the words in one language one set of nodes, and the
 current cognate groups in the other languages the other set of
-nodes, and the edge weights between these nodes are the conditional
-probability of each word belonging to each cognate group. Given these
-weights, we use the greedy Competitive Linking (XXX cite) algorithm
-to find an approximate maximizer.
+nodes, and the edge affinities between these nodes are the conditional
+probability of each word belonging to each cognate group. To compute
+the affinities for each cognate group, inference in each tree
+computes the marginal distribution of the words from the ``held
+out'' language, and likelihoods are computed for each word.  Given
+these weights, we use the greedy Competitive Linking (XXX cite)
+algorithm to find an approximate maximizer.
 
 One important note is initialization. In our early experiments we
 found that choosing a random starting configuration usually led to
@@ -198,53 +261,54 @@ and then continued iterations on the full tree.
 
 \subsection{Message Approximation}
 
-Under the iterative bipartite algorithm, inference in each tree
-computes the marginal distribution at
-
 Unfortunately, the maximal number of states in a message in each
 cognate group is exponential in the number of words assigned to
 that group. Minimization can only help so much: in order for two
 states to be collapsed, the distribution over transitions from those
 states must be indistinguishable, or indistinguishable to within
 some tolerance. In practice, for the kinds of transducers generated
-in our model, minimization removes at most half the states, which is
-not sufficient to negate the exponential growth.
+in our model, minimization removes at most half the states, which
+is not sufficient to counteract the exponential growth. Thus, we
+need to find a way to approximate a message $\mu(x)$ by some simpler
+distribution $\hat\mu(x;\theta)$, which has some simpler form with
+parameter $\theta$.
 
-Previous authors have focused on a combination of n-best lists and
-unigram back-off models. (XXX cite eisner) In our setting, n-best
-lists seem inadequate: a 10,000-best list for a typical message
-only accounts for 50\% of message log perplexity. (XXX probably
-should run experiments for comparison.) That is, the posterior
-marginals in our model are fairly flat.
+In the context of transducers, previous authors have focused on a
+combination of n-best lists and unigram\footnote{Here, and for the
+rest of the paper, the ``grams'' of interest are characters in the
+International Phonetic Alphabet.} back-off models. (XXX cite eisner)
+In our setting, n-best lists seem inadequate; early experiments
+showed that a 10,000-best list for a typical message only accounts
+for 50\% of message log perplexity. (XXX probably should run
+experiments for comparison.) That is, the posterior marginals in
+our model are fairly flat.
 
-XXX this is old:
-
-We consider a different approach based on state splitting. Intuitively,
-we should prefer to use a unigram model over words unless there is
-evidence that a particular sequence is more probable than that
-independence assumption should suggest.
-
-Using an expectation semiring (XXX cite Eisner), we tally the
-expected number of transitions with a given label, as well as the
-expected number of bigram transitions. Then, for each character y
-(plus a hallucinated ``start'' character), we see if the distribution
-over unigram transitions $p(x_t)$ is an adequate approximation of
-the conditional distribution of unigrams $p(x_{t+1}|x_t = y)$. If
-so, then the $y$ transition can be a self-loop into the basic unigram
-model. If not, then we can create a new state which is transitioned
-into after observing any $y$. To determine whether or not to make
-a split, we measure the KL divergence between the distribution
-$p(x_t)$ and $p(x_{t+1}|x_t=y)$, and use a threshold to determine
-which states to merge and which to split.\footnote{It should be
-noted that this form of the KL divergence is identical to the mutual
-information.}
-
-This state splitting approach lends itself to recursive invocation.
-Once we consider bigrams, we could continue by splitting bigram
-states, therefore creating trigram states, and so on. In our experiments,
-we tried XXX, and found that 
-
-XXX end old stuff
+An alternative approach might be to simply treat messages as
+unnormalized probability distributions, and to minimize the KL
+divergence between some approximating message and the true message.
+However, messages are not always probability distributions and--because
+the distribution over potential strings is in principle infinite--they
+need not sum to a finite number. Instead, we propose to minimize
+the KL divergence between the ``expected'' marginal distribution
+and the approximated ``expected'' marginal distribution:
+\begin{equation}
+  \begin{split}
+    \hat\theta &= \arg\!\min_{\theta} D_{KL}(\pi(x)\hat\mu(x;\theta)||\pi(x)\mu(x) ) \\
+    &= \arg\!\min_{\theta} \sum_x \pi(x) \hat\mu(x;\theta) \log \frac{\pi(x)\hat\mu(x;\theta)}{\pi(x)\mu(x)} \\
+    &= \arg\!\min_{\theta} \sum_x \pi(x) \hat\mu(x;\theta) \log \frac{\hat\mu(x;\theta)}{\mu(x)} \\
+   \end{split}
+ \end{equation}
+where $\pi$ is a prior distribution acting as a surrogate for the posterior
+distribution over $x$ without the information from $\mu$. That is, we 
+seek to approximate $\mu$ not on its own, but as it functions in
+an environment representing its final context. In the context of
+the automata in this paper, $\mu(x)$ is a complex automaton with
+potentially many states, $\hat\mu(x)$ is a simple parametric automaton
+with forms that we discuss below, and $\pi(x)$ is an arbitrary (but
+hopefully fairly simple) automaton. In our experiments, we choose
+$\pi(x)$ to be a unigram language model over the language in question.
+Actually, we find that $\pi(x)$ can be a \textbf{uniform} distribution
+over characters and still obtain reasonable results.
 
 \section{Learning}
 
