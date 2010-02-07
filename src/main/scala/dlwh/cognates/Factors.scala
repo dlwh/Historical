@@ -44,7 +44,7 @@ trait CompressionPruning extends MarginalPruning { this: TransducerFactors =>
 
 trait PosUniPruning extends CompressionPruning { this: TransducerFactors =>
   def compressor(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char] = {
-    val compression = new PosUniCompression[Char](length+7,'#') with NormalizedTransitions[Int,Char];
+    val compression = new SafePosUniCompression(length+7,'#',length + 4);
     compression
   }
 }

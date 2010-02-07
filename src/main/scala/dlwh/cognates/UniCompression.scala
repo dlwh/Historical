@@ -72,7 +72,7 @@ class SafeUniCompression(val beginningUnigram: Char, expLength: Double) extends 
 
   def compress(prob: Double, counts: Statistics) = {
     val auto = inner.compress(0.0,counts);
-    val decayAuto = new DecayAutomaton(expLength, Set.empty ++ counts.keysIterator);
+    val decayAuto = new DecayAutomaton(expLength, Set.empty ++ counts.keysIterator - beginningUnigram);
     val difference = prob - (auto & decayAuto cost)
     val ret = auto.scaleInitialWeights(difference);
     ret

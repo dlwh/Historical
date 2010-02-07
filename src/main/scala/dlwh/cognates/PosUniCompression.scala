@@ -72,3 +72,35 @@ abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(imp
     auto
   }
 }
+
+class SafePosUniCompression(length: Int, val beginningUnigram: Char, expLength: Double) extends Compressor[Int, Char] {
+  def destinationFor(a: Int, c: Char) = a;
+  import scalanlp.fst.Alphabet._;
+  val inner = new PosUniCompression(length, beginningUnigram) with NormalizedTransitions[Int,Char];
+  def alphabet = inner.alphabet;
+  type Statistics = inner.Statistics;
+  def gatherStatistics(chars: Set[Char], auto: Automaton[Double,_,Char]):(Statistics,Double) = {
+    val decayAuto = new DecayAutomaton(expLength, chars);
+    val (allStats,total) = inner.gatherStatistics(chars,auto & decayAuto);
+    val retVal = Array.fill(allStats.length)(LogDoubleCounter[Char]());
+    for( (stats,i) <- allStats zipWithIndex; (k,v) <- stats) {
+      if(k == beginningUnigram)
+        retVal(i)(k) = v - decayAuto.stopProb;
+      else
+        retVal(i)(k) = v - decayAuto.arcCost;
+    }
+    // TODO: what to do with total
+    (retVal,total)
+  }
+
+  def interpolate(a: Statistics, eta1: Double, b: Statistics, eta2: Double) = inner.interpolate(a,eta1,b,eta2);
+
+  def compress(prob: Double, counts: Statistics) = {
+    val auto = inner.compress(0.0,counts);
+    val decayAuto = new DecayAutomaton(expLength, Set.empty ++ counts.iterator.flatMap(_.keysIterator) - beginningUnigram);
+    val difference = prob - (auto & decayAuto cost)
+    val ret = auto.scaleInitialWeights(difference);
+    println(prob,difference,auto & decayAuto cost, ret.cost, decayAuto & ret cost);
+    ret
+  }
+}
