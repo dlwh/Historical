@@ -9,7 +9,7 @@ import scalanlp.math.Numerics._;
 import Types._;
 import scalanlp.util.Index
 import scalanlp.util.Log._;
-import scalanlp.optimize.CompetitiveLinking;
+import scalanlp.optimize.KuhnMunkres;
 
 abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) {
   type MFactors <: Factors
@@ -17,7 +17,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
   def makeIO(s:State, otherLanguages: Map[Language,Seq[Cognate]], j: Int) = {
     val words = Map.empty ++ otherLanguages.iterator.map { case (l,seq) => (l,seq(j).word) }
-    println("looking for a new friend for " + words);
+    println("Looking at " + words);
     val io = new InsideOutside(tree, s.factors, words);
     io;
   }
@@ -49,7 +49,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
       affinities(j) = aff;
     }
 
-    val (changes,score) = CompetitiveLinking.extractMatching(affinities.map(x => x:Seq[Double]).toSeq);
+    val (changes,score) = KuhnMunkres.extractMatching(affinities.map(x => x:Seq[Double]).toSeq);
     // repermute our current permutation
     val newPermute = changes map current toSeq;
     val newS = s.copy(permutations = otherLanguages + (language -> newPermute), likelihood = score);
@@ -81,6 +81,14 @@ class BaselineBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Langu
   override def initialFactors: MFactors = new BigramFactors;
 }
 
+class NoLearningBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) extends Bipartite(tree,cognates,languages) {
+  val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
+  type MFactors = TransducerFactors
+
+  def initialFactors = new TransducerFactors(tree,alphabet) with UniPruning
+}
+
+
 
 class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) extends Bipartite(tree,cognates,languages) with TransducerLearning {
   val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
@@ -90,7 +98,7 @@ class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language
 
   override def nextAction(s: State) = learnFactors(s);
 
-  def learnFactors(s: State):State = {
+  def learnFactors(s: State):State = if(languages.size == s.permutations.size) {
     var ll = 0.0;
     val numGroups = s.permutations.valuesIterator.next.length;
     val ios = for(i <- 0 until numGroups iterator) yield {
@@ -102,13 +110,13 @@ class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language
     val stats = gatherStatistics(ios);
     val newFactors = mkFactors(stats);
     s.copy(factors = newFactors, likelihood = ll);
-  }
+  } else s
 
-  def initialFactors = new TransducerFactors(tree,alphabet) with UniPruning
+  def initialFactors = new TransducerFactors(tree,alphabet) with PosUniPruning
 
   def mkFactors(statistics: Statistics):TransducerFactors = {
     val transducers = mkTransducers(statistics);
-    val factors = new TransducerFactors(tree,alphabet,transducers) with UniPruning
+    val factors = new TransducerFactors(tree,alphabet,transducers) with PosUniPruning
     globalLog.log(INFO)("Trans out " + memoryString);
     factors
   }
@@ -169,10 +177,13 @@ trait BipartiteRunner {
 
 object RunBipartite extends BipartiteRunner {
   def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String]) = new TransBipartite(tree,cogs,languages);
-
 }
 
 object RunBaseline extends BipartiteRunner {
   def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String]) = new BaselineBipartite(tree,cogs,languages);
 
+}
+
+object RunNoLearning extends BipartiteRunner {
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String]) = new NoLearningBipartite(tree,cogs,languages);
 }

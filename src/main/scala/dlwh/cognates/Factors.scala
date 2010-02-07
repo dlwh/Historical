@@ -111,7 +111,6 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
     val bigs = ms.foldLeft(Set[(Char,Char)]()) { _ ++ _.intBigrams };
     val pruned = prune(minned,length, chars, bigs);
     //globalLog.log(INFO)("* out " + memoryString);
-    println(pruned);
     new Marginal( pruned,length,chars,bigs);
   }
 
@@ -138,9 +137,9 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
     override def toString = { "Marginal 3 Best: " + KBest.extractList(fsa,3)};
 
     /**
-    * returns the log-normalized log probability of the word.
+    * returns the log probability of the word.
     */
-    def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost - partition;
+    def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost// - partition;
   }
 
   // parent to child (argument order)

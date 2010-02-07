@@ -183,7 +183,7 @@ trait ArcCreator[S,T] { this : Compressor[S,T] =>
 trait NormalizedTransitions[S,T] extends ArcCreator[S,T] { this: Compressor[S,T] =>
   def arcsForCounter(state: S, ctr: LogDoubleCounter[T]) = {
     val normalizer = ctr.logTotal;
-    assert(!normalizer.isNaN)
+    assert(!normalizer.isNaN,ctr)
     for{
       (ch2,w) <- ctr.iterator
       dest = destinationFor(state,ch2);

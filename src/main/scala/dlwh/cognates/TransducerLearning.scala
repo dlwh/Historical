@@ -22,21 +22,23 @@ trait TransducerLearning {
   }
 
   def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]): Statistics = {
-    val trigramStats = for{
+    val trigramStats = TaskExecutor.iterateTasks {for{
       io <- ios
-      pair@ (fromL,toL) <- edgesToLearn.iterator;
-      trans <- io.edgeMarginal(fromL, toL).iterator
-    } yield {
-      val allPairs = for {
-        a <- alphabet + eps;
-        b <- alphabet + eps;
-        if a != eps || b != eps
-      } yield (a,b);
+    } yield { () =>
+      for { pair@ (fromL,toL) <- edgesToLearn.iterator;
+        trans <- io.edgeMarginal(fromL, toL).iterator
+      } yield {
+        val allPairs = for {
+          a <- alphabet + eps;
+          b <- alphabet + eps;
+          if a != eps || b != eps
+        } yield (a,b);
 
-      val cost = transducerCompressor.gatherStatistics(allPairs,trans.fst);
+        val cost = transducerCompressor.gatherStatistics(allPairs,trans.fst);
 
-      (fromL,toL) -> cost._1;
-    }
+        (fromL,toL) -> cost._1;
+      }
+   } } flatten
 
     import collection.mutable.{Map=>MMap}
     val stats = MMap[(Language,Language),transducerCompressor.Statistics]();

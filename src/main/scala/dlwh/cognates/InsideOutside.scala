@@ -81,9 +81,16 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
       val marg = if(!hasUpwardMessage) parentMessage.get.apply();
       else {
         val parent = parentMessage.map(_.apply()).iterator;
-        val incoming = children.iterator.withFilter(_.hasUpwardMessage).map(_.upwardMessage);
+        val incoming = parent ++ children.iterator.withFilter(_.hasUpwardMessage).map(_.upwardMessage);
         val wordMessage  = word.iterator.map(marginalForWord(_,0.0));
-        product(parent ++ incoming ++ wordMessage toSeq);
+        if(!incoming.hasNext) marginalForWord(word.get)
+        else if(word.isEmpty) (incoming) reduceLeft(_ * _);
+        else {
+          val inc = incoming reduceLeft(_ *_);
+          val cost = inc(word.get);
+          val m = marginalForWord(word.get,cost);
+          m
+        }
       }
       marg;
     }
@@ -93,9 +100,14 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
     lazy val upwardMessage:Marginal = {
       assert(hasUpwardMessage);
       val incoming = children.iterator.withFilter(_.hasUpwardMessage).map(_.upwardMessage);
-      val wordMessage = word.iterator.map(w => marginalForWord(w,0.0));
-      if(children.isEmpty) wordMessage.next
-      else (wordMessage ++ incoming) reduceLeft(_ * _);
+      if(children.isEmpty) marginalForWord(word.get)
+      else if(word.isEmpty) (incoming) reduceLeft(_ * _);
+      else {
+        val inc = incoming reduceLeft(_ *_);
+        val cost = inc(word.get);
+        val m = marginalForWord(word.get,cost);
+        m
+      }
     }
 
     lazy val reconstructedMarginal: Marginal = {
