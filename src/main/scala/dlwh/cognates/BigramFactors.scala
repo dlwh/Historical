@@ -18,7 +18,7 @@ class BigramFactors extends Factors {
   def edgeFor(parent: Language, child: Language, alphabet: Set[Char]) = new EdgeFactor();
   def rootMarginal(alphabet: Set[Char]) = new Marginal(Set.empty);
   def marginalForWord(word: String, score: Double= 0.0) = new Marginal(extractBigrams(word));
-  def product(ms: Seq[Marginal]) = ms.reduceLeft(_*_);
+  def product(upward: Boolean, ms: Seq[Marginal]) = ms.reduceLeft(_*_);
 
   class BigramEdge extends EdgeFactorBase {
     def childMarginalize(c: Marginal): Marginal = c;
