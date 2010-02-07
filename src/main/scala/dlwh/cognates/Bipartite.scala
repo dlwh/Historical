@@ -38,7 +38,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
       val marg = makeIO(s,otherLanguages,j).marginalFor(language).get;
       val aff = new Array[Double](current.length);
       for ( i <- 0 until current.length ) {
-        aff(i) = marg(current(i).word);
+        aff(i) = -marg(current(i).word);
         assert(!aff(i).isNaN);
       }
       (j,aff);
@@ -52,7 +52,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
     val (changes,score) = KuhnMunkres.extractMatching(affinities.map(x => x:Seq[Double]).toSeq);
     // repermute our current permutation
     val newPermute = changes map current toSeq;
-    val newS = s.copy(permutations = otherLanguages + (language -> newPermute), likelihood = score);
+    val newS = s.copy(permutations = otherLanguages + (language -> newPermute), likelihood = -score);
     nextAction(newS)
   }
 

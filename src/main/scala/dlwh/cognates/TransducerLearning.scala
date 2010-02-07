@@ -22,10 +22,10 @@ trait TransducerLearning {
   }
 
   def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]): Statistics = {
-    val trigramStats = TaskExecutor.iterateTasks {for{
+    val trigramStats: Iterator[((Language,Language),transducerCompressor.Statistics)] = TaskExecutor.iterateTasks {for{
       io <- ios
     } yield { () =>
-      for { pair@ (fromL,toL) <- edgesToLearn.iterator;
+      (for { pair@ (fromL,toL) <- edgesToLearn.iterator;
         trans <- io.edgeMarginal(fromL, toL).iterator
       } yield {
         val allPairs = for {
@@ -37,7 +37,7 @@ trait TransducerLearning {
         val cost = transducerCompressor.gatherStatistics(allPairs,trans.fst);
 
         (fromL,toL) -> cost._1;
-      }
+      } ).toSeq iterator
    } } flatten
 
     import collection.mutable.{Map=>MMap}

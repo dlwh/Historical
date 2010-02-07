@@ -100,7 +100,6 @@ class SafePosUniCompression(length: Int, val beginningUnigram: Char, expLength: 
     val decayAuto = new DecayAutomaton(expLength, Set.empty ++ counts.iterator.flatMap(_.keysIterator) - beginningUnigram);
     val difference = prob - (auto & decayAuto cost)
     val ret = auto.scaleInitialWeights(difference);
-    println(prob,difference,auto & decayAuto cost, ret.cost, decayAuto & ret cost);
     ret
   }
 }
