@@ -38,6 +38,14 @@ abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(imp
     }
   }
   
+  def smooth(stats: Statistics, counts: LogDoubleCounter[T]): Statistics = {
+    val res = stats.map(_.copy);
+    for( ctr <- res; (k,v) <- counts) {
+      ctr(k) = logSum(ctr(k),v);
+    }
+    res;
+  }
+
   def compress(chars: Set[T], auto: Automaton[Double,_,T]):Automaton[Double,Int, T] = {
     val (stats,cost) = gatherStatistics(chars,auto);
     compress(cost,stats);
@@ -94,6 +102,7 @@ class SafePosUniCompression(length: Int, val beginningUnigram: Char, expLength: 
   }
 
   def interpolate(a: Statistics, eta1: Double, b: Statistics, eta2: Double) = inner.interpolate(a,eta1,b,eta2);
+  def smooth(a: Statistics, ctr: LogDoubleCounter[Char]) = inner.smooth(a,ctr);
 
   def compress(prob: Double, counts: Statistics) = {
     val auto = inner.compress(0.0,counts);

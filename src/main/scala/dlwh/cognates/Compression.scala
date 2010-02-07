@@ -20,6 +20,7 @@ trait Compressor[State,T] {
    */
   def gatherStatistics(validChars: Set[T], auto: Automaton[Double,_,T]):(Statistics,Double)
   def interpolate(stats1: Statistics, eta1: Double, stats2: Statistics, eta2:Double):Statistics
+  def smooth(stats: Statistics, counts: LogDoubleCounter[T]): Statistics
 
   final def compress(auto: Automaton[Double,_,T], validChars: Set[T]):Automaton[Double,State,T] = {
     val stats = gatherStatistics(validChars,auto);
@@ -93,6 +94,14 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
   }
 
   type Statistics = LogPairedDoubleCounter[T,T];
+
+  def smooth(stats: Statistics, counts: LogDoubleCounter[T]): Statistics = {
+    val res = stats.copy;
+    for( (_,ctr) <- res.rows; (k,v) <- counts) {
+      ctr(k) = logSum(ctr(k),v);
+    }
+    res
+  }
 
   def interpolate(a: Statistics, eta1:Double, b: Statistics, eta2: Double) = {
     val logEta = log(eta2);
@@ -202,6 +211,7 @@ trait NormalizedByFirstChar[S,T] extends ArcCreator[S,(T,T)] { this: Compressor[
 
   def arcsForCounter(state: S, ctr: LogDoubleCounter[(T,T)]) = {
     val paired = LogPairedDoubleCounter[T,T]();
+    require(!ctr.logTotal.isInfinite && !ctr.logTotal.isNaN);
 
     val insertWeights = new ArrayBuffer[Double]();
     for( ((ch1,ch2),w) <- ctr) {
