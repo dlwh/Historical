@@ -9,7 +9,7 @@ import scalanlp.math.Numerics._;
 import Types._;
 import scalanlp.util.Index
 import scalanlp.util.Log._;
-import scalanlp.optimize.KuhnMunkres;
+import fig.basic.BipartiteMatcher;
 
 abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) {
   type MFactors <: Factors
@@ -39,6 +39,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
       val aff = new Array[Double](current.length);
       for ( i <- 0 until current.length ) {
         aff(i) = -marg(current(i).word);
+        println(otherLanguages.valuesIterator.map(_ apply j) toSeq,current(i),aff(i));
         assert(!aff(i).isNaN);
       }
       (j,aff);
@@ -49,9 +50,14 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
       affinities(j) = aff;
     }
 
-    val (changes,score) = KuhnMunkres.extractMatching(affinities.map(x => x:Seq[Double]).toSeq);
+    val bm = new BipartiteMatcher();
+    val changes = bm.findMinWeightAssignment(affinities);
     // repermute our current permutation
     val newPermute = changes map current toSeq;
+    var score = 0.0
+    for( (y,x) <- changes zipWithIndex) {
+      score += affinities(x)(y);
+    }
     val newS = s.copy(permutations = otherLanguages + (language -> newPermute), likelihood = -score);
     nextAction(newS)
   }
@@ -87,8 +93,6 @@ class NoLearningBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Lan
 
   def initialFactors = new TransducerFactors(tree,alphabet) with UniPruning
 }
-
-
 
 class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) extends Bipartite(tree,cognates,languages) with TransducerLearning {
   val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
