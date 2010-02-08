@@ -2,6 +2,7 @@ package dlwh.cognates
 
 import scalanlp.fst._
 import scalanlp.stats.sampling.Rand;
+import scala.actors.Future
 import scala.collection.mutable.ArrayBuffer
 import scalala.Scalala._;
 import scalanlp.counters.LogCounters._;
@@ -11,56 +12,114 @@ import scalanlp.util.Index
 import scalanlp.util.Log._;
 import fig.basic.BipartiteMatcher;
 
-abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) {
+abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double) {
   type MFactors <: Factors
-  case class State(permutations: Map[Language,Seq[Cognate]], factors: MFactors, likelihood:Double = Double.NegativeInfinity);
+  case class State(groups: Seq[Map[Language,Cognate]], factors: MFactors,
+                   deathScores:Map[(Language,Language),Double] = Map().withDefaultValue(initDeathProb), likelihood:Double = Double.NegativeInfinity);
 
-  def makeIO(s:State, otherLanguages: Map[Language,Seq[Cognate]], j: Int) = {
-    val words = Map.empty ++ otherLanguages.iterator.map { case (l,seq) => (l,seq(j).word) }
+  def makeIO(s:State, words: Map[Language,Cognate]) = {
     println("Looking at " + words);
-    val io = new InsideOutside(tree, s.factors, words);
+    val io = new InsideOutside(tree, s.factors, Map.empty ++ words.mapValues(_.word));
     io;
   }
+
+  def treeScore(s: State, io: InsideOutside[MFactors]):Double = (
+    io.treePrior(s.deathScores)
+  )
 
   def initialFactors: MFactors
 
   def initialState(words :Seq[Cognate], factors: MFactors): State = {
-    val map = Map.empty ++ words.groupBy(_.language)
-    State(map, factors);
+    // the n'th word in each language is assigned to the n'th cognate group
+    val groupMap = words.groupBy(_.language).valuesIterator.flatMap(_.zipWithIndex.iterator).toSeq.groupBy(_._2);
+    val groups = for(group  <- groupMap.valuesIterator) yield {
+      val cogs = for( (cog,i) <- group) yield (cog.language,cog);
+      Map.empty ++ cogs;
+    };
+    State(groups.toSeq, factors);
+  }
+
+  final def calculateAffinities(s: State, group: Map[Language,Cognate], language: Language, words: Seq[Cognate]) = {
+    val io = makeIO(s,group)
+    val marg = io.marginalFor(language).get;
+    val prior = treeScore(s,io.include(language,"<dummy>"));
+
+    val aff = new Array[Double](words.length);
+    for ( i <- 0 until words.length ) {
+      aff(i) = -(marg(words(i).word) + prior);
+      assert(!aff(i).isNaN);
+    }
+    aff
+  }
+
+  final def doMatching(affinities: Array[Array[Double]]) = {
+    val bm = new BipartiteMatcher();
+    val size = affinities.size max affinities(0).size;
+    val paddedAffinities = Array.tabulate(size,size) { (x,y) =>
+      if (x < affinities.length && y < affinities(x).length) affinities(x)(y)
+      else 0.0;
+    };
+    val changes = bm.findMinWeightAssignment(paddedAffinities);
+    changes.take(affinities.length);
+  }
+
+  def baselineScores(s: State, language: Language, words: Seq[Cognate]) = {
+    val arr = calculateAffinities(s,Map.empty,language,words);
+    for( i <- 0 until arr.length) {
+      arr(i) -= treePenalty;
+    }
+    arr
   }
 
   final def step(s: State, language: Language):State = {
-    val current = s.permutations.get(language) getOrElse cognates.filter(_.language == language);
-    import s._;
-    val otherLanguages = permutations - language;
+    val current = cognates.filter(_.language == language);
+    val otherLanguages = s.groups.map(group => group - language).filter(!_.isEmpty);
+
     println(language);
-    val tasks = for ( j <- 0 until current.length) yield { () =>
-      val marg = makeIO(s,otherLanguages,j).marginalFor(language).get;
-      val aff = new Array[Double](current.length);
-      for ( i <- 0 until current.length ) {
-        aff(i) = -marg(current(i).word);
-        println(otherLanguages.valuesIterator.map(_ apply j) toSeq,current(i),aff(i));
-        assert(!aff(i).isNaN);
-      }
-      (j,aff);
+
+    val tasks = for ( j <- 0 until otherLanguages.length) yield { () =>
+      val aff = calculateAffinities(s,otherLanguages(j),language,current)
+      (j,aff)
     }
 
-    val affinities = new Array[Array[Double]](current.length);
+    val affinities = new Array[Array[Double]](otherLanguages.length);
     TaskExecutor.doTasks(tasks) foreach { case (j,aff) =>
       affinities(j) = aff;
     }
 
-    val bm = new BipartiteMatcher();
-    val changes = bm.findMinWeightAssignment(affinities);
-    val indices = Set.empty ++ changes;
-    assert(indices.size == changes.length);
-    // repermute our current permutation
-    val newPermute = changes map current toSeq;
+
+    val changes = doMatching(affinities);
+    assert(changes.toSet.size == changes.length);
+
+    // Calculate baseline scores for all words
+    val baselines = baselineScores(s,language,current);
+    // Compute the score, and patch anything that is lower score than just leaving it by itself.
     var score = 0.0
-    for( (y,x) <- changes zipWithIndex) {
-      score += affinities(x)(y);
+    var loners = Set[Cognate]();
+    for( (w,g) <- changes.zipWithIndex if w != -1 && w < current.length) {
+      val affScore = affinities(g)(w);
+      // i.e. if -log prob of recommended attachment is worse than going it alone, just go it alone
+      println(current(w) + " " +  affScore + " " + baselines(w) + otherLanguages(g));
+      if(affScore < baselines(w)) {
+        score += affinities(g)(w);
+      } else {
+        changes(g) = -1;
+        loners += current(w);
+        score += baselines(w);
+      }
     }
-    val newS = s.copy(permutations = otherLanguages + (language -> newPermute), likelihood = -score);
+
+    val augmentedGroups = for {
+      (group,g) <- otherLanguages.zipWithIndex;
+      newWordIndex = changes(g)
+    } yield {
+      if(newWordIndex != -1 && newWordIndex < current.length) group + (language -> current(newWordIndex))
+      else group;
+    }
+
+    val newGroups = augmentedGroups ++ loners.map(c => Map.empty + (language -> c));
+
+    val newS = s.copy(groups = newGroups, likelihood = -score);
     nextAction(newS)
   }
 
@@ -84,19 +143,22 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
 }
 
-class BaselineBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) extends Bipartite(tree,cognates,languages) {
+class BaselineBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double)
+                        extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb) {
   override type MFactors = BigramFactors;
   override def initialFactors: MFactors = new BigramFactors;
 }
 
-class NoLearningBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) extends Bipartite(tree,cognates,languages) {
+class NoLearningBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double)
+                      extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb) {
   val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
   type MFactors = TransducerFactors
 
   def initialFactors = new TransducerFactors(tree,alphabet) with UniPruning
 }
 
-class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language]) extends Bipartite(tree,cognates,languages) with TransducerLearning {
+class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double)
+                     extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb) with TransducerLearning {
   val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
 
   type MFactors = TransducerFactors
@@ -104,18 +166,18 @@ class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language
 
   override def nextAction(s: State) = learnFactors(s);
 
-  def learnFactors(s: State):State = if(languages.size == s.permutations.size) {
+  def learnFactors(s: State):State = {
     var ll = 0.0;
-    val numGroups = s.permutations.valuesIterator.next.length;
+    val numGroups = s.groups.length;
     val ios = for(i <- 0 until numGroups iterator) yield {
-      val io = makeIO(s,s.permutations,i);
+      val io = makeIO(s,s.groups(i));
       io;
     }
 
     val stats = gatherStatistics(ios);
     val newFactors = mkFactors(stats);
     s.copy(factors = newFactors);
-  } else s
+  }
 
   def initialFactors = new TransducerFactors(tree,alphabet) with PosUniPruning;
 
@@ -129,20 +191,25 @@ class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language
 }
 
 object Accuracy {
-  def permutationAccuracy(a: Seq[Int], b: Seq[Int]) = {
-    var numRight = 0;
-    var numWrong = 0;
-    for( (aa,bb) <- a zip b) {
-      if(aa == bb) numRight += 1;
-      else numWrong += 1;
-    }
-    numRight * 1.0 / a.length;
-  }
 
-  def doPermutations(indices: Map[Language,Seq[Int]])  = {
-    for( (l1,a) <- indices;
-        (l2,b) <- indices.dropWhile(_._1!= l1).drop(1)
-       ) yield ( (l1,l2),permutationAccuracy(a,b));
+  def doPermutations(languages:Seq[Language], indices: Seq[Map[Language,Int]])  = {
+    val numRight = scalanlp.counters.Counters.IntCounter[(Language,Language)];
+    val numTotal = scalanlp.counters.Counters.IntCounter[(Language,Language)];
+    for {
+      map <- indices;
+      (l1,i1) <- languages.zipWithIndex;
+      (l2,i2) <- languages.zipWithIndex if( i1 < i2);
+      truth1 <- map.get(l1);
+      truth2 <- map.get(l2)
+    } {
+      if(truth1 == truth2) {
+        numRight(l1->l2) += 1;
+      }
+      numTotal(l1->l2) += 1;
+    }
+
+    val accuracies = for( (pair,total) <- numTotal) yield (pair,numRight(pair) / total.toDouble);
+    accuracies.toMap;
   }
 
   def indexGold(cogs: Seq[Seq[Cognate]]) = {
@@ -157,7 +224,7 @@ object Accuracy {
 trait BipartiteRunner {
   import Accuracy._;
 
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String]): Bipartite
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double): Bipartite
 
   def main(args: Array[String]) {
     val languages = args(1).split(",");
@@ -166,30 +233,34 @@ trait BipartiteRunner {
     val goldIndices = indexGold(gold);
     val data = gold.flatten;
     val randomized = Rand.permutation(data.length).draw().map(data);
-    val iter = bip(dataset.tree, randomized, languages).iterations;
+    val expectedNumTrees = data.length.toDouble / languages.size;
+    val treePenalty = Math.log( (expectedNumTrees -1) / expectedNumTrees)
+    println(treePenalty * 100);
+    val iter = bip(dataset.tree, randomized, languages,treePenalty * 100,0.001).iterations;
     for( state <- iter.take(1000)) {
-      val numGroups = state.permutations.valuesIterator.map(_.length).reduceLeft(_ max _);
+      val numGroups = state.groups.length;
       for(g <- 0 until numGroups) {
-        val cognates = Seq.empty ++ (for(cogs <- state.permutations.valuesIterator) yield cogs(g));
-        val indices = cognates map goldIndices
+        val cognates = state.groups(g);
+        val indices = cognates.valuesIterator map goldIndices toSeq;
         println(cognates.mkString(",") + " " + indices.mkString(","));
       }
-      println("Likelihood" + state.likelihood);
-      val accuracies = doPermutations(state.permutations.mapValues(_ map goldIndices).toMap);
+      println("Likelihood" + state.likelihood)
+      val groundedGroups = state.groups map ( group => group.mapValues(goldIndices).toMap);
+      val accuracies = doPermutations(languages,groundedGroups);
       println(accuracies);
     }
   }
 }
 
 object RunBipartite extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String]) = new TransBipartite(tree,cogs,languages);
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = new TransBipartite(tree,cogs,languages, treePenalty, initDP);
 }
 
 object RunBaseline extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String]) = new BaselineBipartite(tree,cogs,languages);
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = new BaselineBipartite(tree,cogs,languages, treePenalty, initDP);
 
 }
 
 object RunNoLearning extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String]) = new NoLearningBipartite(tree,cogs,languages);
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP);
 }
