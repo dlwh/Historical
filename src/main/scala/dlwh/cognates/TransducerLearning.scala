@@ -20,7 +20,7 @@ trait TransducerLearning {
   } yield (a,b);
 
 
-  def initialMatchCounts = -30;
+  def initialMatchCounts = -68;
   def initialSubCounts = initialMatchCounts-4;
   def initialDelCounts = initialMatchCounts-6;
 
@@ -37,6 +37,7 @@ trait TransducerLearning {
     val trigramStats: Iterator[((Language,Language),transducerCompressor.Statistics)] = (TaskExecutor.doTasks {for{
       io <- ios.toSeq
     } yield { () =>
+      println(io.assignments);
       (for { pair@ (fromL,toL) <- edgesToLearn.iterator;
         trans <- io.edgeMarginal(fromL, toL).iterator
       } yield {
@@ -44,7 +45,6 @@ trait TransducerLearning {
         val cost = transducerCompressor.gatherStatistics(allPairs,trans.fst);
         assert(!cost._2.isInfinite);
 
-        println("Here" + pair + cost._2);
         (fromL,toL) -> cost._1;
       } ).toSeq iterator
    } }).iterator.flatten
@@ -52,8 +52,8 @@ trait TransducerLearning {
     import collection.mutable.{Map=>MMap}
     val stats = MMap[(Language,Language),transducerCompressor.Statistics]();
     for ( (lpair,ctr) <- trigramStats)  {
-      println(lpair);
-      stats(lpair) = stats.get(lpair).map(transducerCompressor.interpolate(_,1,ctr,1)).getOrElse(ctr);
+      if(stats.contains(lpair)) stats(lpair) = transducerCompressor.interpolate(stats(lpair),1,ctr,1);
+      else stats(lpair) = ctr;
     }
 
     val smoothingCounter = LogDoubleCounter[(Char,Char)]();

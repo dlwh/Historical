@@ -78,20 +78,16 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
     }
 
     lazy val marginal: Marginal = {
-      val marg = if(!hasUpwardMessage) parentMessage.get.apply();
+      val parent = parentMessage.get.apply();
+      val incoming: Seq[Marginal] = children.iterator.withFilter(_.hasUpwardMessage).map(_.upwardMessage).toSeq
+      val wordMessage  = word.iterator.map(marginalForWord(_,0.0));
+      if(word.isEmpty) product(false,Seq(parent) ++ incoming);
       else {
-        val parent = parentMessage.get.apply();
-        val incoming: Seq[Marginal] = children.iterator.withFilter(_.hasUpwardMessage).map(_.upwardMessage).toSeq
-        val wordMessage  = word.iterator.map(marginalForWord(_,0.0));
-        if(word.isEmpty) product(false,Seq(parent) ++ incoming);
-        else {
-          val inc = product(false,Seq(parent) ++ incoming);
-          val cost = inc(word.get);
-          val m = marginalForWord(word.get,cost);
-          m
-        }
+        val inc = product(false,Seq(parent) ++ incoming);
+        val cost = inc(word.get);
+        val m = marginalForWord(word.get,cost);
+        m
       }
-      marg;
     }
 
     def hasUpwardMessage:Boolean = !word.isEmpty || children.exists(_.hasUpwardMessage);

@@ -19,14 +19,16 @@ abstract class UniCompression[@specialized("Char") T:Alphabet](val beginningUnig
     import ring._;
 
     val cost = auto.reweight(promote[Any] _ , promoteOnlyWeight _).cost;
-    (cost.decode,cost.totalProb);
+    (cost.decode - cost.totalProb value,cost.totalProb);
   }
 
   def interpolate(a: Statistics, eta1: Double, b: Statistics, eta2: Double) = {
-    val logEta = Math.log(eta2);
-    val c = (a + Math.log(eta1)) value;
+    val c = LogDoubleCounter[T]();
+    for( (k,v) <- a) {
+      c(k) = v + Math.log(eta1);
+    }
     for( (k,v) <- b) {
-      c(k) = logSum(c(k),v + logEta);
+      c(k) = logSum(c(k),v + Math.log(eta2));
     }
     c
   }

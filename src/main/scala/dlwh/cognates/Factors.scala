@@ -32,6 +32,10 @@ trait MarginalPruning { this: TransducerFactors =>
    def prune(upward: Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Psi
 }
 
+trait NullPruning { this: TransducerFactors =>
+  def prune(upward: Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) =fsa
+}
+
 trait CompressionPruning extends MarginalPruning { this: TransducerFactors =>
    def compressor(upward:Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char];
    def prune(upward: Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Psi = {
@@ -92,7 +96,7 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
   def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
     //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
     val ed = (for( ed <- editDistances.get((parent,child)))
-              yield ed) getOrElse new EditDistance(-10,-10,fullAlphabet);
+              yield ed) getOrElse new EditDistance(-3,-4,fullAlphabet);
     new EdgeFactor(ed,alphabet);
   }
 

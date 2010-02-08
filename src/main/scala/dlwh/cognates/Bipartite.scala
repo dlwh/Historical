@@ -52,6 +52,8 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
     val bm = new BipartiteMatcher();
     val changes = bm.findMinWeightAssignment(affinities);
+    val indices = Set.empty ++ changes;
+    assert(indices.size == changes.length);
     // repermute our current permutation
     val newPermute = changes map current toSeq;
     var score = 0.0
@@ -107,20 +109,19 @@ class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language
     val numGroups = s.permutations.valuesIterator.next.length;
     val ios = for(i <- 0 until numGroups iterator) yield {
       val io = makeIO(s,s.permutations,i);
-      ll += io.likelihood;
       io;
     }
 
     val stats = gatherStatistics(ios);
     val newFactors = mkFactors(stats);
-    s.copy(factors = newFactors, likelihood = ll);
+    s.copy(factors = newFactors);
   } else s
 
-  def initialFactors = new TransducerFactors(tree,alphabet) with PosUniPruning
+  def initialFactors = new TransducerFactors(tree,alphabet) with PosUniPruning;
 
   def mkFactors(statistics: Statistics):TransducerFactors = {
     val transducers = mkTransducers(statistics);
-    val factors = new TransducerFactors(tree,alphabet,transducers) with PosUniPruning
+    val factors = new TransducerFactors(tree,alphabet,transducers) with PosUniPruning;
     globalLog.log(INFO)("Trans out " + memoryString);
     factors
   }
@@ -169,8 +170,9 @@ trait BipartiteRunner {
     for( state <- iter.take(1000)) {
       val numGroups = state.permutations.valuesIterator.map(_.length).reduceLeft(_ max _);
       for(g <- 0 until numGroups) {
-        val cognates = for(cogs <- state.permutations.valuesIterator) yield cogs(g);
-        println(cognates.mkString(","));
+        val cognates = Seq.empty ++ (for(cogs <- state.permutations.valuesIterator) yield cogs(g));
+        val indices = cognates map goldIndices
+        println(cognates.mkString(",") + " " + indices.mkString(","));
       }
       println("Likelihood" + state.likelihood);
       val accuracies = doPermutations(state.permutations.mapValues(_ map goldIndices).toMap);
