@@ -34,7 +34,7 @@
 \section{Introduction}
 
 The crowning achievement of historical linguistics has long been
-the Comparative Method (XXX cite some historical linguist who has said as much. Ohala 1981), by which
+the Comparative Method \cite{ohala93phonetics}, by which
 linguists take assembled cognate words derived from a common ancestor
 word to deduce the phonological and morphological changes that
 explains the differences between them. For example, (XXX need to
@@ -191,12 +191,14 @@ with one another and to recover ancestral forms of those words.
 We make a few high-level modeling assumptions. First, all words in
 a cognate group have a single common ancestor word in a single
 ancestral language. Second, each surface form in each language
-evolved from its parent form via a regular stochastic process that
-is shared across all cognate groups. Specifically, each branch in
-the phylogenetic tree has a weighted finite state transducer from
-parent strings to child strings.
+evolved from its parent form via regular stochastic transformations
+that are shared across all cognate groups. Specifically, each branch
+in the phylogenetic tree has a weighted finite state transducer
+from parent strings to child strings.
 
-With these principles in mind, we define a generative model of the cognate groups and their individual word forms in each language as follows:
+With these principles in mind, we define a generative model of the
+cognate groups and their individual word forms in each language as
+follows:
 \begin{enumerate}
   \item Choose a (binary) tree topology over languages.
   \item For each edge in the tree, choose a transducer $\phi_{a,d}$ over strings in an ancestor language $a$ and descendent language $d$.
@@ -222,9 +224,9 @@ words evolve.
 
 \section{Inference}
 
-In our setting, we are given a set of languages and a list of words
+We are given a set of languages and a list of words
 in each language, and our objective is to determine which words are
-cognate with each other words. In the romance dataset, we have the
+cognate with each other words. In the Romance dataset, we have the
 additional constraint that each cognate group supports exactly one
 word from each language. In effect, in the Romance dataset the 
 inference task is reduced to finding a permutation of the respective
@@ -250,8 +252,8 @@ probability of each word belonging to each cognate group. To compute
 the affinities for each cognate group, inference in each tree
 computes the marginal distribution of the words from the ``held
 out'' language, and likelihoods are computed for each word.  Given
-these weights, we use the greedy Competitive Linking (XXX cite and
-try out Hungarian) algorithm to find an approximate maximizer.
+these weights, we use the Kuhn-Munkres algorithm (XXX cite ) algorithm
+to find an approximate maximizer.
 
 One important note is initialization. In our early experiments we
 found that choosing a random starting configuration usually led to
@@ -306,14 +308,19 @@ an environment representing its final context.
 In the context of the automata in this paper, $\mu(x)$ is a complex
 automaton with potentially many states, $\hat\mu(x)$ is a simple
 parametric automaton with forms that we discuss below, and $\pi(x)$
-is an arbitrary (but hopefully fairly simple) automaton. In our
-experiments, we choose $\pi(x)$ to be a unigram language model over
-the language in question.  Actually, we find that $\pi(x)$ can be
-a \textbf{uniform} distribution over characters and still obtain
-reasonable results.
+is an arbitrary (but hopefully fairly simple) automaton.
+The actual procedure used in this paper is as follows. Given a
+deterministic prior transducer $\pi$, and a deterministic automaton
+topology $\mu^*$:
+\begin{enumerate}
+  \item Set $\pi\odot\mu$ = KL(
+  \item Set 
+\end{enumerate} 
+In our experiments, we choose $\pi(x)$ to be a unigram language
+model over the language in question.  Actually, we find that $\pi(x)$
+can be a \textbf{uniform} distribution over characters and still
+obtain reasonable results.
 
-For the actual procedure we use in this paper, XXX compose ``unweighted''
-transducer
 
 \section{Learning}
 
@@ -426,4 +433,9 @@ so no graphical model.\\
   Basically context driven. Different task, but probably worth mentioning.
 
 \section{Conclusion}
+\section*{References}
+\bibliographystyle{acl}
+\bibliography{refs}
+
+
 \end{document}
