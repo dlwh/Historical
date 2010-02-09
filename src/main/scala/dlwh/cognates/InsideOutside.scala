@@ -51,6 +51,19 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
   private val root = buildTree(tree);
   root.parentMessage = Some(() => rootMarginal(alphabet));
 
+  def pathsToFringe : Seq[((Language,Language),Boolean)] = recursivePaths(root);
+
+  private def recursivePaths(root: Node):Seq[((Language,Language),Boolean)]  = {
+    val children = root.children.flatMap { edge =>
+      if(edge.hasUpwardMessage) {
+        Seq(((edge.parent.language,edge.child.language),false)) ++ recursivePaths(edge.child);
+      } else {
+        Seq(((edge.parent.language,edge.child.language),true))
+      }
+    }
+    children;
+  }
+
   def treePrior(deathScores: Map[(Language,Language),Double]) = recursiveTreeScore(deathScores,root);
 
   private def recursiveTreeScore(deathScores: Map[(Language,Language),Double], root: Node):Double = {

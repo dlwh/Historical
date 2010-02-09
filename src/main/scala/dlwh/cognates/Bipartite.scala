@@ -14,8 +14,11 @@ import fig.basic.BipartiteMatcher;
 
 abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double, allowSplitting: Boolean) {
   type MFactors <: Factors
-  case class State(groups: Seq[Map[Language,Cognate]], factors: MFactors,
-                   deathScores:Map[(Language,Language),Double] = Map().withDefaultValue(initDeathProb), likelihood:Double = Double.NegativeInfinity);
+  case class State(groups: Seq[Map[Language,Cognate]],
+                   factors: MFactors,
+                   deathScores:Map[(Language,Language),Double] = Map().withDefaultValue(initDeathProb),
+                   likelihood:Double = Double.NegativeInfinity,
+                   knownLanguages: Set[Language] = Set.empty);
 
   def makeIO(s:State, words: Map[Language,Cognate]) = {
     println("Looking at " + words);
@@ -36,13 +39,14 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
       val cogs = for( (cog,i) <- group) yield (cog.language,cog);
       Map.empty ++ cogs;
     };
-    State(groups.toSeq, factors);
+    State(groups.toSeq, factors,knownLanguages = words.iterator.map(_.language).toSeq.toSet);
   }
 
   final def calculateAffinities(s: State, group: Map[Language,Cognate], language: Language, words: Seq[Cognate]) = {
     val io = makeIO(s,group)
     val marg = io.marginalFor(language).get;
     val prior = treeScore(s,io.include(language,"<dummy>"));
+    assert(!prior.isNaN)
 
     val aff = new Array[Double](words.length);
     for ( i <- 0 until words.length ) {
@@ -119,8 +123,35 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
     val newGroups = augmentedGroups ++ loners.map(c => Map.empty + (language -> c));
 
-    val newS = s.copy(groups = newGroups, likelihood = -score);
+    val deathProbs = learnDeathProbs(s,newGroups);
+    println(deathProbs);
+
+    val newS = s.copy(groups = newGroups,
+                      likelihood = -score,
+                      deathScores = deathProbs,
+                      knownLanguages = s.knownLanguages + language);
     nextAction(newS)
+  }
+
+  def learnDeathProbs(s: State, groups: Seq[Map[Language,Cognate]]) = {
+    val deathCounts = scalanlp.counters.Counters.IntCounter[(Language,Language)];
+    val availableCounts = scalanlp.counters.Counters.IntCounter[(Language,Language)];
+    for {
+      group <- groups;
+      io = makeIO(s,group);
+      (lPair,lastOnPath) <- io.pathsToFringe
+    } {
+      availableCounts(lPair) += 1;
+      if(lastOnPath) deathCounts(lPair) += 1;
+    }
+
+    println(deathCounts,availableCounts);
+    val normalized = for {
+      (pair,total) <- availableCounts
+      deaths = deathCounts(pair)
+    } yield (pair,(deaths + initDeathProb) / (total + 1.0));
+
+    normalized.toMap.withDefaultValue(initDeathProb);
   }
 
   protected def nextAction(state: State): State = state;
@@ -243,7 +274,7 @@ trait BipartiteRunner {
         val indices = cognates.valuesIterator map goldIndices toSeq;
         println(cognates.mkString(",") + " " + indices.mkString(","));
       }
-      println("Likelihood" + state.likelihood)
+      println("Conditional Likelihood" + state.likelihood)
       val groundedGroups = state.groups map ( group => group.mapValues(goldIndices).toMap);
       val precisions = precision(languages,groundedGroups);
       println(precisions);
