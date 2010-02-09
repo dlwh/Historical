@@ -140,7 +140,7 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
     /**
     * returns the log probability of the word.
     */
-    def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost// - partition;
+    def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost - partition;
   }
 
   // parent to child (argument order)
