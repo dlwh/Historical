@@ -4,6 +4,7 @@ import scalanlp.fst._;
 import scalanlp.util.Index;
 import scalanlp.counters.LogCounters._;
 import scalanlp.math.Numerics._;
+import scalala.Scalala._;
 import scala.collection.mutable.PriorityQueue;
 import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
@@ -114,7 +115,7 @@ abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Doub
     println("Enter");
     val cost = auto.reweight(promote[Any] _, promoteOnlyWeight _ ).cost;
     println("Exit");
-    ( (cost.decode,cost.decodeBigrams),cost.totalProb);
+    ( (cost.decode - cost.totalProb value,cost.decodeBigrams - cost.totalProb value),cost.totalProb);
   }
 
   val gramIndex = Index[Seq[T]]();

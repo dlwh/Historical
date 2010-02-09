@@ -120,7 +120,7 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
     println("Enter");
     val cost = auto.reweight(promote[Any] _, promoteOnlyWeight _ ).cost;
     println("Exit");
-    (cost.counts,cost.totalProb);
+    (cost.counts - cost.totalProb value,cost.totalProb);
   }
 
   val gramIndex = Index[Option[T]]();
