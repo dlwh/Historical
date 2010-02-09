@@ -12,7 +12,7 @@ import scalanlp.util.Index
 import scalanlp.util.Log._;
 import fig.basic.BipartiteMatcher;
 
-abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double) {
+abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double, allowSplitting: Boolean) {
   type MFactors <: Factors
   case class State(groups: Seq[Map[Language,Cognate]], factors: MFactors,
                    deathScores:Map[(Language,Language),Double] = Map().withDefaultValue(initDeathProb), likelihood:Double = Double.NegativeInfinity);
@@ -100,7 +100,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
       val affScore = affinities(g)(w);
       // i.e. if -log prob of recommended attachment is worse than going it alone, just go it alone
       println(current(w) + " " +  affScore + " " + baselines(w) + otherLanguages(g));
-      if(affScore < baselines(w)) {
+      if(affScore < baselines(w) || !allowSplitting) {
         score += affinities(g)(w);
       } else {
         changes(g) = -1;
@@ -143,22 +143,22 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
 }
 
-class BaselineBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double)
-                        extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb) {
+class BaselineBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double, allowSplitting: Boolean)
+                        extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb,allowSplitting) {
   override type MFactors = BigramFactors;
   override def initialFactors: MFactors = new BigramFactors;
 }
 
-class NoLearningBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double)
-                      extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb) {
+class NoLearningBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double, allowSplitting: Boolean)
+                      extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb,allowSplitting) {
   val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
   type MFactors = TransducerFactors
 
   def initialFactors = new TransducerFactors(tree,alphabet) with UniPruning
 }
 
-class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double)
-                     extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb) with TransducerLearning {
+class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double,allowSplitting:Boolean)
+                     extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb,allowSplitting) with TransducerLearning {
   val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
 
   type MFactors = TransducerFactors
@@ -192,7 +192,7 @@ class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language
 
 object Accuracy {
 
-  def doPermutations(languages:Seq[Language], indices: Seq[Map[Language,Int]])  = {
+  def precision(languages:Seq[Language], indices: Seq[Map[Language,Int]])  = {
     val numRight = scalanlp.counters.Counters.IntCounter[(Language,Language)];
     val numTotal = scalanlp.counters.Counters.IntCounter[(Language,Language)];
     for {
@@ -235,8 +235,7 @@ trait BipartiteRunner {
     val randomized = Rand.permutation(data.length).draw().map(data);
     val expectedNumTrees = data.length.toDouble / languages.size;
     val treePenalty = Math.log( (expectedNumTrees -1) / expectedNumTrees)
-    println(treePenalty * 100);
-    val iter = bip(dataset.tree, randomized, languages,treePenalty * 100,0.001).iterations;
+    val iter = bip(dataset.tree, randomized, languages,treePenalty,0.1).iterations;
     for( state <- iter.take(1000)) {
       val numGroups = state.groups.length;
       for(g <- 0 until numGroups) {
@@ -246,21 +245,47 @@ trait BipartiteRunner {
       }
       println("Likelihood" + state.likelihood)
       val groundedGroups = state.groups map ( group => group.mapValues(goldIndices).toMap);
-      val accuracies = doPermutations(languages,groundedGroups);
-      println(accuracies);
+      val precisions = precision(languages,groundedGroups);
+      println(precisions);
     }
   }
 }
 
 object RunBipartite extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = new TransBipartite(tree,cogs,languages, treePenalty, initDP);
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
+    new TransBipartite(tree,cogs,languages, treePenalty, initDP,false);
+  }
 }
+
+object RunAdaptiveBipartite extends BipartiteRunner {
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
+    new TransBipartite(tree,cogs,languages, treePenalty, initDP,true);
+  }
+}
+
 
 object RunBaseline extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = new BaselineBipartite(tree,cogs,languages, treePenalty, initDP);
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
+    new BaselineBipartite(tree,cogs,languages, treePenalty, initDP,false);
+  }
 
 }
+object RunAdaptiveBaseline extends BipartiteRunner {
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
+    new BaselineBipartite(tree,cogs,languages, treePenalty, initDP,true);
+  }
+}
+
+
 
 object RunNoLearning extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP);
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
+    new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP,false);
+  }
+}
+
+object RunAdaptiveNoLearning extends BipartiteRunner {
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
+    new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP,true);
+  }
 }
