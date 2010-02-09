@@ -33,3 +33,7 @@ with semantics (i.e. english language glosses + wordnet) 0.826 (Average precisio
 Baseline (Dice Scores):
  Works really really well on small datasets. Really poorly on the larger datasets:
  Map((Portuguese,Spanish) -> 0.4708904109589041, (Latin,Spanish) -> 0.5034246575342466, (Latin,Portuguese) -> 0.3527397260273973, (Italian,Latin) -> 0.5616438356164384, (Italian,Spanish) -> 0.523972602739726, (Italian,Portuguese) -> 0.339041095890411)
+
+ Pos Uni Learning, romance.:
+
+ Map((Spanish,Portuguese) -> 0.910958904109589, (Latin,Portuguese) -> 0.6712328767123288, (Italian,Latin) -> 0.7808219178082192, (Spanish,Italian) -> 0.8184931506849316, (Italian,Portuguese) -> 0.7876712328767124, (Spanish,Latin) -> 0.6917808219178082)
