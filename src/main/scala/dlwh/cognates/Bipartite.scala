@@ -4,7 +4,7 @@ import scalanlp.fst._
 import scalanlp.stats.sampling.Rand;
 import scala.actors.Future
 import scala.collection.mutable.ArrayBuffer
-import scalala.Scalala._;
+import scalala.Scalala.{iArrayToPartialMap=>_,_};
 import scalanlp.counters.LogCounters._;
 import scalanlp.counters.Counters;
 import scalanlp.math.Numerics._;
