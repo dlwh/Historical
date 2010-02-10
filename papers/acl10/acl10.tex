@@ -3,6 +3,7 @@
 \usepackage{times}
 \usepackage{amsfonts}
 \usepackage{amssymb}
+ \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{multirow}
 \usepackage{enumerate}
@@ -140,7 +141,7 @@ though for acyclic or feed-forward transducers this can be improved
 dramatically by using a generalization of Djisktra's algorithm, the
 Bellman-Ford algorithm or other related algorithms.
 
-The second is the composition of two transducers. Intuitively,
+The second operation is the composition of two transducers. Intuitively,
 composition creates a new transducer that takes the output from one
 automata, processes it through the other transducer, and then returns
 the output of that transducer. That is, consider two transducers
@@ -185,8 +186,24 @@ entries attested.
 \section{Model}
 
 In this section we present a generative model of the derivation of
-cognate words. Our task is to recover both which words are cognate
-with one another and to recover ancestral forms of those words.
+cognate words. XXX Another lead in sentence.
+
+\begin{figure*}
+  \centering
+  \includegraphics[scale=0.4]{gmodel}
+  \caption{(a) The process by which cognate words are generated.
+  Here, we show the derivation of Romance language words from their
+  respective Latin ancestor. (b) A close-up of a possible alignment
+  produced by a transducer. In this paper we use unigram transducers
+  that are equivalent to parameterized edit distances.  (c) When
+  some cognate trees may not be complete, we model the ``death''
+  of words on another tree running parallel to the word-generating
+  tree.}
+
+  \label{fig:gmodel}
+\end{figure*}
+
+Figure 
 
 We make a few high-level modeling assumptions. First, all words in
 a cognate group have a single common ancestor word in a single
