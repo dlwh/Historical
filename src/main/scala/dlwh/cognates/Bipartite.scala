@@ -285,7 +285,7 @@ trait BipartiteRunner {
     val randomized = Rand.permutation(data.length).draw().map(data);
     val expectedNumTrees = data.length.toDouble / languages.size;
     val treePenalty = Math.log( (expectedNumTrees -1) / expectedNumTrees)
-    val iter = bip(dataset.tree, randomized, languages,treePenalty,0.1).iterations;
+    val iter = bip(dataset.tree, randomized, languages,treePenalty,0.99).iterations;
     val numPositives = numberOfPositives(languages, gold);
     for( state <- iter.take(1000)) {
       val numGroups = state.groups.length;
