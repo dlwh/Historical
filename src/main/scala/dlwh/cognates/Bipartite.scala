@@ -295,7 +295,7 @@ trait BipartiteRunner {
         println(cognates.mkString(",") + " " + indices.mkString(","));
       }
       println("Conditional Likelihood" + state.likelihood)
-      val groundedGroups = state.groups map ( group => group.mapValues(goldIndices).toMap);
+      val groundedGroups = state.groups map { group => group.mapValues(goldIndices).toMap };
       val (precisions,recalls) = precisionAndRecall(languages,groundedGroups,numPositives);
       println("Precisions" + precisions);
       println("Recall" + recalls);

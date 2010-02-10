@@ -42,10 +42,7 @@ object Tree {
       private val tok = rep(other) ^^ { x => x.mkString("")};
 
       def tree: Parser[Tree] = (
-        lparen ~> tok <~ rparen ^^ { Child(_)  }
-        | lparen ~> (tok ~ tree ~ (ws ~> tree <~ rparen )) ^^ { 
-          case  tok~tree~right => Ancestor(tok,Seq(tree,right))
-        }
+        lparen ~> tok ~ rep(tree) <~ rparen ^^ { case label ~ children => if(children.isEmpty) Child(label) else Ancestor(label,children)  }
       )
 
       def readTree(input: String) =  {
