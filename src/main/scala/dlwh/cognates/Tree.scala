@@ -17,16 +17,13 @@ sealed trait Tree {
   def edges: Set[(String,String)];
 };
 
-case class Ancestor(label: String, lchild: Tree, rchild: Tree) extends Tree {
-  def map(f: String=>String) = Ancestor(f(label), lchild map f, rchild map f);
+case class Ancestor(label: String, children: Seq[Tree]) extends Tree {
+  def map(f: String=>String) = Ancestor(f(label), children.map(_ map f));
   def predecessorsOfLanguage(l: String) = {
-    lazy val leftPath = lchild.predecessorsOfLanguage(l);
-    lazy val rightPath = rchild.predecessorsOfLanguage(l);
-    if(!leftPath.isEmpty) leftPath + label;
-    else if(!rightPath.isEmpty) rightPath + label;
-    else Set.empty;
+    val path = children.iterator.map(_.predecessorsOfLanguage(l)).reduceLeft( (a,b) => if(a.isEmpty) b else a );
+    path + label;
   }
-  def edges = lchild.edges ++ rchild.edges ++ Set((label,lchild.label),(label,rchild.label));
+  def edges = children.flatMap(_.edges).toSet ++ children.map( label -> _.label).toSet
 }
 
 case class Child(label: String) extends Tree { 
@@ -47,7 +44,7 @@ object Tree {
       def tree: Parser[Tree] = (
         lparen ~> tok <~ rparen ^^ { Child(_)  }
         | lparen ~> (tok ~ tree ~ (ws ~> tree <~ rparen )) ^^ { 
-          case  tok~tree~right => Ancestor(tok,tree,right)
+          case  tok~tree~right => Ancestor(tok,Seq(tree,right))
         }
       )
 

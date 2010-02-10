@@ -160,11 +160,9 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
       val word = bottomWords.get(label)
       val node = new Node(label,word,Seq.empty);
       node
-    case Ancestor(label,lchild,rchild) =>
-      val lNode = buildTree(lchild);
-      val rNode = buildTree(rchild);
+    case Ancestor(label,treeChildren) =>
+      val children = treeChildren.map(buildTree);
       val word = bottomWords.get(label);
-      val children = Seq(lNode,rNode);
       val node:Node = new Node(label, word, children map {n =>
           val e:Edge = new Edge(n);
           n.parentMessage = Some( ()=>e.downwardMessage);
