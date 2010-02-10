@@ -6,6 +6,7 @@ import scala.actors.Future
 import scala.collection.mutable.ArrayBuffer
 import scalala.Scalala._;
 import scalanlp.counters.LogCounters._;
+import scalanlp.counters.Counters;
 import scalanlp.math.Numerics._;
 import Types._;
 import scalanlp.util.Index
@@ -223,9 +224,9 @@ class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language
 
 object Accuracy {
 
-  def precision(languages:Seq[Language], indices: Seq[Map[Language,Int]])  = {
+  def precisionAndRecall(languages:Seq[Language], indices: Seq[Map[Language,Int]], numPositive: Counters.IntCounter[(Language,Language)])  = {
     val numRight = scalanlp.counters.Counters.IntCounter[(Language,Language)];
-    val numTotal = scalanlp.counters.Counters.IntCounter[(Language,Language)];
+    val numGuesses = scalanlp.counters.Counters.IntCounter[(Language,Language)];
     for {
       map <- indices;
       (l1,i1) <- languages.zipWithIndex;
@@ -235,17 +236,35 @@ object Accuracy {
     } {
       if(truth1 == truth2) {
         numRight(l1->l2) += 1;
+        numRight("*"->"*") += 1;
       }
-      numTotal(l1->l2) += 1;
+      numGuesses(l1->l2) += 1;
+      numGuesses("*"->"*") += 1;
     }
 
-    val accuracies = for( (pair,total) <- numTotal) yield (pair,numRight(pair) / total.toDouble);
-    accuracies.toMap;
+    val precision = for( (pair,total) <- numGuesses) yield (pair,numRight(pair) / total.toDouble);
+    val recall = for( (pair,total) <- numPositive) yield (pair,numRight(pair) / total.toDouble);
+    (precision.toMap,recall.toMap);
   }
 
   def indexGold(cogs: Seq[Seq[Cognate]]) = {
     val map = (for( (group,i) <- cogs.zipWithIndex; c <- group) yield (c,i)) toMap;
     map;
+  }
+
+  def numberOfPositives(languages: Seq[Language], groups: Seq[Seq[Cognate]]) = {
+    val numPositive = scalanlp.counters.Counters.IntCounter[(Language,Language)];
+    for {
+      cogs <- groups;
+      set = cogs.map(_.language).toSet;
+      (l1,i1) <- languages.zipWithIndex if set contains l1
+      (l2,i2) <- languages.zipWithIndex if( i1 < i2) && set.contains(l2)
+    } {
+      numPositive(l1 -> l2) += 1;
+      numPositive("*" -> "*") += 1;
+    }
+
+    numPositive;
   }
 
 
@@ -267,6 +286,7 @@ trait BipartiteRunner {
     val expectedNumTrees = data.length.toDouble / languages.size;
     val treePenalty = Math.log( (expectedNumTrees -1) / expectedNumTrees)
     val iter = bip(dataset.tree, randomized, languages,treePenalty,0.1).iterations;
+    val numPositives = numberOfPositives(languages, gold);
     for( state <- iter.take(1000)) {
       val numGroups = state.groups.length;
       for(g <- 0 until numGroups) {
@@ -276,8 +296,9 @@ trait BipartiteRunner {
       }
       println("Conditional Likelihood" + state.likelihood)
       val groundedGroups = state.groups map ( group => group.mapValues(goldIndices).toMap);
-      val precisions = precision(languages,groundedGroups);
-      println(precisions);
+      val (precisions,recalls) = precisionAndRecall(languages,groundedGroups,numPositives);
+      println("Precisions" + precisions);
+      println("Recall" + recalls);
     }
   }
 }
