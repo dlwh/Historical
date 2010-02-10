@@ -15,6 +15,7 @@ sealed trait Tree {
   */
   def predecessorsOfLanguage(l: String): Set[String];
   def edges: Set[(String,String)];
+  def leaves: Set[(String)];
 };
 
 case class Ancestor(label: String, children: Seq[Tree]) extends Tree {
@@ -23,6 +24,7 @@ case class Ancestor(label: String, children: Seq[Tree]) extends Tree {
     val path = children.iterator.map(_.predecessorsOfLanguage(l)).reduceLeft( (a,b) => if(a.isEmpty) b else a );
     path + label;
   }
+  def leaves = children.flatMap(_.leaves).toSet;
   def edges = children.flatMap(_.edges).toSet ++ children.map( label -> _.label).toSet
 }
 
@@ -30,6 +32,7 @@ case class Child(label: String) extends Tree {
   def map(f: String=>String) = Child(f(label));
   def predecessorsOfLanguage(l : String) = if(l == label) Set(l) else Set.empty;
   def edges = Set.empty;
+  def leaves = Set(this.label);
 }
 
 object Tree {
