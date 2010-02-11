@@ -186,7 +186,7 @@ class NoLearningBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Lan
   val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
   type MFactors = TransducerFactors
 
-  def initialFactors = new TransducerFactors(tree,alphabet) with UniPruning
+  def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with PosUniPruning
 }
 
 class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double,allowSplitting:Boolean)
@@ -211,7 +211,7 @@ class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language
     s.copy(factors = newFactors);
   }
 
-  def initialFactors = new TransducerFactors(tree,alphabet) with PosUniPruning;
+  def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with PosUniPruning;
 
   def mkFactors(statistics: Statistics):TransducerFactors = {
     val transducers = mkTransducers(statistics);
@@ -309,6 +309,22 @@ object RunBipartite extends BipartiteRunner {
   }
 }
 
+object RunUniBipartite extends BipartiteRunner {
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
+    new TransBipartite(tree,cogs,languages, treePenalty, initDP,false) {
+
+      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with UniPruning;
+
+      override def mkFactors(statistics: Statistics):TransducerFactors = {
+        val transducers = mkTransducers(statistics);
+        val factors = new TransducerFactors(tree,alphabet,transducers) with UniPruning;
+        globalLog.log(INFO)("Trans out " + memoryString);
+        factors
+      }
+    }
+  }
+}
+
 object RunAdaptiveBipartite extends BipartiteRunner {
   def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
     new TransBipartite(tree,cogs,languages, treePenalty, initDP,true);
@@ -339,5 +355,15 @@ object RunNoLearning extends BipartiteRunner {
 object RunAdaptiveNoLearning extends BipartiteRunner {
   def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
     new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP,true);
+  }
+}
+
+object RunUniNoLearning extends BipartiteRunner {
+  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
+    new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP,false) {
+
+      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with UniPruning;
+
+    }
   }
 }
