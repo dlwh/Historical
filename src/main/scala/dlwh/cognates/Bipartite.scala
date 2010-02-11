@@ -71,7 +71,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
   def baselineScores(s: State, language: Language, words: Seq[Cognate]) = {
     val arr = calculateAffinities(s,Map.empty,language,words);
     for( i <- 0 until arr.length) {
-      arr(i) -= treePenalty;
+      arr(i) += treePenalty;
     }
     arr
   }
