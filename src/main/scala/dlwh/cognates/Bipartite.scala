@@ -51,7 +51,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
     val aff = new Array[Double](words.length);
     for ( i <- 0 until words.length ) {
-      aff(i) = -(marg(words(i).word) + prior);
+      aff(i) = (marg(words(i).word) + prior);
       assert(!aff(i).isNaN);
     }
     aff
@@ -64,7 +64,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
       if (x < affinities.length && y < affinities(x).length) affinities(x)(y)
       else 0.0;
     };
-    val changes = bm.findMinWeightAssignment(paddedAffinities);
+    val changes = bm.findMaxWeightAssignment(paddedAffinities);
     changes.take(affinities.length);
   }
 
@@ -105,7 +105,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
       val affScore = affinities(g)(w);
       // i.e. if -log prob of recommended attachment is worse than going it alone, just go it alone
       println(current(w) + " " +  affScore + " " + baselines(w) + otherLanguages(g));
-      if(affScore < baselines(w) || !allowSplitting) {
+      if(affScore >= baselines(w) || !allowSplitting) {
         score += affinities(g)(w);
       } else {
         changes(g) = -1;
@@ -128,7 +128,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
     println(deathProbs);
 
     val newS = s.copy(groups = newGroups,
-                      likelihood = -score,
+                      likelihood = score,
                       deathScores = deathProbs,
                       knownLanguages = s.knownLanguages + language);
     nextAction(newS)
@@ -284,7 +284,8 @@ trait BipartiteRunner {
     val data = gold.flatten;
     val randomized = Rand.permutation(data.length).draw().map(data);
     val expectedNumTrees = data.length.toDouble / languages.size;
-    val treePenalty = Math.log( (expectedNumTrees -1) / expectedNumTrees)
+    //val treePenalty = Math.log( (expectedNumTrees -1) / expectedNumTrees)
+    val treePenalty = 5; // Positive actually means a bonus.
     val iter = bip(dataset.tree, randomized, languages,treePenalty,0.5).iterations;
     val numPositives = numberOfPositives(languages, gold);
     for( state <- iter.take(1000)) {
