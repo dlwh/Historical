@@ -279,14 +279,17 @@ trait BipartiteRunner {
   def main(args: Array[String]) {
     val languages = args(1).split(",");
     val dataset = new Dataset(args(0),languages);
-    val gold = dataset.cognates;
+    val tree = dataset.tree;
+    val leaves = tree.leaves;
+    val gold = dataset.cognates.map(_.filter(cog => leaves(cog.language)));
+
     val goldIndices = indexGold(gold);
     val data = gold.flatten;
     val randomized = Rand.permutation(data.length).draw().map(data);
     val expectedNumTrees = data.length.toDouble / languages.size;
     //val treePenalty = Math.log( (expectedNumTrees -1) / expectedNumTrees)
     val treePenalty = 5; // Positive actually means a bonus.
-    val iter = bip(dataset.tree, randomized, languages,treePenalty,0.5).iterations;
+    val iter = bip(tree,randomized, languages,treePenalty,0.5).iterations;
     val numPositives = numberOfPositives(languages, gold);
     for( state <- iter.take(1000)) {
       val numGroups = state.groups.length;
