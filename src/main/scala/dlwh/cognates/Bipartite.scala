@@ -310,15 +310,15 @@ object RunBipartite extends BipartiteRunner {
   }
 }
 
-object RunUniBipartite extends BipartiteRunner {
+object RunBiBipartite extends BipartiteRunner {
   def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
     new TransBipartite(tree,cogs,languages, treePenalty, initDP,false) {
 
-      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with UniPruning;
+      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with BiPruning;
 
       override def mkFactors(statistics: Statistics):TransducerFactors = {
         val transducers = mkTransducers(statistics);
-        val factors = new TransducerFactors(tree,alphabet,transducers) with UniPruning;
+        val factors = new TransducerFactors(tree,alphabet,transducers) with BiPruning;
         globalLog.log(INFO)("Trans out " + memoryString);
         factors
       }
@@ -359,11 +359,11 @@ object RunAdaptiveNoLearning extends BipartiteRunner {
   }
 }
 
-object RunUniNoLearning extends BipartiteRunner {
+object RunBiNoLearning extends BipartiteRunner {
   def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
     new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP,false) {
 
-      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with UniPruning;
+      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with BiPruning;
 
     }
   }

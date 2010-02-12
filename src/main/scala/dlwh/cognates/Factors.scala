@@ -59,6 +59,13 @@ trait UniPruning extends CompressionPruning { this: TransducerFactors =>
   }
 }
 
+trait BiPruning extends CompressionPruning { this: TransducerFactors =>
+   def compressor(upward: Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char] = {
+    val compression = if(upward) new SafeBiCompression(0.1,interestingChars.size + 2,'#',length + 40) else new BiCompression(0.1,interestingChars.size + 2,'#') with NormalizedTransitions[Option[Char],Char];
+    compression;
+  }
+}
+
 /*
 trait TriPruning { this: TransducerFactors =>
    def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
