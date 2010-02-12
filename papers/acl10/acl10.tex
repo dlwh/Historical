@@ -66,9 +66,9 @@ method. We present an iterative algorithm using bipartite graph matching
 to fit the model to data.
 
 Our model encodes distributions over strings as weighted finite
-state automata ( XXX cite Mohri). Weighted automata have been
-successfully applied to speech processing ( XXX cite Mohri) and
-more recently to morphology (cite Dreyer and Eisner).  We present
+state automata \cite{mohri09weighted}. Weighted automata have been
+successfully applied to speech processing \cite{Mohri96weightedautomata} and
+more recently to morphology \cite{dreyer2009graphical}.  We present
 a new method for automatically compressing the automata that are
 generated as messages during inference that can take into account
 prior information about the expected outcome of inference.
@@ -84,8 +84,7 @@ coverage. XXX something more?
 In this section, we present a summary of the algorithms and
 representations used for handling weighted finite state transducers,
 which we will be using extensively in this paper. For more detailed
-treatment, we direct readers to (XXX cite Mohri) or (XXX cite Dreyer
-and Eisner).
+treatment, we direct readers to \cite{mohri09weighted}.
 
 \subsection{Weighted Automata}
 
@@ -134,8 +133,7 @@ log probabilities.
 \subsection{Transducer Operations}
 
 For our purposes we are concerned with three fundamental operations
-on weighted transducers, all explained in more depth in (XXX cite
-Mohri). The first is computing the sum of all paths through a
+on weighted transducers. The first is computing the sum of all paths through a
 transducer, which corresponds to computing the partition function
 of a distribution. This operation can be performed in worst case
 cubic time (using a generalization of the Floyd-Warshall Algorithm),
@@ -162,9 +160,9 @@ in each transducer. Repeated compositions compound the problem:
 iterated composition of $k$ transducers produces $O(n^k)$ states.
 Minimization alleviates this problem by collapsing indistinguishable
 states into a single state. Unfortunately, minimization does not
-always collapse enough states. In section XXX, we discuss approaches
+always collapse enough states. In Section \ref{sec:approx}, we discuss approaches
 to ``lossy'' minimization that produce automata that are not exactly
-the same, but are typically much smaller.
+the same but are typically much smaller.
 
 \section{Datasets}
 
@@ -273,7 +271,7 @@ probability of each word belonging to each cognate group. To compute
 the affinities for each cognate group, inference in each tree
 computes the marginal distribution of the words from the ``held
 out'' language, and likelihoods are computed for each word.  Given
-these weights, we use the Kuhn-Munkres algorithm (XXX cite ) algorithm
+these weights, we use the Kuhn-Munkres algorithm \cite{Kuhn1955} algorithm
 to find an approximate maximizer.
 
 One important note is initialization. In our early experiments we
@@ -283,6 +281,7 @@ added one language in per iteration until all languages were added,
 and then continued iterations on the full tree.
 
 \subsection{Message Approximation}
+\label{sec:approx}
 
 Unfortunately, the maximal number of states in a message in each
 cognate group is exponential in the number of words assigned to
@@ -299,7 +298,7 @@ parameter $\theta$.
 In the context of transducers, previous authors have focused on a
 combination of n-best lists and unigram\footnote{Here, and for the
 rest of the paper, the ``grams'' of interest are characters in the
-International Phonetic Alphabet.} back-off models. (XXX cite eisner)
+International Phonetic Alphabet.} back-off models. \cite{dreyer2009graphical}
 In our setting, n-best lists seem inadequate; early experiments
 showed that a 10,000-best list for a typical message only accounts
 for 50\% of message log perplexity. That is, the posterior marginals in
@@ -334,9 +333,9 @@ a deterministic automaton topology $\hat\mu^*$, we created the
 composed unweighted automaton $\tau \circ \hat \mu^*$, and calculate
 arc transitions weights to minimize the KL divergence between that
 composed transducer and $\tau\circ\mu$.  The procedure for calculating
-these statistics was described in (XXX cite the other eisner paper),
-which amounts to using an expectation semiring (XXX cite yet another
-eisner paper) to compute expected transitions in $\tau\circ\mu$.
+these statistics was described in \newcite{li2009first}, which
+amounts to using an expectation semiring \cite{eisner2001expectation}
+to compute expected transitions in $\tau\circ\mu$.
 
 From there, we need to created the transducer
 $\tau^{-1}\circ\tau\circ\hat\mu$. That is, we need to divide out
@@ -348,7 +347,8 @@ over word lengths and a uniform distribution over characters (that
 is, $\tau(w) \propto {p^{|w|}}$), then computing $\hat\mu$ is as
 simple as dividing each arc in $\tau\circ\hat\mu$ by
 $p$.\footnote{Actually, we must be sure to divide each ``final
-weight'' in the transducer by $(1-|\Sigma| p)$}
+weight'' in the transducer by $(1-|\Sigma| p)$, which is the stopping
+probability for a geometric transducer.}
 
 There are a number of choices for $\tau$. One is a hard maximum on the
 length of words. Another is to choose $\tau(w)$ to be a unigram
@@ -357,6 +357,45 @@ probability over lengths. In our experiments, we find that $\tau(w)$
 can be a \textit{uniform} distribution over characters and still
 obtain reasonable results.
 
+\subsection{Transducer Topologies}
+
+What remains is the selection of the topologies for the approximating
+message $\hat\mu$. We consider two possible approximations. The
+first is a plain unigram model, which has $|\Sigma|+2$ parameters:
+one weight $\sigma_a$ for each character $a \in \Sigma$, a ``starting weight'' $\lambda$, and
+a stopping probability. Estimating this model involves only computing
+the expected count of each character, along with the expected
+length of a word, $E[|w|]$. We then normalize the counts according
+to the maximum likelihood estimate, which gives:
+\begin{equation}
+  \begin{split}
+    \sum_{a\in\Sigma} \sigma_a &= \frac{E[|w|]-1}{E[|w|}
+   \end{split}
+ \end{equation}
+with the stop probability taking the remaining mass. 
+
+$\lambda$ can be computed by ensuring that the
+approximate and exact expected marginals have the same partition
+function. That is, with the other parameters fixed solve:
+\begin{equation*}
+  \begin{split}
+    \sum_w \tau(w) \hat\mu(w) = \sum_w \tau(w) \mu(w)
+  \end{split}
+\end{equation*}
+
+The other topology we consider takes positional information into
+account.  Namely, for each position (up to some maximum position),
+we have a unigram model over characters emitted at that position,
+along with the probability of stopping at that position. Estimating
+the parameters of this model is similar, except that the expected
+counts for the characters in the alphabet are conditioned on their
+position in the string. With the expected counts for each position,
+we normalize each state's final and outgoing weights. In our
+experiments, we typically set the maximum string length to 7 + the
+longest observed string.
+
+(XXX probably want a figure for these topologies, and I should probably
+explain this better. It's really straightforward, but I don't want to sound pedantic.)
 
 \section{Learning}
 
@@ -393,9 +432,8 @@ approach described for messages, but two essential differences hold.
 First, we must tally expected ``alignment n-grams'' rather than
 character n-grams. Second, we do not need to use the new loss
 function, because the messages are normalized and we know what what
-the arcs must sum to. Based on the description in (XXX cite the
-edit distance paper I found), we have that, for each character $a$
-in the ancestor language:
+the arcs must sum to. Based on the derivation by \newcite{Oncina20061575}
+, we have that, for each character $a$ in the ancestor language:
 \begin{equation}
   \begin{split}
     \sum_{b \in \Sigma \cup \{\epsilon\}} w(a,b) &= 1 - \sum_{b \in \Sigma} w(\epsilon,b) \\
@@ -429,12 +467,10 @@ Table \ref{tbl:exp1} shows the results under various configurations. XXX
     Transducers & Messages & Pair Acc. & Rec. Acc.\\
     \hline
     \hline
-    Levenshtein&Unigrams & & \\
-    Levenshtein&Pos. Unigrams & & \\
+    Levenshtein&Pos. Unigrams & 90.3 & \\
     Levenshtein&Bigrams & & \\
     Levenshtein&K-Best & & \\
     \hline
-    Learned&Unigrams & & \\
     Learned&Pos. Unigrams & & \\
     Learned&Bigrams & & \\
     Learned&K-Best & & \\
@@ -482,7 +518,6 @@ so no graphical model.\\
   Basically context driven. Different task, but probably worth mentioning.
 
 \section{Conclusion}
-\section*{References}
 \bibliographystyle{acl}
 \bibliography{refs}
 
