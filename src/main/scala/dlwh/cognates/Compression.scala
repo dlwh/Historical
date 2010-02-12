@@ -183,6 +183,38 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
   }
 }
 
+class SafeBiCompression( klThreshold: Double, maxStates: Int, val beginningUnigram: Char, expLength: Double) extends Compressor[Option[Char], Char] {
+  def destinationFor(a: Option[Char], c: Char) = inner.destinationFor(a,c);
+  import scalanlp.fst.Alphabet._;
+  val inner = new BiCompression(beginningUnigram=beginningUnigram, klThreshold=this.klThreshold, maxStates=this.maxStates) with NormalizedTransitions[Option[Char],Char];
+  def alphabet = inner.alphabet;
+  type Statistics = inner.Statistics;
+  def gatherStatistics(chars: Set[Char], auto: Automaton[Double,_,Char]) = {
+    val decayAuto = new DecayAutomaton(expLength, chars);
+    val (stats,total) = inner.gatherStatistics(chars,auto & decayAuto);
+    val retVal = LogPairedDoubleCounter[Char,Char]
+    for( (k1,k2,v) <- stats.triples) {
+      if(k2 == beginningUnigram)
+        retVal(k1,k2) = v - decayAuto.stopProb;
+      else
+        retVal(k1,k2) = v - decayAuto.arcCost;
+    }
+    // TODO: what to do with total
+    (retVal,total)
+  }
+
+  def interpolate(a: Statistics, eta1: Double, b: Statistics, eta2: Double) = inner.interpolate(a,eta1,b,eta2);
+  def smooth(a: Statistics, ctr: LogDoubleCounter[Char]) = inner.smooth(a,ctr);
+
+  def compress(prob: Double, counts: Statistics) = {
+    val auto = inner.compress(0.0,counts);
+    val decayAuto = new DecayAutomaton(expLength, Set.empty ++ counts.keysIterator.map(_._2) - beginningUnigram);
+    val difference = prob - (auto & decayAuto cost)
+    val ret = auto.scaleInitialWeights(difference);
+    ret
+  }
+}
+
 import scalanlp.fst.Arc;
 trait ArcCreator[S,T] { this : Compressor[S,T] =>
   def arcsForCounter(state: S, ctr: LogDoubleCounter[T]): Iterator[Arc[Double,S,T]];
