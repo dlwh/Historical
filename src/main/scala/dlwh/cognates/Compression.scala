@@ -76,7 +76,6 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
     for {
       (history,ctr) <- bigrams.rows;
       kl = klDivergence(ctr,marginal) * Math.exp( ctr.logTotal - marginal.logTotal);
-      () = println(history + " " + kl);
       if kl > klThreshold
     } {
       pq += UniState(history,ctr,kl);
@@ -117,9 +116,7 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
     val tgs = new BigramSemiring[T](chars,beginningUnigram,cheatOnEquals=true);
     import tgs._;
     import ring._;
-    println("Enter");
     val cost = auto.reweight(promote[Any] _, promoteOnlyWeight _ ).cost;
-    println("Exit");
     (cost.counts - cost.totalProb value,cost.totalProb);
   }
 
