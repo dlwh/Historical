@@ -72,11 +72,19 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
     implicit val stateOrdering = Ordering.fromLessThan(orderStates _ )
 
     val pq = new PriorityQueue[State]();
+    def whine(ctr: LogDoubleCounter[T], marginal: LogDoubleCounter[T], kl: Double) = {
+      if(kl.isNaN) {
+        println(ctr.toString + ctr.logTotal);
+        println(marginal.toString + marginal.logTotal);
+        println(kl);
+      }
+    }
 
     for {
       (history,ctr) <- bigrams.rows;
-      kl = klDivergence(ctr,marginal) * Math.exp( ctr.logTotal - marginal.logTotal);
-      () = println(history + " " + kl);
+      kl = klDivergence(marginal,ctr) * Math.exp( ctr.logTotal - marginal.logTotal);
+     // () = whine(ctr,marginal,kl);
+     // () = println(history,kl);
       if kl > klThreshold
     } {
       pq += UniState(history,ctr,kl);
@@ -114,13 +122,12 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
 
   def gatherStatistics(chars: Set[T], auto: Automaton[Double,_,T]): (Statistics,Double) = {
     // Set up the semiring
-    val tgs = new BigramSemiring[T](chars,beginningUnigram,cheatOnEquals=true);
+    val tgs = new BigramSemiring[T](chars,beginningUnigram);
     import tgs._;
     import ring._;
-    println("Enter");
     val cost = auto.reweight(promote[Any] _, promoteOnlyWeight _ ).cost;
-    println("Exit");
-    (cost.counts - cost.totalProb value,cost.totalProb);
+    val ret = (cost.counts - cost.totalProb value,cost.totalProb);
+    ret
   }
 
   val gramIndex = Index[Option[T]]();
@@ -200,7 +207,8 @@ class SafeBiCompression( klThreshold: Double, maxStates: Int, val beginningUnigr
         retVal(k1,k2) = v - decayAuto.arcCost;
     }
     // TODO: what to do with total
-    (retVal,total)
+    val ret = (retVal,total)
+    ret;
   }
 
   def interpolate(a: Statistics, eta1: Double, b: Statistics, eta2: Double) = inner.interpolate(a,eta1,b,eta2);
