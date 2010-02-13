@@ -103,12 +103,11 @@ entries attested.
   \includegraphics[scale=0.4]{gmodel}
   \caption{(a) The process by which cognate words are generated.
   Here, we show the derivation of Romance language words from their
-  respective Latin ancestor. (b) A close-up of a possible alignment
-  produced by a transducer. In this paper we use unigram transducers
-  that are equivalent to parameterized edit distances. (c) When
-  some cognate trees may not be complete, we model the ``death''
-  of words on another tree running parallel to the word-generating
-  tree.}
+  respective Latin ancestor. (b) The class of parameterized edit
+  distances used in this paper. Each pair of characters has a weight
+  $\sigma$ for deletion, and each character has weights $\eta$ and
+  $\delta$ for insertion and deletion respectively. (c) A possible
+  alignment produced by an edit distance.}
 
   \label{fig:gmodel}
 \end{figure*}
@@ -124,7 +123,7 @@ languages have words in that group. Evolution describes the process
 by which words are transformed from their parent word. Finally,
 permutation describes the ``scrambling'' of the word lists into an
 order that bears no relation to their lineage. Each process is
-described graphically in Figure (\ref{fig:gmodel}), and we present
+described graphically in Figure (\ref{fig:gmodel}a), and we present
 each in detail in the following subsections.
 
 \subsection{Survival}
@@ -139,23 +138,23 @@ all of that node's descendants also be dead. This tree models the
 intuition that a word is more likely to be found in two sibling
 languages (e.g. Spanish and Portuguese) than in two cousin languages
 (e.g. Portuguese and Italian) and not an intervening sibling
-(Spanish). The survival process is shown in Figure (\ref{fig:gmodel}a).
+(Spanish). 
 
-(XXX where to put this:) Also, because we do not know how many cognate groups there may
-be ahead of time, we place a geometric prior on the number of
-unobserved groups. (XXX)
+(XXX where to put this:) Also, because we do not know how many
+cognate groups there may be ahead of time, we place a geometric
+prior on the number of unobserved groups. (XXX)
 
 \subsection{Evolution}
 
 Once we know which languages will have an attested word, which will
 not, we must generate the words. The evolution model generates
 words according to a transformation from their immediate ancestor.
-Figure (\ref{fig:gmodel}b) graphically describes our generative
-model for three Romance languages: Italian, Portuguese, and Spanish.
-In each cognate group, each word $w$ is generated from its parent
-using a conditional distribution with parameter $\phi$, which is
-specific to that edge in the tree, but shared between all cognate
-groups. 
+The figure graphically describes our generative model for three
+Romance languages: Italian, Portuguese, and Spanish.  In each cognate
+group, each word $W_\ell$ is generated from its parent according to a
+conditional distribution with parameter $\phi$, which is specific
+to that edge in the tree, but shared between all cognate
+groups.
 
 In this paper, $\phi$ takes the form of a parameterized edit distance
 similar to the standard Levenshtein distance, though arbitrary
@@ -217,22 +216,22 @@ tree computes the marginal distribution of the words from the ``held
 out'' language. For the marginals, we use an analog of the 
 forward/backward (XXX cite someone?) algorithm. In the upward pass,
 we send messages from the leaves of the tree towards the root. For observed
-leaf nodes $w_d$, we have:
+leaf nodes $W_d$, we have:
 \begin{equation*}
   \begin{split}
     \mu_{d\to a}(w_a) = \sum_{w_d} p(w_d|w_a,\phi)
    \end{split}
  \end{equation*}
-and for interior nodes $w_i$:
+and for interior nodes $W_i$:
 \begin{equation*}
   \begin{split}
     \mu_{i\to a}(w_a) = \sum_{w_i} p(w_i|w_a) \prod_{d \in \mathrm{child}(w_i)} \mu_{d \to i}(w_i) 
   \end{split}
 \end{equation*}
-In the downward pass (toward the held-out language), we sum over ancestors word $w_a$:
+In the downward pass (toward the held-out language), we sum over ancestors word $W_a$:
 \begin{equation*}
   \begin{split}
-    \mu_{a\to d}(w_d) = \sum_{w_a} p(w_d|w_a) \prod_{d' \in \mathrm{child}(w_a)} \mu_{d' \to a}(w_a) 
+    \mu_{a\to d}(w_d) = \sum_{w_a} p(w_d|w_a) \prod_{\scriptsize \begin{array}{cc}d' \in \mathrm{child}(w_a) \\ d' \neq d \end{array}} \mu_{d' \to a}(w_a) 
   \end{split}
 \end{equation*}
 Computing these messages recursively gives a marginal distribution
@@ -249,53 +248,59 @@ and added one language in per iteration until all languages were
 added, and then continued iterations on the full tree.
 
 \section{Learning}
-So far we've only addressed learning the permutations $\pi$ and
-the approximations needed to perform inference tractably. We also
-have two other sets of parameters: the transducers $\phi$, and the
-death probabilities $S$. The parameters can be learned through
-standard maximum likelihood estimation, which we detail in this
-section.
+So far we've only addressed learning the permutations $\pi$. While
+they are not the target of our inference, we also have two other
+sets of parameters: the transducers $\phi$, and the death probabilities
+$S$. The parameters can be learned through standard maximum likelihood
+estimation, which we detail in this section.
 
 Estimating the parameters for each survival parameter $S_\ell$ is
-straightforward. Because we enforce that a word must be dead if
-its parent word is dead, we simplify need to learn the conditional
+straightforward. Because we enforce that a word must be dead if its
+parent word is dead, we simplify need to learn the conditional
 probabilities $p($death$|$parent not dead$)$. Given fixed assignments
-$\pi$, we simply count, apply smoothing (we found XXX to be a good
-value) and divide.
+$\pi$, we simply count the number of ``deaths'' that occurred under
+a live parent, apply smoothing--we found 0.5 to be reasonable--and
+divide by the total number of live parents.
 
-Estimating the parameters for each transducer can be performed
-analogously to the message approximation algorithm presented in the
-previous section without the need for the extra prior distribution
-$\tau$. For each pair of parent/child languages $(a,d)$ and each
-cognate group $g$, we maintain a factor marginal as a transducer.
-Our goal is to compress these G factor marginals into a single
-transducer that best approximates the alignments seen across all
-cognate groups.
-
-In this paper, we learn parameterized edit distances which are
-essentially Levenshtein distances with a non-uniform substitution,
-insertion, and deletion matrix. These edit distances define a
-exponential family distribution when conditioned on an ancestral
-word (or when multiplied by a prior distribution over those words).
-To construct the transducers, we follow a similar approach to the
-approach described for messages, but two essential differences hold.
-First, we must tally expected ``alignment n-grams'' rather than
-character n-grams. Second, we do not need to use the new loss
-function, because the messages are normalized and we know what what
-the arcs must sum to. Based on the derivation by \newcite{Oncina20061575}
-, we have that, for each character $a$ in the ancestor language:
+For the edit transducers $\phi$, we learn parameterized edit distances
+which are essentially Levenshtein distances with a non-uniform
+substitution, insertion, and deletion matrix, which we call
+$\sigma(x,y)$. These edit distances define a conditional exponential
+family distribution when conditioned on an ancestral word (or when
+multiplied by a prior distribution over those words).  To construct
+the transducers, we first calculate the marginal distribution over
+the edges connecting any two languages $a$ and $d$. With this
+distribution, we need to tally the expected ``alignment unigrams''
+rather than character n-grams. That is, we need to compute for each
+pair of characters $x$ and $y$ the quantity:
 \begin{equation}
   \begin{split}
-    \sum_{b \in \Sigma \cup \{\epsilon\}} w(a,b) &= 1 - \sum_{b \in \Sigma} w(\epsilon,b) \\
-    w(a,b) &\propto \frac{\#(a,b)}{\#(a,\cdot)} \\
-    w(\epsilon,b) &\propto \frac{\#(\epsilon,b)}{\#(\cdot,\cdot)} \\
+    E_{p(w_a,w_d)}&[\#(x,y)] \\ = \sum_{w_a,w_d} &\sum_{\tiny\begin{array}{c} z\in \\ \mathrm{align(w_a,w_d)} \end{array}} \#(x,y) p(z|w_a,w_d)p(w_a,w_d)
    \end{split}
  \end{equation}
-where $\#(a,b)$ indicates the expected number of times the alignment
-of $a$ and $b$ are seen. These equations ensure that the three transition
+, where we denote $\#(x,y)$ to be the number of times the pair of characters
+appears in the pair of strings, and $\mathrm{align}(w_a,w_d)$ is the set of possible
+alignment between words $w_a$ and $w_d$.
+
+
+Given the expected counts, we now need to normalize them to ensure that the transducer represents a conditional
+probability distribution. Based on the derivation by \newcite{Oncina20061575}
+, we have that, for each character $x$ in the ancestor language:
+\begin{equation}
+  \begin{split}
+    \sum_{y \in \Sigma \cup \{\epsilon\}} \sigma(x,y) &= 1 - \sum_{y \in \Sigma} \sigma(\epsilon,y) \\
+    \sigma(x,y) &\propto \frac{E[\#(x,y)]}{E[\#(x,\cdot)]} \\
+    \sigma(\epsilon,y) &\propto \frac{E[\#(\epsilon,y)]}{E[\#(\cdot,\cdot)]} \\
+   \end{split}
+ \end{equation}
+These equations ensure that the three transition
 types (substitution/match, deletion, and insertion) are normalized for
 any ancestral character.
 
+For each pair of parent/child languages $(a,d)$ and each
+cognate group, we maintain a factor posterior as a transducer.  Our
+goal is to compress all factor posterior into a single transducer
+that best approximates the alignments seen across all cognate groups.
 
 
 \section{Transducers and Approximation}
@@ -311,8 +316,8 @@ while initially compact, these automata can become unwieldy in
 inference, and so approximations must be used.
 
 In this section, we summarize the algorithms and representations
-used for handling weighted finite state transducers.\footnote{For
-more detailed treatment, we direct readers to \newcite{mohri09weighted}.}
+used for weighted finite state transducers.\footnote{For more
+detailed treatment, we direct readers to \newcite{mohri09weighted}.}
 We also describe a new procedure for approximating automata in a
 message-passing environment.
 
@@ -406,7 +411,7 @@ some tolerance. In practice, for the kinds of transducers generated
 in our model, minimization removes at most half the states, which
 is not sufficient to counteract the exponential growth. Thus, we
 need to find a way to approximate a message $\mu(x)$ by some simpler
-distribution $\hat\mu(x;\theta)$, which has some simpler form with
+distribution $\tilde\mu(x;\theta)$, which has some simpler form with
 parameter $\theta$.
 
 In the context of transducers, previous authors have focused on a
@@ -428,9 +433,9 @@ the KL divergence between the ``expected'' marginal distribution
 and the approximated ``expected'' marginal distribution:
 \begin{equation}
   \begin{split}
-    \hat\theta &= \arg\!\min_{\theta} D_{KL}(\tau(w)\hat\mu(w;\theta)||\tau(w)\mu(w) ) \\
-    &= \arg\!\min_{\theta} \sum_w \tau(w) \hat\mu(w;\theta) \log \frac{\tau(w)\hat\mu(w;\theta)}{\tau(w)\mu(w)} \\
-    &= \arg\!\min_{\theta} \sum_w \tau(w) \hat\mu(w;\theta) \log \frac{\hat\mu(w;\theta)}{\mu(w)} \\
+    \hat\theta &= \arg\!\min_{\theta} D_{KL}(\tau(w)\tilde\mu(w;\theta)||\tau(w)\mu(w) ) \\
+    &= \arg\!\min_{\theta} \sum_w \tau(w) \tilde\mu(w;\theta) \log \frac{\tau(w)\tilde\mu(w;\theta)}{\tau(w)\mu(w)} \\
+    &= \arg\!\min_{\theta} \sum_w \tau(w) \tilde\mu(w;\theta) \log \frac{\tilde\mu(w;\theta)}{\mu(w)} \\
    \end{split}
  \end{equation}
 where $\tau$ is a prior distribution acting as a surrogate for the posterior
@@ -439,12 +444,12 @@ seek to approximate $\mu$ not on its own, but as it functions in
 an environment representing its final context. 
 
 In the context of this paper, $\mu(w)$ is a complex automaton with
-potentially many states, $\hat\mu(w)$ is a simple parametric automaton
+potentially many states, $\tilde\mu(w)$ is a simple parametric automaton
 with forms that we discuss below, and $\tau(w)$ is an arbitrary
 (but hopefully fairly simple) automaton. The actual method we use
 is as follows. Given a deterministic prior transducer $\tau$, and
-a deterministic automaton topology $\hat\mu^*$, we created the
-composed unweighted automaton $\tau \circ \hat \mu^*$, and calculate
+a deterministic automaton topology $\tilde\mu^*$, we created the
+composed unweighted automaton $\tau \circ \tilde\mu^*$, and calculate
 arc transitions weights to minimize the KL divergence between that
 composed transducer and $\tau\circ\mu$. The procedure for calculating
 these statistics was described in \newcite{li2009first}, which
@@ -452,27 +457,33 @@ amounts to using an expectation semiring \cite{eisner2001expectation}
 to compute expected transitions in $\tau\circ\mu$.
 
 From there, we need to created the transducer
-$\tau^{-1}\circ\tau\circ\hat\mu$. That is, we need to divide out
+$\tau^{-1}\circ\tau\circ\tilde\mu$. That is, we need to divide out
 the influence of $\tau(w)$. Since we know the topology and arc
 weights for $\tau$ ahead of time, this is often as simple as dividing
-arc weights in $\tau\circ\hat\mu$ by the corresponding arc weight
+arc weights in $\tau\circ\tilde\mu$ by the corresponding arc weight
 in $\tau(w)$. For example, if $\tau$ encodes a geometric distribution
 over word lengths and a uniform distribution over characters (that
-is, $\tau(w) \propto {p^{|w|}}$), then computing $\hat\mu$ is as
-simple as dividing each arc in $\tau\circ\hat\mu$ by
+is, $\tau(w) \propto {p^{|w|}}$), then computing $\tilde\mu$ is as
+simple as dividing each arc in $\tau\circ\tilde\mu$ by
 $p$.\footnote{Actually, we must be sure to divide each ``final
 weight'' in the transducer by $(1-|\Sigma| p)$, which is the stopping
 probability for a geometric transducer.}
 
-There are a number of choices for $\tau$. One is a hard maximum on the
-length of words. Another is to choose $\tau(w)$ to be a unigram
-language model over the language in question with a geometric
-probability over lengths. In our experiments, we find that $\tau(w)$
-can be a \textit{uniform} distribution over characters and still
-obtain reasonable results.
+There are a number of choices for $\tau$. One is a hard maximum on
+the length of words; that is, one that assigns some uniform probability
+to all strings of length K or less. Another is to choose $\tau(w)$
+to be a unigram language model over the language in question with
+a geometric probability over lengths. In our experiments, we find
+that $\tau(w)$ can be a geometric distribution over lengths with a
+uniform distribution over characters and still obtain reasonable
+results.  This distribution captures the importance of shorter
+strings while still maintaining a relatively weak prior.
 
 What remains is the selection of the topologies for the approximating
-message $\hat\mu$. We consider two possible approximations. The
+message $\tilde\mu$. We consider two possible approximations. 
+
+(XXX fix this)
+The
 first is a plain unigram model, which has $|\Sigma|+2$ parameters:
 one weight $\sigma_a$ for each character $a \in \Sigma$, a ``starting weight'' $\lambda$, and
 a stopping probability. Estimating this model involves only computing
@@ -491,7 +502,7 @@ approximate and exact expected marginals have the same partition
 function. That is, with the other parameters fixed solve:
 \begin{equation*}
   \begin{split}
-    \sum_w \tau(w) \hat\mu(w) = \sum_w \tau(w) \mu(w)
+    \sum_w \tau(w) \tilde\mu(w) = \sum_w \tau(w) \mu(w)
   \end{split}
 \end{equation*}
 
