@@ -134,7 +134,7 @@ reaching that language. Death at any node in the tree requires that
 all of that node's descendants also be dead. This tree models the
 intuition that a word is more likely to be found in two sibling
 languages (e.g. Spanish and Portuguese) than in two cousin languages
-(e.g. Portuguese and Italian) and not an intervening sibling
+(Portuguese and Italian) but not an intervening sibling
 (Spanish). 
 
 (XXX where to put this:) Also, because we do not know how many
@@ -249,7 +249,7 @@ probabilities as inputs.
 One important final note is initialization. In our early experiments
 we found that choosing a random starting configuration usually led
 to rather poor local optima. Instead, we started with empty trees,
-and added one language in per iteration until all languages were
+and added in one language per iteration until all languages were
 added, and then continued iterations on the full tree.
 
 \section{Learning} 
@@ -292,7 +292,7 @@ these counts is to use an expectation semiring introduced by
 
 Given the expected counts, we now need to normalize them to ensure
 that the transducer represents a conditional probability distribution.
-Based on the derivation by \newcite{Oncina20061575} , we have that,
+Based on the derivation by \newcite{Oncina20061575}, we have that,
 for each character $x$ in the ancestor language:
 \begin{equation}
   \begin{split}
@@ -411,7 +411,7 @@ some tolerance. In practice, for the kinds of transducers generated
 in our model, minimization removes at most half the states, which
 is not sufficient to counteract the exponential growth. Thus, we
 need to find a way to approximate a message $\mu(x)$ by some simpler
-distribution $\tilde\mu(x;\theta)$, which has some simpler form with
+distribution $\tilde\mu(x;\theta)$ that has some simpler form with
 parameter $\theta$.
 
 In the context of transducers, previous authors have focused on a
