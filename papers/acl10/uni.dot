@@ -1,0 +1,7 @@
+digraph C {
+  0 -> 0 [label="f"]
+  0 -> 0 [label="u"]
+  0 -> 0 [label="e"]
+  0 -> 0 [label="g"]
+  0 -> 0 [label="o"]
+}

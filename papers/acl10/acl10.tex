@@ -482,6 +482,17 @@ strings while still maintaining a relatively weak prior.
 
 \subsection{Message Topologies}
 
+\begin{figure*}
+  \centering
+  \includegraphics[scale=0.4]{fsa}
+  \caption{Various topologies for approximating topologies: (a) a
+  unigram model, (b) a bigram model, (c) the anchored unigram model,
+  and (d) the kbest model plus backoff model used in
+  \newcite{dreyer2009graphical}. In (c) and (d), the relative height
+  of arcs is meant to convey approximate probabilities.}
+  \label{fig:fsa}
+\end{figure*}
+
 What remains is the selection of the topologies for the approximating
 message $\tilde\mu$. We consider two possible approximations. XXX
 a little more
@@ -526,13 +537,47 @@ explain this better. It's really straightforward, but I don't want to sound peda
 
 \section{Experiments}
 
-\subsection{Baseline}
+We conduct three experiments. The first is a ``complete data''
+experiment, in which we reconstitute the cognate groups from Romance
+where we know that all cognate groups have words in all three
+languages. The second is a ``partial data'' experiment, in which
+we examine a subset of 10 languages in the Oceanic dataset. Here,
+only a fraction of words appear in any cognate group. The third is
+the task of proto-word reconstruction given these automatically
+created groups. For reconstructions, we use the inference methods
+from \newcite{bouchard09improved}.
 
-XXX As a baseline we use DICE scores. XXX
+As a baseline, we use a variant of our inference algorithm where
+instead of automata we use Dice's coefficient, which is commonly
+used in bilingual detection of cognates.
+\cite{Kondrak01identifyingcognates,Kondrak03cognatescan} Dice's
+coefficient is defined, for sets X and Y, as:
+\begin{equation}
+  \begin{split}
+    DICE(X,Y) &= \frac{2 |X\cap Y|}{|X| + |Y|}
+   \end{split}
+ \end{equation}
+We follow prior work and use sets of bigrams within words.  During
+bipartite matching the set X is the set of bigrams in the held-out
+language, and Y is the union of bigrams in the other languages.
+When the number of congate groups is not known,
+we XXX (not sure still\dots)
 
-\subsection{Experiment 1: Romance}
+\subsection{Experiment 1: Complete Data}
 
-XXX some text
+In this experiment, we know precisely how many cognate groups there
+are and that every cognate group has a word in each language. This
+is, of course, an unrealistic scenario, but it represents a good
+test case of how well these models can perform without the
+non-parametric task of decided how many clusters to use.
+
+We scrambled the 584 cognate groups in the Romance dataset and ran
+the algorithm to convergence. Besides the baseline, we tried using
+Unigrams, Anchored Unigrams, and Bigrams with and without learning
+the parametric edit distances. When we didn't use learning, we set
+the parameters of the edit distance to (0, -3, -4) for matches,
+substitutions, and deletions/insertions, respectively. With learning
+enabled, transducers were initialized with these parameters.
 
 For evaluation, we report two metrics. The first is pairwise accuracy
 for each pair of languages averaged across pairs. The other is
@@ -541,25 +586,26 @@ reconstructed cognate groups.
 
 Table \ref{tbl:exp1} shows the results under various configurations. XXX
 
-\begin{table}
+\begin{table*}
+  \centering
   \begin{tabular}{|c|c|c|c|}
     Transducers & Messages & Pair Acc. & Rec. Acc.\\
     \hline
     \hline
-    Levenshtein&Pos. Unigrams & & \\
+    Levenshtein&Unigrams & & \\
+    Levenshtein&Anchored Unigrams & & \\
     Levenshtein&Bigrams & & \\
-    Levenshtein&K-Best & & \\
-    \hline
-    Learned&Pos. Unigrams & 90.3  & \\
+    \hline 
+    Learned&Unigrams & 90.3  & \\
+    Learned&Anchored Unigrams & 90.3  & \\
     Learned&Bigrams & & \\
-    Learned&K-Best & & \\
   \end{tabular}
   \caption{Accuracies for reconstructing cognate groups. Levenshtein
   refers to fixed parameter edit distance transducers with
   deletion/insertion and substitution costs set to XXX, respectively.
   Learned refers to automatically learned edit distances.}
   \label{tbl:exp1}
-\end{table}
+\end{table*}
 
 \subsection{Experiment 2: Austronesian}
 
