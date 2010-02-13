@@ -124,13 +124,15 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
     val newGroups = augmentedGroups ++ loners.map(c => Map.empty + (language -> c));
 
-    val deathProbs = learnDeathProbs(s,newGroups);
+    val newKnownLanguages = s.knownLanguages + language;
+    val deathProbs = if(newKnownLanguages.size >= languages.size) learnDeathProbs(s,newGroups) else s.deathScores;
     println(deathProbs);
 
     val newS = s.copy(groups = newGroups,
                       likelihood = score,
                       deathScores = deathProbs,
-                      knownLanguages = s.knownLanguages + language);
+                      knownLanguages = newKnownLanguages
+                      );
     nextAction(newS)
   }
 
@@ -288,7 +290,7 @@ trait BipartiteRunner {
     val randomized = Rand.permutation(data.length).draw().map(data);
     val expectedNumTrees = data.length.toDouble / languages.size;
     //val treePenalty = Math.log( (expectedNumTrees -1) / expectedNumTrees)
-    val treePenalty = 5; // Positive actually means a bonus.
+    val treePenalty = 1; // Positive actually means a bonus.
     val iter = bip(tree,randomized, languages,treePenalty,0.5).iterations;
     val numPositives = numberOfPositives(languages, gold);
     for( state <- iter.take(1000)) {
