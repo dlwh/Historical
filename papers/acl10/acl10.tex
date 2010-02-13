@@ -236,7 +236,7 @@ and for interior nodes $W_i$:
 In the downward pass (toward the held-out language), we sum over ancestors word $W_a$:
 \begin{equation*}
   \begin{split}
-    \mu_{a\to d}(w_d) = \sum_{w_a} p(w_d|w_a) \prod_{\scriptsize \begin{array}{cc}d' \in \mathrm{child}(w_a) \\ d' \neq d \end{array}} \mu_{d' \to a}(w_a) 
+    \mu_{a\to d}(w_d) = \sum_{w_a} p(w_d|w_a) \prod_{\stackrel{d' \in \mathrm{child}(w_a)}{d' \neq d}} \mu_{d' \to a}(w_a) 
   \end{split}
 \end{equation*}
 Computing these messages recursively gives a marginal distribution
@@ -281,12 +281,12 @@ $a$ and $d$. With this distribution, we the expected
 need to compute for each pair of characters $x$ and $y$ the quantity:
 \begin{equation}
   \begin{split}
-    E_{p(w_a,w_d)}&[\#(x,y)] \\ = \sum_{w_a,w_d} &\sum_{\tiny\begin{array}{c} z\in \\ \mathrm{align(w_a,w_d)} \end{array}} \#(x,y) p(z|w_a,w_d)p(w_a,w_d)
+    E_{p(w_a,w_d)}&[\#(x,y)] \\ = \sum_{w_a,w_d} &\sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align(w_a,w_d)}}} \#(x,y) p(z|w_a,w_d)p(w_a,w_d)
    \end{split}
  \end{equation}
 , where we denote $\#(x,y)$ to be the number of times the pair of characters
 appears in the pair of strings, and $\mathrm{align}(w_a,w_d)$ is the set of possible
-alignment between words $w_a$ and $w_d$. The exact method for computing
+alignments between words $w_a$ and $w_d$. The exact method for computing
 these counts is to use an expectation semiring introduced by
 \newcite{eisner2001expectation}.
 
@@ -301,9 +301,8 @@ for each character $x$ in the ancestor language:
     \sigma(\epsilon,y) &= \frac{E[\#(\epsilon,y)]}{E[\#(\cdot,\cdot)]} \\
    \end{split}
  \end{equation}
-These equations ensure that the three transition
-types (substitution/match, deletion, and insertion) are normalized for
-any ancestral character.
+These equations ensure that the three transition types (substitution/match,
+deletion, and insertion) are normalized for any ancestral character.
 
 \section{Transducers and Approximations}
 
@@ -424,6 +423,19 @@ showed that a 10,000-best list for a typical message only accounts
 for 50\% of message log perplexity. That is, the posterior marginals in
 our model are (at least initially) fairly flat.
 
+% Put this here to make it come before the section heading Message Topologies
+\begin{figure*}
+  \centering
+  \includegraphics[scale=0.4]{fsa}
+  \caption{Various topologies for approximating topologies: (a) a
+  unigram model, (b) a bigram model, (c) the anchored unigram model,
+  and (d) the kbest model plus backoff model used in
+  \newcite{dreyer2009graphical}. In (c) and (d), the relative height
+  of arcs is meant to convey approximate probabilities.}
+  \label{fig:fsa}
+\end{figure*}
+
+
 An alternative approach might be to simply treat messages as
 unnormalized probability distributions, and to minimize the KL
 divergence between some approximating message and the true message.
@@ -482,35 +494,28 @@ strings while still maintaining a relatively weak prior.
 
 \subsection{Message Topologies}
 
-\begin{figure*}
-  \centering
-  \includegraphics[scale=0.4]{fsa}
-  \caption{Various topologies for approximating topologies: (a) a
-  unigram model, (b) a bigram model, (c) the anchored unigram model,
-  and (d) the kbest model plus backoff model used in
-  \newcite{dreyer2009graphical}. In (c) and (d), the relative height
-  of arcs is meant to convey approximate probabilities.}
-  \label{fig:fsa}
-\end{figure*}
-
 What remains is the selection of the topologies for the approximating
-message $\tilde\mu$. We consider two possible approximations. XXX
-a little more
+message $\tilde\mu$. We consider three possible approximations,
+illustrated in Figure \ref{fig:fsa}. The first is a plain unigram
+model, the second is a bigram model, and the third is an anchored
+unigram topolgy: a position-specific unigram model for each position
+up to some maximum length.
 
-(XXX fix this)
-The first is a plain unigram model, which has $|\Sigma|+2$ parameters:
+The standard unigram model has $|\Sigma|+2$ parameters:
 one weight $\sigma_a$ for each character $a \in \Sigma$, a ``starting
 weight'' $\lambda$, and a stopping probability. Estimating this
 model involves only computing the expected count of each character,
 along with the expected length of a word, $E[|w|]$. We then normalize
 the counts according to the maximum likelihood estimate, which
 gives: 
-\begin{equation}
+\begin{equation*}
   \begin{split}
-    \sum_{a\in\Sigma} \sigma_a &= \frac{E[|w|]-1}{E[|w|}
+    \sum_{a\in\Sigma} \sigma_a &= \frac{E[|w|]-1}{E[|w|} \\
+    \sigma_a &\propto E[\#(a)]
    \end{split}
- \end{equation}
-with the stop probability taking the remaining mass. 
+ \end{equation*}
+with the stop probability taking the remaining mass. Recall that
+these expectations can be computed using an expectation semiring.
 
 $\lambda$ can be computed by ensuring that the
 approximate and exact expected marginals have the same partition
@@ -521,7 +526,19 @@ function. That is, with the other parameters fixed solve:
   \end{split}
 \end{equation*}
 
-The other topology we consider takes positional information into
+The second topology we consider is the bigram topology, which is
+similar to the unigram topology except that instead of a single
+state, we have a state for each character in $\Sigma$, along with
+a special start state. Each state $a$ has transitions with weights
+$\sigma_{b|a}= p(b|a)$. Normalization is straightforward:
+\begin{equation*}
+  \begin{split}
+    \sum_{b\in\Sigma} \sigma_{b|a}&= 1-\sigma_{\mathrm{stop}|a} \\
+    \sigma_{b|a} &\propto E[\#(b|a)]
+   \end{split}
+ \end{equation*}
+
+The final topology we consider takes positional information into
 account. Namely, for each position (up to some maximum position),
 we have a unigram model over characters emitted at that position,
 along with the probability of stopping at that position. Estimating
@@ -531,9 +548,6 @@ position in the string. With the expected counts for each position,
 we normalize each state's final and outgoing weights. In our
 experiments, we typically set the maximum string length to 7 + the
 longest observed string.
-
-(XXX probably want a figure for these topologies, and I should probably
-explain this better. It's really straightforward, but I don't want to sound pedantic.)
 
 \section{Experiments}
 
@@ -596,14 +610,13 @@ Table \ref{tbl:exp1} shows the results under various configurations. XXX
     Levenshtein&Anchored Unigrams & & \\
     Levenshtein&Bigrams & & \\
     \hline 
-    Learned&Unigrams & 90.3  & \\
+    Learned&Unigrams & & \\
     Learned&Anchored Unigrams & 90.3  & \\
     Learned&Bigrams & & \\
   \end{tabular}
   \caption{Accuracies for reconstructing cognate groups. Levenshtein
-  refers to fixed parameter edit distance transducers with
-  deletion/insertion and substitution costs set to XXX, respectively.
-  Learned refers to automatically learned edit distances.}
+  refers to fixed parameter edit distance transducer. Learned refers
+  to automatically learned edit distances.}
   \label{tbl:exp1}
 \end{table*}
 
@@ -645,6 +658,7 @@ words. Performance in the 50-65\% Average Precision range.\\
 
 XXX future work: talk about adding in semantics a la \newcite{Kondrak01identifyingcognates}, removing the
 bipartite restriction, and joint reconstruction and reconstitution
+\clearpage
 \bibliographystyle{acl}
 \bibliography{refs}
 
