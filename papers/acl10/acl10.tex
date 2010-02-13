@@ -42,7 +42,7 @@ word to deduce the phonological and morphological changes that
 explains the differences between them. For example, (XXX need to
 find a good example). Typically, the Comparative Method requires
 the linguist to make qualitative judgments regarding the relative
-likelihood of certain sound changes.  More recently, statistical
+likelihood of certain sound changes. More recently, statistical
 methods have been introduced to provide greater robustness and
 automation to the Comparative Method. (XXX cite Alex, and anyone
 pre Alex).
@@ -50,7 +50,7 @@ pre Alex).
 All these methods, however, assume that the cognate words are already
 given. Unfortunately, this is not always an easy task, since the
 underlying morphological and phonological changes can obscure
-relationships between words.  More difficult still are the ``spurious''
+relationships between words. More difficult still are the ``spurious''
 relationships between words that by chance or do to linguistic
 universals. For example, both Mandarin and English \textit{/mama/}
 (XXX probably find a better example) are phonologically quite similar
@@ -68,7 +68,7 @@ to fit the model to data.
 Our model encodes distributions over strings as weighted finite
 state automata \cite{mohri09weighted}. Weighted automata have been
 successfully applied to speech processing \cite{Mohri96weightedautomata} and
-more recently to morphology \cite{dreyer2009graphical}.  We present
+more recently to morphology \cite{dreyer2009graphical}. We present
 a new method for automatically compressing the automata that are
 generated as messages during inference that can take into account
 prior information about the expected outcome of inference.
@@ -79,12 +79,242 @@ and Latin, and the other is a manually curated of Austronesian
 languages with many more (XXX how many) languages but much sparser
 coverage. XXX something more?
 
-\section{Background}
+\section{Datasets}
 
-In this section, we present a summary of the algorithms and
-representations used for handling weighted finite state transducers,
-which we will be using extensively in this paper. For more detailed
-treatment, we direct readers to \cite{mohri09weighted}.
+(XXX finish this section)
+
+In our experiments, we focus on two datasets. One is an automatically
+generated word list of XXX (\#) cognate words from three Romance
+languages (Portuguese, Italian and Spanish), as well as their common
+ancestor Latin. (XXX more on where this came from). The other is a
+hand-curated list of cognates words from Austronesian languages.
+Both datasets are transcribed as IPA (Romance automatically,
+Austronesian manually). (XXX More on who curated it ,etc)
+
+Beyond the differences in human supervision, there are several
+important differences between the datasets. First, the Oceanic
+dataset is comprised of many more languages (XXX), but it is much
+sparser: the Romance dataset has a word for every language in each
+cognate group, while the Oceanic dataset has only XXX of possible
+entries attested.
+
+\begin{figure*}
+  \centering
+  \includegraphics[scale=0.4]{gmodel}
+  \caption{(a) The process by which cognate words are generated.
+  Here, we show the derivation of Romance language words from their
+  respective Latin ancestor. (b) A close-up of a possible alignment
+  produced by a transducer. In this paper we use unigram transducers
+  that are equivalent to parameterized edit distances. (c) When
+  some cognate trees may not be complete, we model the ``death''
+  of words on another tree running parallel to the word-generating
+  tree.}
+
+  \label{fig:gmodel}
+\end{figure*}
+
+\section{Model}
+
+In this section we describe a generative model for vocabulary lists
+in multiple related languages given the phylogenetic relationship
+between the languages (that is, their family tree). The generative
+process falls into three subprocesses: survival, evolution, and
+permutation. Survival dictates, for each cognate group, which
+languages have words in that group. Evolution describes the process
+by which words are transformed from their parent word. Finally,
+permutation describes the ``scrambling'' of the word lists into an
+order that bears no relation to their lineage. Each process is
+described graphically in Figure (\ref{fig:gmodel}), and we present
+each in detail in the following subsections.
+
+\subsection{Survival}
+
+For each cognate group, our generative process starts by selecting
+an ancestral word from the root language. Then, at each level, the
+word may either die, and not spread to any of its children, or it
+can continue. This process is modeled in a ``death tree'' with
+variables $S_\ell$ specifying whether or not the word died before
+reaching that language. Death at any node in the tree requires that
+all of that node's descendants also be dead. This tree models the
+intuition that a word is more likely to be found in two sibling
+languages (e.g. Spanish and Portuguese) than in two cousin languages
+(e.g. Portuguese and Italian) and not an intervening sibling
+(Spanish). The survival process is shown in Figure (\ref{fig:gmodel}a).
+
+(XXX where to put this:) Also, because we do not know how many cognate groups there may
+be ahead of time, we place a geometric prior on the number of
+unobserved groups. (XXX)
+
+\subsection{Evolution}
+
+Once we know which languages will have an attested word, which will
+not, we must generate the words. The evolution model generates
+words according to a transformation from their immediate ancestor.
+Figure (\ref{fig:gmodel}b) graphically describes our generative
+model for three Romance languages: Italian, Portuguese, and Spanish.
+In each cognate group, each word $w$ is generated from its parent
+using a conditional distribution with parameter $\phi$, which is
+specific to that edge in the tree, but shared between all cognate
+groups. 
+
+In this paper, $\phi$ takes the form of a parameterized edit distance
+similar to the standard Levenshtein distance, though arbitrary
+models could in principle be used.(XXX cite alex) As an example,
+see the illustration in Figure (\ref{fig:gmodel}c). Here, the Vulgar
+Latin word \textit{cantare} is generated from its parent form
+\textit{canere} by a series of edits: 4 matches, 1 substitution
+(from 'e' to 'a') and one insertion (the letter 't'). The probability
+of each individual edit is determined by $\phi$, and the probability
+of the child Vulgar Latin word conditioned on the Latin word is the
+sum over all possible alignments that generate it.
+
+\subsection{Permutation}
+
+Finally, at the leaves of the trees are the observed words. (We
+take interior nodes to be unobserved.) Here, we make the (false,
+but simplifying) assumption that in any language there is at most
+one word per language per cognate group. Because the assignments
+of words to cognates is unknown, we specify an unknown parameter
+$\pi_\ell$ for each language that specifies a permutation of the
+words which specifies the mapping. From a generative perspective,
+$\pi_\ell$ generates observed positions of the words in some
+vocabulary list.
+
+In this paper, our task is primarily to learn the permutations
+$\pi_\ell$. All other hidden variables are auxiliary.
+
+\section{Inference}
+
+We are given a set of languages and a list of words in each language,
+and our objective is to determine which words are cognate with each
+other words. In the Romance dataset, we have the additional constraint
+that each cognate group supports exactly one word from each language,
+while in the Austronesian dataset we have at most one word from each
+language. In effect, the inference task is reduced to finding a
+permutation of the respective word lists to maximize the log
+probability of the observed words:
+\begin{equation}
+  \begin{split}
+    \vec{\pi} = \arg\!\max_{\vec \pi} \sum_{g} \log p(\vec w_{(\ell,\pi_\ell(g))}|\vec \phi,\vec \pi)
+   \end{split}
+ \end{equation}
+Maximizing this equation directly is intractable, and so instead
+we use a coordinate ascent algorithm to iteratively maximize one
+permutation while holding the others fixed:
+\begin{equation}
+  \begin{split}
+    \pi_\ell = \arg\!\max_{\pi_\ell} \sum_{g} \log p(\vec w_{(\ell,\pi_\ell(g))}|\vec \phi,\vec \pi_{-\ell},\pi_\ell)
+  \end{split}
+\end{equation}
+Each iteration is then actually an instance of bipartite graph
+matching, with the words in one language one set of nodes, and the
+current cognate groups in the other languages the other set of
+nodes, and the edge affinities between these nodes are the conditional
+probability of each word belonging to each cognate group.
+
+To compute the affinities for each cognate group, inference in each
+tree computes the marginal distribution of the words from the ``held
+out'' language. For the marginals, we use an analog of the 
+forward/backward (XXX cite someone?) algorithm. In the upward pass,
+we send messages from the leaves of the tree towards the root. For observed
+leaf nodes $w_d$, we have:
+\begin{equation*}
+  \begin{split}
+    \mu_{d\to a}(w_a) = \sum_{w_d} p(w_d|w_a,\phi)
+   \end{split}
+ \end{equation*}
+and for interior nodes $w_i$:
+\begin{equation*}
+  \begin{split}
+    \mu_{i\to a}(w_a) = \sum_{w_i} p(w_i|w_a) \prod_{d \in \mathrm{child}(w_i)} \mu_{d \to i}(w_i) 
+  \end{split}
+\end{equation*}
+In the downward pass (toward the held-out language), we sum over ancestors word $w_a$:
+\begin{equation*}
+  \begin{split}
+    \mu_{a\to d}(w_d) = \sum_{w_a} p(w_d|w_a) \prod_{d' \in \mathrm{child}(w_a)} \mu_{d' \to a}(w_a) 
+  \end{split}
+\end{equation*}
+Computing these messages recursively gives a marginal distribution
+over the held-out language, and so we compute, for each word, the
+probability of that word being in that cognate group. We then use
+the Kuhn-Munkres algorithm \cite{Kuhn1955} to find the optimal
+assignment for the bipartite matching problem, using the conditional
+probabilities as inputs.
+
+One important final note is initialization. In our early experiments
+we found that choosing a random starting configuration usually led
+to rather poor local optima. Instead, we started with empty trees,
+and added one language in per iteration until all languages were
+added, and then continued iterations on the full tree.
+
+\section{Learning}
+So far we've only addressed learning the permutations $\pi$ and
+the approximations needed to perform inference tractably. We also
+have two other sets of parameters: the transducers $\phi$, and the
+death probabilities $S$. The parameters can be learned through
+standard maximum likelihood estimation, which we detail in this
+section.
+
+Estimating the parameters for each survival parameter $S_\ell$ is
+straightforward. Because we enforce that a word must be dead if
+its parent word is dead, we simplify need to learn the conditional
+probabilities $p($death$|$parent not dead$)$. Given fixed assignments
+$\pi$, we simply count, apply smoothing (we found XXX to be a good
+value) and divide.
+
+Estimating the parameters for each transducer can be performed
+analogously to the message approximation algorithm presented in the
+previous section without the need for the extra prior distribution
+$\tau$. For each pair of parent/child languages $(a,d)$ and each
+cognate group $g$, we maintain a factor marginal as a transducer.
+Our goal is to compress these G factor marginals into a single
+transducer that best approximates the alignments seen across all
+cognate groups.
+
+In this paper, we learn parameterized edit distances which are
+essentially Levenshtein distances with a non-uniform substitution,
+insertion, and deletion matrix. These edit distances define a
+exponential family distribution when conditioned on an ancestral
+word (or when multiplied by a prior distribution over those words).
+To construct the transducers, we follow a similar approach to the
+approach described for messages, but two essential differences hold.
+First, we must tally expected ``alignment n-grams'' rather than
+character n-grams. Second, we do not need to use the new loss
+function, because the messages are normalized and we know what what
+the arcs must sum to. Based on the derivation by \newcite{Oncina20061575}
+, we have that, for each character $a$ in the ancestor language:
+\begin{equation}
+  \begin{split}
+    \sum_{b \in \Sigma \cup \{\epsilon\}} w(a,b) &= 1 - \sum_{b \in \Sigma} w(\epsilon,b) \\
+    w(a,b) &\propto \frac{\#(a,b)}{\#(a,\cdot)} \\
+    w(\epsilon,b) &\propto \frac{\#(\epsilon,b)}{\#(\cdot,\cdot)} \\
+   \end{split}
+ \end{equation}
+where $\#(a,b)$ indicates the expected number of times the alignment
+of $a$ and $b$ are seen. These equations ensure that the three transition
+types (substitution/match, deletion, and insertion) are normalized for
+any ancestral character.
+
+
+
+\section{Transducers and Approximation}
+
+The procedure described in the preceding section would be quite
+straightforward if the words $W$ were treated as indices into some
+word list, leaving inference as a form of multinomial message passing
+on trees. Instead, in our model words are complex string-valued
+random variables. To represent distributions and messages over
+these variables, we choose to use weighted finite state automata,
+which can compactly represent functions over strings. Unfortunately,
+while initially compact, these automata can become unwieldy in
+inference, and so approximations must be used.
+
+In this section, we summarize the algorithms and representations
+used for handling weighted finite state transducers.\footnote{For
+more detailed treatment, we direct readers to \newcite{mohri09weighted}.}
+We also describe a new procedure for approximating automata in a
+message-passing environment.
 
 \subsection{Weighted Automata}
 
@@ -96,7 +326,7 @@ of all paths through the graph that accept a string.
 
 More specifically, a weighted transducer assigns weights from a set
 $S$ to pairs of strings with characters in alphabets $\Sigma$ and
-$\Delta$. Each path through the transducer corresponds to an alignment
+$S$. Each path through the transducer corresponds to an alignment
 between two strings, with an associated score for that alignment.
 The weights in S must satisfy the semiring axioms, namely that there
 is an operation $\oplus$ (addition) with an identity element $\bar
@@ -111,11 +341,11 @@ approximation to log probabilities.
 \begin{comment}
 Formally, a weighted transducer over pairs of strings and a semiring
 $(S,\oplus,\otimes,\bar 0, \bar 1)$ is a tuple
-$(\Sigma,\Delta,Q,I,F,E,\lambda,\tau)$, where $\Sigma$ is the
-``input'' alphabet, $\Delta$ the ``output'' alphabet, $Q$ a set of
+$(\Sigma,S,Q,I,F,E,\lambda,\tau)$, where $\Sigma$ is the
+``input'' alphabet, $S$ the ``output'' alphabet, $Q$ a set of
 states, $I \subseteq Q$ a set of initial states, $F \subseteq Q$ a
 set of final states, $E \subseteq (Q \times Q \times (\Sigma \cup
-\{\epsilon\}) \times (\Delta\cup \{\epsilon\}) \times S)$ the set
+\{\epsilon\}) \times (S\cup \{\epsilon\}) \times S)$ the set
 of labeled and weighted edges, $\lambda: I \rightarrow S$ an initial
 weight function, and $\tau: F \rightarrow S$ the final weight
 function. ($\epsilon$ is a privileged ``null'' character character.)
@@ -146,7 +376,7 @@ composition creates a new transducer that takes the output from one
 automata, processes it through the other transducer, and then returns
 the output of that transducer. That is, consider two transducers
 $T_1$ and $T_2$. $T_1$ has input alphabet $\Sigma$ and output
-alphabet $\Delta$, while $T_2$ has input alphabet $\Delta$ and
+alphabet $S$, while $T_2$ has input alphabet $S$ and
 output alphabet $\Omega$. The composition $T_1 \circ T_2$ returns
 a new transducer over $\Sigma$ and $\Omega$ such that $(T_1 \circ
 T_2)(s,t) = \bigoplus_{u} T_1(s,u)\otimes T_2(u,t)$. In this paper,
@@ -163,122 +393,6 @@ states into a single state. Unfortunately, minimization does not
 always collapse enough states. In Section \ref{sec:approx}, we discuss approaches
 to ``lossy'' minimization that produce automata that are not exactly
 the same but are typically much smaller.
-
-\section{Datasets}
-
-(XXX This section should probably be moved and/or split)
-
-In our experiments, we focus on two datasets. One is an automatically
-generated word list of XXX (\#) cognate words from three Romance
-languages (Portuguese, Italian and Spanish), as well as their common
-ancestor Latin. (XXX more on where this came from). The other is a
-hand-curated list of cognates words from Austronesian languages.
-Both datasets are transcribed as IPA (Romance automatically,
-Austronesian manually). (XXX More on who curated it ,etc)
-
-Beyond the differences in human supervision, there are several
-important differences between the datasets. First, the Oceanic
-dataset is comprised of many more languages (XXX), but it is much
-sparser: the Romance dataset has a word for every language in each
-cognate group, while the Oceanic dataset has only XXX of possible
-entries attested.
-
-\section{Model}
-
-In this section we present a generative model of the derivation of
-cognate words. XXX Another lead in sentence.
-
-\begin{figure*}
-  \centering
-  \includegraphics[scale=0.4]{gmodel}
-  \caption{(a) The process by which cognate words are generated.
-  Here, we show the derivation of Romance language words from their
-  respective Latin ancestor. (b) A close-up of a possible alignment
-  produced by a transducer. In this paper we use unigram transducers
-  that are equivalent to parameterized edit distances.  (c) When
-  some cognate trees may not be complete, we model the ``death''
-  of words on another tree running parallel to the word-generating
-  tree.}
-
-  \label{fig:gmodel}
-\end{figure*}
-
-Our model generates words according to a transformation from their
-immediate ancestor. Figure (\ref{fig:gmodel}a) graphically describes
-our generative model for three Romance languages: Italian, Portuguese,
-and Spanish. In each cognate group, each word $w$ is generated from
-its parent using a transducer $\phi$, which is specific to that
-edge in the tree, but shared between all cognate groups. For instance,
-as illustrated in Figure (\ref{fig:gmodel}b), the Vulgar Latin word
-\textit{cantare} is generated from its parent form \textit{canere}
-by a series of edits. The probability of each individual edit is
-determined by $\phi$, and the probability of the descendent Vulgar
-Latin word conditioned on the Latin word is the sum over all possible
-alignments that generate it.
-
-At the leaves of the trees are the observed words. (We take interior
-nodes to be unobserved.) Here, we make the (false, but simplifying)
-assumption that in any language there is at most one word per
-language per cognate group.  Because which words belong to which
-cognate group is unknown, we specify an unknown parameter $\pi_\ell$
-for each language that specifies a permutation of the words which
-specifies the mapping. In this paper, our task is primarily to learn
-the permutations $\pi_\ell$.
-
-A further complication is that words in a cognate group may die off
-or otherwise be unattested in a surface language. To capture this
-constraint, for each cognate group we create a parallel ``death
-tree'' with variables $\delta_\ell$ specifying whether or not the
-word died before reaching that language. Death at any node in the
-tree requires that all of that node's descendants also be dead.
-This parallel tree models the intuition that a word is more likely
-to be found in two sibling languages (e.g. Spanish and Portuguese)
-than in two cousin languages (e.g. Portuguese and Italian) and not
-an intervening sibling (Spanish).  The death tree is shown in Figure
-(\ref{fig:gmodel}c).
-
-Finally, because we do not know how many cognate groups there may
-be ahead of time, we place a geometric prior on the number of
-unobserved groups. (XXX)
-
-\subsection{Inference}
-
-We are given a set of languages and a list of words
-in each language, and our objective is to determine which words are
-cognate with each other words. In the Romance dataset, we have the
-additional constraint that each cognate group supports exactly one
-word from each language. In effect, in the Romance dataset the 
-inference task is reduced to finding a permutation of the respective
-word lists to maximize the log probability of the observed words:
-\begin{equation}
-  \begin{split}
-    \vec{\pi} = \arg\!\max_{\vec \pi} \sum_{g} \log p(\vec w_{(\ell,\pi_\ell(i))}|\vec \phi,\vec \pi)
-   \end{split}
- \end{equation}
-Maximizing this equation directly is intractable, and so instead
-we use a coordinate ascent algorithm to iteratively maximize one
-permutation while holding the others fixed:
-\begin{equation}
-  \begin{split}
-    \pi_\ell = \arg\!\max_{\pi_\ell} \sum_{g} \log p(\vec w_{(\ell,\pi_\ell(i))}|\vec \phi,\vec \pi_{-\ell},\pi_\ell)
-  \end{split}
-\end{equation}
-Each iteration is then actually an instance of bipartite graph
-matching, with the words in one language one set of nodes, and the
-current cognate groups in the other languages the other set of
-nodes, and the edge affinities between these nodes are the conditional
-probability of each word belonging to each cognate group. To compute
-the affinities for each cognate group, inference in each tree
-computes the marginal distribution of the words from the ``held
-out'' language, and likelihoods are computed for each word.  Given
-these weights, we use the Kuhn-Munkres algorithm \cite{Kuhn1955} algorithm
-to find an approximate maximizer.
-
-One important note is initialization. In our early experiments we
-found that choosing a random starting configuration usually led to
-rather poor local optima. Instead, we started with empty trees, and
-added one language in per iteration until all languages were added,
-and then continued iterations on the full tree.
 
 \subsection{Message Approximation}
 \label{sec:approx}
@@ -327,12 +441,12 @@ an environment representing its final context.
 In the context of this paper, $\mu(w)$ is a complex automaton with
 potentially many states, $\hat\mu(w)$ is a simple parametric automaton
 with forms that we discuss below, and $\tau(w)$ is an arbitrary
-(but hopefully fairly simple) automaton.  The actual method we use
+(but hopefully fairly simple) automaton. The actual method we use
 is as follows. Given a deterministic prior transducer $\tau$, and
 a deterministic automaton topology $\hat\mu^*$, we created the
 composed unweighted automaton $\tau \circ \hat \mu^*$, and calculate
 arc transitions weights to minimize the KL divergence between that
-composed transducer and $\tau\circ\mu$.  The procedure for calculating
+composed transducer and $\tau\circ\mu$. The procedure for calculating
 these statistics was described in \newcite{li2009first}, which
 amounts to using an expectation semiring \cite{eisner2001expectation}
 to compute expected transitions in $\tau\circ\mu$.
@@ -356,8 +470,6 @@ language model over the language in question with a geometric
 probability over lengths. In our experiments, we find that $\tau(w)$
 can be a \textit{uniform} distribution over characters and still
 obtain reasonable results.
-
-\subsection{Transducer Topologies}
 
 What remains is the selection of the topologies for the approximating
 message $\hat\mu$. We consider two possible approximations. The
@@ -384,7 +496,7 @@ function. That is, with the other parameters fixed solve:
 \end{equation*}
 
 The other topology we consider takes positional information into
-account.  Namely, for each position (up to some maximum position),
+account. Namely, for each position (up to some maximum position),
 we have a unigram model over characters emitted at that position,
 along with the probability of stopping at that position. Estimating
 the parameters of this model is similar, except that the expected
@@ -396,55 +508,6 @@ longest observed string.
 
 (XXX probably want a figure for these topologies, and I should probably
 explain this better. It's really straightforward, but I don't want to sound pedantic.)
-
-\section{Learning}
-
-So far we've only addressed learning the permutations $\pi$ and
-the approximations needed to perform inference tractably. We also
-have two other sets of parameters: the transducers $\phi$, and the
-death probabilities $\delta$. The parameters can be learned through
-standard maximum likelihood estimation, which we detail in this
-section.
-
-Estimating the parameters for each $\delta_\ell$ is straightforward.
-Because we enforce that a word must be dead if its parent word is
-dead, we simplify need to learn the conditional probabilities
-$p($death$|$parent not dead$)$. Given fixed assignments $\pi$, we
-simply count, apply smoothing (we found XXX to be a good value) and
-divide.
-
-Estimating the parameters for each transducer can be performed
-analogously to the message approximation algorithm presented in the
-previous section without the need for the extra prior distribution
-$\tau$. For each pair of parent/child languages $(a,d)$ and each
-cognate group $g$, we maintain a factor marginal as a transducer.
-Our goal is to compress these G factor marginals into a single
-transducer that best approximates the alignments seen across all
-cognate groups.
-
-In this paper, we learn parameterized edit distances which are
-essentially Levenshtein distances with a non-uniform substitution,
-insertion, and deletion matrix. These edit distances define a
-exponential family distribution when conditioned on an ancestral
-word (or when multiplied by a prior distribution over those words).
-To construct the transducers, we follow a similar approach to the
-approach described for messages, but two essential differences hold.
-First, we must tally expected ``alignment n-grams'' rather than
-character n-grams. Second, we do not need to use the new loss
-function, because the messages are normalized and we know what what
-the arcs must sum to. Based on the derivation by \newcite{Oncina20061575}
-, we have that, for each character $a$ in the ancestor language:
-\begin{equation}
-  \begin{split}
-    \sum_{b \in \Sigma \cup \{\epsilon\}} w(a,b) &= 1 - \sum_{b \in \Sigma} w(\epsilon,b) \\
-    w(a,b) &\propto \frac{\#(a,b)}{\#(a,\cdot)} \\
-    w(\epsilon,b) &\propto \frac{\#(\epsilon,b)}{\#(\cdot,\cdot)} \\
-   \end{split}
- \end{equation}
-where $\#(a,b)$ indicates the expected number of times the alignment
-of $a$ and $b$ are seen. These equations ensure that the three transition
-types (substitution/match, deletion, and insertion) are normalized for
-any ancestral character.
 
 \section{Experiments}
 
