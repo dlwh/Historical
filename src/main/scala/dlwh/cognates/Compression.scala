@@ -6,6 +6,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.PriorityQueue
 import scalanlp.counters.LogCounters._;
 import scalanlp.math.Numerics._;
+import scalanlp.math.Semiring.LogSpace._;
 import scalala.Scalala._;
 
 import Types._;
@@ -43,7 +44,7 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
     val marginals = LogDoubleCounter[T];
     for( (b,ctr) <- bigrams.rows;
       (ch,v) <- ctr) {
-      if(b != (('#','#')) || ch != (('#','#'))) {
+      if(b != beginningUnigram || ch != beginningUnigram) {
         marginals(ch) = logSum(marginals(ch),v);
       }
     }
@@ -81,9 +82,9 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
     }
 
     for {
-      (history,ctr) <- bigrams.rows;
-      kl = klDivergence(marginal,ctr) * Math.exp( ctr.logTotal - marginal.logTotal);
-      if kl > klThreshold
+      (history,ctr) <- bigrams.rows
+      kl = klDivergence(marginal,ctr) * Math.exp( ctr.logTotal - marginal.logTotal)
+    //  if kl > klThreshold
     } {
       pq += UniState(history,ctr,kl);
     }
@@ -120,7 +121,7 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
 
   def gatherStatistics(chars: Set[T], auto: Automaton[Double,_,T]): (Statistics,Double) = {
     // Set up the semiring
-    val tgs = new BigramSemiring[T](chars,beginningUnigram);
+    val tgs = new BigramSemiring[T](chars,beginningUnigram,cheatOnEquals=true);
     import tgs._;
     import ring._;
     val cost = auto.reweight(promote[Any] _, promoteOnlyWeight _ ).cost;
@@ -179,7 +180,7 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
       //idx1 = gramIndex(chars);
       finalScore = finalWeight(chars, state.transitions);
       if finalScore != Double.NegativeInfinity
-    } yield (chars,finalScore - state.transitions.logTotal);
+    } yield (chars,finalScore);
 
     val auto = Automaton.automaton(Map(startState->prob),Map.empty ++ finalWeights)(
       (divArcs).toSeq :_*
@@ -201,8 +202,9 @@ class SafeBiCompression( klThreshold: Double, maxStates: Int, val beginningUnigr
     for( (k1,k2,v) <- stats.triples) {
       if(k2 == beginningUnigram)
         retVal(k1,k2) = v - decayAuto.stopProb;
-      else
+      else if(k2 != implicitly[Alphabet[Char]].epsilon)
         retVal(k1,k2) = v - decayAuto.arcCost;
+      else retVal(k1,k2) = v;
     }
     // TODO: what to do with total
     val ret = (retVal,total)
@@ -215,7 +217,8 @@ class SafeBiCompression( klThreshold: Double, maxStates: Int, val beginningUnigr
   def compress(prob: Double, counts: Statistics) = {
     val auto = inner.compress(0.0,counts);
     val decayAuto = new DecayAutomaton(expLength, Set.empty ++ counts.keysIterator.map(_._2) - beginningUnigram);
-    val difference = prob - (auto & decayAuto cost)
+    val currentCost = (auto & decayAuto cost);
+    val difference = prob - currentCost;
     val ret = auto.scaleInitialWeights(difference);
     ret
   }
