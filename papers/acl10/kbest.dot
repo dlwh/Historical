@@ -1,0 +1,41 @@
+digraph C {
+
+  a1 [label=""]
+  a2 [label=""]
+  a3 [label=""]
+  a4 [label=""]
+  a5 [label=""]
+
+  0 ->  a1 [label="f"]
+  a1 -> a2 [label="u"]
+  a2 -> a3 [label="e"]
+  a3 -> a4 [label="g"]
+  a4 -> a5 [label="o"]
+
+  0  -> b1 [label="f"]
+  b2 -> b3 [label="e"]
+  b1 -> b2 [label="u"]
+  b3 -> b4 [label="g"]
+  b4 -> b5 [label="o"]
+
+  0  -> c1 [label="f"]
+  c1 -> c2 [label="e"]
+  c2 -> c3 [label="u"]
+  c3 -> c4 [label="g"]
+
+  0  -> d1 [label="f"]
+  d1 -> d3 [label="e"]
+  d3 -> d4 [label="e"]
+
+  0 -> x [label = "f"]
+  0 -> x [label = "u"]
+  0 -> x [label = "e"]
+  0 -> x [label = "g"]
+  0 -> x [label = "o"]
+  x -> x [label = "f"]
+  x -> x [label = "u"]
+  x -> x [label = "e"]
+  x -> x [label = "g"]
+  x -> x [label = "o"]
+  x [label=""]
+}
