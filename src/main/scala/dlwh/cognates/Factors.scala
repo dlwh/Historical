@@ -104,7 +104,7 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
   def edgeFor(parent: String, child: String, alphabet: Set[Char]): EdgeFactor = {
     //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
     val ed = (for( ed <- editDistances.get((parent,child)))
-              yield ed) getOrElse new EditDistance(-3,-4,fullAlphabet);
+              yield ed) getOrElse new EditDistance(-11,-14,fullAlphabet);
     new EdgeFactor(ed,alphabet);
   }
 
@@ -143,7 +143,7 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
       fsa.cost;
     }
 
-    override def toString = { "Marginal 3 Best: " + KBest.extractList(fsa,3)};
+    override def toString = { "Marginal 3 Best: " + fsa };
 
     /**
     * returns the log probability of the word.
