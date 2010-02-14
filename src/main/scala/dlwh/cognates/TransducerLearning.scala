@@ -1,17 +1,21 @@
 package dlwh.cognates
 
 import scalanlp.fst.Alphabet;
+import scalanlp.fst.Automaton;
 import scalanlp.fst.Transducer
 import scalanlp.util.Log._;
 import Types._;
+import scalanlp.math.Semiring.LogSpace._;
 import scalanlp.counters.LogCounters._;
 
 trait TransducerLearning {
   val transducerCompressor: Compressor[_,(Char,Char)];
+  val rootCompressor: Compressor[_,Char];
   def alphabet: Set[Char];
   def eps = implicitly[Alphabet[Char]].epsilon;
   def tree: Tree;
   type Statistics = Map[(Language,Language),transducerCompressor.Statistics];
+  type RootStats = rootCompressor.Statistics;
   private val edgesToLearn = tree.edges.toSeq;
   private lazy val allPairs = for {
     a <- alphabet + eps;
@@ -24,6 +28,10 @@ trait TransducerLearning {
   def initialSubCounts = initialMatchCounts-4;
   def initialDelCounts = initialMatchCounts-6;
 
+  def mkRoot(stats: RootStats): Automaton[Double,_,Char] = {
+    rootCompressor.compress(0.0,stats);
+  }
+
   def mkTransducers(statistics: Statistics):Map[(Language,Language),Transducer[Double,_,Char,Char]] = {
     globalLog.log(INFO)("Trans in " + memoryString);
     val transducers:Map[(Language,Language),Transducer[Double,_,Char,Char]] = {
@@ -32,13 +40,13 @@ trait TransducerLearning {
     transducers
   }
 
-  def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]): Statistics = {
+  def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]): (Statistics,RootStats) = {
 
-    val trigramStats: Iterator[((Language,Language),transducerCompressor.Statistics)] = (TaskExecutor.doTasks {for{
+    val trigramStats = (TaskExecutor.doTasks {for{
       io <- ios.toSeq
     } yield { () =>
       println(io.assignments);
-      (for { pair@ (fromL,toL) <- edgesToLearn.iterator;
+      val edges = ((for { pair@ (fromL,toL) <- edgesToLearn.iterator;
         trans <- io.edgeMarginal(fromL, toL).iterator
       } yield {
 
@@ -46,14 +54,25 @@ trait TransducerLearning {
         assert(!cost._2.isInfinite);
 
         (fromL,toL) -> cost._1;
-      } ).toSeq iterator
-   } }).iterator.flatten
+      } ).toSeq);
+
+      val root = io.rootMarginal;
+      (edges,rootCompressor.gatherStatistics(alphabet + eps,root.fsa)._1);
+   } })
 
     import collection.mutable.{Map=>MMap}
     val stats = MMap[(Language,Language),transducerCompressor.Statistics]();
-    for ( (lpair,ctr) <- trigramStats)  {
-      if(stats.contains(lpair)) stats(lpair) = transducerCompressor.interpolate(stats(lpair),1,ctr,1);
-      else stats(lpair) = ctr;
+    var rootStats: Option[RootStats] = None;
+    for ( (ts,rStats) <- trigramStats) {
+      if(rootStats.isEmpty) {
+        rootStats = Some(rStats)
+      } else {
+        rootStats = Some(rootCompressor.interpolate(rootStats.get,1,rStats,1));
+      }
+      for( (lpair,ctr) <- ts) {
+        if(stats.contains(lpair)) stats(lpair) = transducerCompressor.interpolate(stats(lpair),1,ctr,1);
+        else stats(lpair) = ctr;
+      }
     }
 
     val smoothingCounter = LogDoubleCounter[(Char,Char)]();
@@ -61,7 +80,15 @@ trait TransducerLearning {
       smoothingCounter(p) = if(a == b) initialMatchCounts else if(a == eps || b == eps) initialDelCounts else initialSubCounts;
     }
 
-    Map.empty ++ stats.mapValues(transducerCompressor.smooth(_,smoothingCounter));
+    val charSmoothing = LogDoubleCounter[Char]();
+    for( a <- alphabet) {
+      charSmoothing(a) = initialMatchCounts;
+    }
+
+
+    val finalTransducerStats = Map.empty ++ stats.mapValues(transducerCompressor.smooth(_,smoothingCounter));
+    val finalRootStats = rootCompressor.smooth(rootStats.get,charSmoothing);
+    (finalTransducerStats,finalRootStats);
   }
 
   def interpolate(a: Statistics, b: Statistics, eta: Double) = {

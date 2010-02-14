@@ -197,6 +197,7 @@ class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language
 
   type MFactors = TransducerFactors
   val transducerCompressor = new UniCompression(('#','#')) with NormalizedByFirstChar[Unit,Char];
+  val rootCompressor = new BiCompression(1E-4,alphabet.size + 3, '#') with NormalizedTransitions[Option[Char],Char];
 
   override def nextAction(s: State) = learnFactors(s);
 
@@ -208,16 +209,17 @@ class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language
       io;
     }
 
-    val stats = gatherStatistics(ios);
-    val newFactors = mkFactors(stats);
+    val (stats,root) = gatherStatistics(ios);
+    val newFactors = mkFactors(stats,root);
     s.copy(factors = newFactors);
   }
 
   def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with PosUniPruning;
 
-  def mkFactors(statistics: Statistics):TransducerFactors = {
+  def mkFactors(statistics: Statistics,root:RootStats):TransducerFactors = {
     val transducers = mkTransducers(statistics);
-    val factors = new TransducerFactors(tree,alphabet,transducers) with PosUniPruning;
+    val rootM = mkRoot(root);
+    val factors = new TransducerFactors(tree,alphabet,transducers,root=Some(rootM)) with PosUniPruning;
     globalLog.log(INFO)("Trans out " + memoryString);
     factors
   }
@@ -321,9 +323,10 @@ object RunBiBipartite extends BipartiteRunner {
 
       override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with BiPruning;
 
-      override def mkFactors(statistics: Statistics):TransducerFactors = {
+      override def mkFactors(statistics: Statistics, root: RootStats):TransducerFactors = {
         val transducers = mkTransducers(statistics);
-        val factors = new TransducerFactors(tree,alphabet,transducers) with BiPruning;
+        val rootM = mkRoot(root);
+        val factors = new TransducerFactors(tree,alphabet,transducers,root=Some(rootM)) with BiPruning;
         globalLog.log(INFO)("Trans out " + memoryString);
         factors
       }
@@ -337,8 +340,9 @@ object RunAdaptiveBiBipartite extends BipartiteRunner {
 
       override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with BiPruning;
 
-      override def mkFactors(statistics: Statistics):TransducerFactors = {
+      override def mkFactors(statistics: Statistics, root: RootStats):TransducerFactors = {
         val transducers = mkTransducers(statistics);
+        val rootM = mkRoot(root);
         val factors = new TransducerFactors(tree,alphabet,transducers) with BiPruning;
         globalLog.log(INFO)("Trans out " + memoryString);
         factors

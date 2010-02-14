@@ -95,7 +95,8 @@ trait BackedOffKBestPruning { this: TransducerFactors =>
 }
 
 abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
-                        editDistances: Map[(Language,Language),Transducer[Double,_,Char,Char]]=Map.empty) extends Factors with MarginalPruning {
+                        editDistances: Map[(Language,Language),Transducer[Double,_,Char,Char]]=Map.empty,
+                        root: Option[Psi]=None) extends Factors with MarginalPruning {
   type Self = TransducerFactors;
   type Marginal = TransducerMarginal;
   type EdgeFactor = TransducerEdge;
@@ -108,7 +109,7 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
   }
 
   def rootMarginal(alphabet: Set[Char]) = {
-    new Marginal(new DecayAutomaton(8,fullAlphabet) : Psi, 0, Set.empty: Set[Char], Set.empty);
+    new Marginal(root.getOrElse(new DecayAutomaton(8,fullAlphabet)) : Psi, 0, Set.empty: Set[Char], Set.empty);
   }
 
   def product(upward: Boolean, ms: Seq[Marginal]):Marginal = {
