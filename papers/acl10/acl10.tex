@@ -605,13 +605,14 @@ Table \ref{tbl:exp1} shows the results under various configurations. XXX
   \begin{tabular}{|c|c|c|c|}
     Transducers & Messages & Pair Acc. & Rec. Acc.\\
     \hline
+    N/A & Baseline & 48.1 & 35.4  \\
     \hline
-    Levenshtein&Unigrams & & \\
-    Levenshtein&Anchored Unigrams & & \\
+    Levenshtein&Unigrams & 37.2 & 26.2 \\
+    Levenshtein&Anchored Unigrams & 68.6 & 56.8\\
     Levenshtein&Bigrams & & \\
     \hline 
     Learned&Unigrams & & \\
-    Learned&Anchored Unigrams & 90.3  & \\
+    Learned&Anchored Unigrams & 90.3  & 86.6 \\
     Learned&Bigrams & & \\
   \end{tabular}
   \caption{Accuracies for reconstructing cognate groups. Levenshtein
