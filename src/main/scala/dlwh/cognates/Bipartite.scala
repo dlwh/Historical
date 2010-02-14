@@ -326,9 +326,10 @@ object RunUniBipartite extends BipartiteRunner {
 
       override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with UniPruning;
 
-      override def mkFactors(statistics: Statistics):TransducerFactors = {
+      override def mkFactors(statistics: Statistics, rootStats: RootStats):TransducerFactors = {
         val transducers = mkTransducers(statistics);
-        val factors = new TransducerFactors(tree,alphabet,transducers) with UniPruning;
+        val root = mkRoot(rootStats)
+        val factors = new TransducerFactors(tree,alphabet,transducers,root=Some(root)) with UniPruning;
         globalLog.log(INFO)("Trans out " + memoryString);
         factors
       }
