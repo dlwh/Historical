@@ -575,6 +575,33 @@ the system of \newcite{bouchard09improved}, we compare the
 reconstructions produced from our automatic groups to those produced
 from gold cognate groups.
 
+\begin{table*}
+  \centering
+  \begin{tabular}{|c|c|c|c||c|c|c|c||}
+    \hline
+    \multicolumn{2}{|c|}{\phantom{aa}} &\multicolumn{2}{|c||}{Romance} & \multicolumn{4}{|c||}{Austronesian}\\
+    \hline
+    Transducers & Messages & P. Acc. & Rec. Acc. & P. Prec. & P. Rec. & P. F1 & Rec. Acc\\
+    \hline
+    N/A & Baseline & 48.1 & 35.4  & & & &\\
+    \hline
+    Levenshtein&Unigrams & 37.2 & 26.2 & & & &\\
+    Levenshtein&Bigrams & 43.0 & 26.5 & & & &\\
+    Levenshtein&Anch. Unigrams & 68.6 & 56.8& & & &\\
+    \hline 
+    Learned&Unigrams & 0.1 & 0.0 & & & &\\
+    Learned&Bigrams & 38.7 & 11.3 & & & &\\
+    Learned&Anch. Unigrams & \textbf{90.3}  & \textbf{86.6} & & & &\\
+    \hline
+  \end{tabular}
+  \caption{Accuracies for reconstructing cognate groups. Levenshtein
+  refers to fixed parameter edit distance transducer. Learned refers
+  to automatically learned edit distances. ``P.'' means macro-averaged
+  pairwise, ``Rec.'' refers to percentage of completely and accurately
+  reconstructed groups.}
+  \label{tbl:exp1}
+\end{table*}
+
 \subsection{Baseline}
 
 As a baseline for cognate group detection, we use an iterative
@@ -615,73 +642,52 @@ for each pair of languages averaged across pairs. The other is
 accuracy measured in terms of the number of correctly and completely
 reconstructed cognate groups.
 
-Table \ref{tbl:exp1} shows the results under various configurations. XXX
+The left half of Table \ref{tbl:exp1} shows the results under various
+configurations. As can easily be seen, the kind of approximation
+used matters quite a lot. In this application, positional information
+is extraordinarily important, more so than the context of the
+previous character. Both Unigrams and Bigrams significantly
+under-perform the baseline, while Anchored Bigrams easily outperforms
+it both with and without learning.
 
-\begin{table*}
-  \centering
-  \begin{tabular}{|c|c|c|c||c|c|c|c||}
-    \hline
-    \multicolumn{2}{|c|}{\phantom{aa}} &\multicolumn{2}{|c||}{Romance} & \multicolumn{4}{|c||}{Austronesian}\\
-    \hline
-    Transducers & Messages & P. Acc. & Rec. Acc. & P. Prec. & P. Rec. & P. F1 & Rec. Acc\\
-    \hline
-    N/A & Baseline & 48.1 & 35.4  & & & &\\
-    \hline
-    Levenshtein&Unigrams & 37.2 & 26.2 & & & &\\
-    Levenshtein&Bigrams & 43.0 & 26.5 & & & &\\
-    Levenshtein&Anch. Unigrams & 68.6 & 56.8& & & &\\
-    \hline 
-    Learned&Unigrams & 0.1 & 0.0 & & & &\\
-    Learned&Bigrams & 38.7 & 11.3 & & & &\\
-    Learned&Anch. Unigrams & 90.3  & 86.6 & & & &\\
-  \end{tabular}
-  \caption{Accuracies for reconstructing cognate groups. Levenshtein
-  refers to fixed parameter edit distance transducer. Learned refers
-  to automatically learned edit distances. ``P.'' means macro-averaged
-  pairwise, ``Rec.'' refers to percentage of completely and accurately
-  reconstructed groups.}
-  \label{tbl:exp1}
-\end{table*}
+An initially surprising result is that learning actually harms
+performance under the unanchored approximations. The explanation
+is that the topologies are not sensitive enough to context, and
+that the learning procedure ends up flattening the distributions.
+In the case of unigrams--which has the least context--learning
+reduces performance to chance.
 
 \subsection{Experiment 2: Austronesian}
 
+XXX
+
 \subsection{Experiment 3: Reconstructions}
 
-
-\begin{comment}
-  (XXX this is mostly worked in, just leaving here for reference)
-\section{Previous Work}
-
-1) The reconstruction engine: a computer implementation of the
-comparative method\\
-  A deterministic approach from 1994 designed to help linguists look
-at reconstructions. Closer to Alex's stuff. \\
-2) Automatic Detection of Orthographic Cues for Cognate Recognition (2006) \\
-  Given a list of english/german words (translations of each other),
-are they cognate? Pretty crappy paper.\\
-3) Identifying Cognates by Phonetic and Semantic Similarity \\
-  The most similar. Given a list of multiple words from four Native
-American languages, sort out which words are cognate. Uses their
-English glosses to look up WordNet distance in addition to phonetic
-distances. Phonetic distances are measured either using DICE on
-bigrams, Longest Common Subsequence, and then a kind of edit distance
-on phone classes (that was earlier work he borrowed. ALINE) *DICE on
-bigrams and LCS look like good baselines.*\\
-  -- This approach was geared towards precision/recall, and in some
-sense is the real task. I'll see if I can find the data. \\
-4)  Combining Evidence in Cognate Identification (2004) \\
-  A very similar paper to (3). Uses ALINE to do phonetic comparisons.
-Doesn't compute proto-projections like we do. Direct comparison of
-words. Performance in the 50-65\% Average Precision range.\\
-6) Semi-Supervised Learning of Partial Cognates using Bilingual Bootstrapping
-  Basically context driven. Different task, but probably worth mentioning.
-\end{comment}
+XXX
 
 \section{Conclusion}
 
-XXX future work: talk about adding in semantics a la \newcite{Kondrak01identifyingcognates}, removing the
-bipartite restriction, and joint reconstruction and reconstitution
-\clearpage
+In this paper, we presented a new generative model of word lists
+that automatically finds cognate groups from scrambled vocabulary
+lists. This model jointly models the origin, propagation, and
+evolution of cognate groups from a common root word. Using the new
+approximation technique we introduced in this paper, our model can
+reduce the error rate by 80\% over a baseline approach inspired by
+previous work. XXX a few more sentences about other results.
+
+Future directions for cognate identification include adding in
+semantic information and improving the reconstruction components
+for joint identification and reconstruction. \newcite{Kondrak03cognatescan}
+showed impressive gains on a bilingual cognate identification task
+using semantic distances based on English glosses in the word lists.
+Improving the reconstruction model could focus on using improved
+edit distance models (e.g. \newcite{bouchard09improved}), or further
+iterating on the approximations introduced in this paper.  Another
+important direction is to extract cognates from raw text, which
+would most likely require easing the bipartite assumption.
+
+XXX (conclude conclusively)
+
 \bibliographystyle{acl}
 \bibliography{refs}
 
