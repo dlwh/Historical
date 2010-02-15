@@ -3,6 +3,7 @@
 \usepackage{times}
 \usepackage{amsfonts}
 \usepackage{amssymb}
+\usepackage[small]{caption}
  \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{multirow}
@@ -103,7 +104,7 @@ automatically compressing our message automata in a way that can
 take into account prior information about the expected outcome of
 inference.
 
-XXX Version 1 (if Romance)
+%XXX Version 1 (if Romance)
 
 In this paper, we focus on a transcribed word list of 583 cognate
 sets from three Romance languages (Portuguese, Italian and Spanish),
@@ -114,6 +115,7 @@ the former, easier, task we achieve accuracies of 90.6\%. On the
 latter task, we achieve accuracies of XXX. Both easily XXX beat
 baseline performance.
 
+\begin{comment}
 XXX Version 2 (if Oceanic too)
 
 We evaluate our model on two datasets: one where all languages
@@ -142,6 +144,7 @@ there may be currently distinct cognate groups that are derived
 from a single ancestral word!
 
 XXX end Versioning.
+\end{comment}
 
 \section{Model}
 
@@ -314,13 +317,13 @@ substitution, insertion, and deletion matrix $\sigma(x,y)$. These edit distances
 define a conditional exponential family distribution when conditioned
 on an ancestral word (or when multiplied by a prior distribution
 over those words). That is, for any fixed $w_a$:
-\begin{equation}
+\begin{equation*}
   \begin{split}
     \sum_{w_d} &p(w_d|w_a,\sigma) = \sum_{w_d} \sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \mathrm{score}(z;\sigma) \\
     &= \sum_{w_d} \sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \exp( \sum_{(x,y)\in z} \sigma(x,y)) \\
      &= 1
    \end{split}
- \end{equation}
+ \end{equation*}
 where $\mathrm{align}(w_a,w_d)$ is the set of possible alignments between words $w_a$ and $w_d$.
 
 To construct the transducers, we first compute the marginal
@@ -328,11 +331,11 @@ distribution over the edges connecting any two languages $a$ and
 $d$. With this distribution, we calculate the expected ``alignment
 unigrams.'' That is, we need to find for each pair of characters
 $x$ and $y$ the quantity:
-\begin{equation}
+\begin{equation*}
   \begin{split}
     E_{p(w_a,w_d)}&[\#(x,y)] \\ = \sum_{w_a,w_d} &\sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \#(x,y) p(z|w_a,w_d)p(w_a,w_d)
    \end{split}
- \end{equation}
+ \end{equation*}
 where we denote $\#(x,y)$ to be the number of times the pair of characters
 appears in the pair of strings. The exact method for computing
 these counts is to use an expectation semiring~\cite{eisner2001expectation}.
@@ -341,13 +344,13 @@ Given the expected counts, we now need to normalize them to ensure
 that the transducer represents a conditional probability distribution.
 Based on the derivation by \newcite{Oncina20061575}, we have that,
 for each character $x$ in the ancestor language:
-\begin{equation}
+\begin{equation*}
   \begin{split}
     \sum_{y \in \Sigma \cup \{\epsilon\}} \sigma(x,y) &= 1 - \sum_{y \in \Sigma} \sigma(\epsilon,y) \\
     \sigma(x,y) &\propto \frac{E[\#(x,y)]}{E[\#(x,\cdot)]} \\
     \sigma(\epsilon,y) &= \frac{E[\#(\epsilon,y)]}{E[\#(\cdot,\cdot)]} \\
    \end{split}
- \end{equation}
+ \end{equation*}
 These equations ensure that the three transition types (substitution/match,
 deletion, and insertion) are normalized for any ancestral character.
 
@@ -391,8 +394,7 @@ function of a distribution over strings. This operation can be
 performed in worst-case cubic time (using a generalization of the
 Floyd-Warshall algorithm).  For acyclic or feed-forward transducers
 this can be improved dramatically by using a generalization of
-Djisktra's algorithm, the Bellman-Ford algorithm or other related
-algorithms~\cite{mohri09weighted}.
+Djisktra's algorithm or other related algorithms~\cite{mohri09weighted}.
 
 The second operation is the composition of two transducers.
 Intuitively, composition creates a new transducer that takes the
@@ -677,7 +679,7 @@ reduces performance to chance.
 
 \subsection{Experiment 2: Incomplete Data}
 
-\subsubsection{Version 1}
+XXX Version 1
 
 As a more realistic example, we consider the case where we do not
 know that all cognate groups have words in all languages. To test
@@ -696,7 +698,7 @@ the best pairwise micro-averaged F1.
 The results are in Table \ref{tbl:partial}. Here again, we see that
 XXX
 
-
+\begin{comment}
 \subsubsection{Version 2}
 
 XXX if Oceanic finishes
@@ -714,6 +716,7 @@ matching process so that if the coefficient fell below some value,
 we started a new group for that word. We experimented on several (XX how many)
 values for the threshold and report on the one that gave the best
 pairwise micro-averaged F1.
+\end{comment}
 
 \subsection{Experiment 3: Reconstructions}
 
