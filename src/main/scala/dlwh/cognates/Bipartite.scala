@@ -180,6 +180,136 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
 }
 
+abstract class BaselineX(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], threshold: Double) {
+  type MFactors <: Factors
+  case class State(groups: Seq[Map[Language,Cognate]],
+                   factors: MFactors,
+                   likelihood:Double = Double.NegativeInfinity,
+                   knownLanguages: Set[Language] = Set.empty);
+
+  def makeIO(s:State, words: Map[Language,Cognate]) = {
+    println("Looking at " + words);
+    val io = new InsideOutside(tree, s.factors, Map.empty ++ words.mapValues(_.word));
+    io;
+  }
+
+  def initialFactors: MFactors
+
+  def initialState(words :Seq[Cognate], factors: MFactors): State = {
+    // the n'th word in each language is assigned to the n'th cognate group
+    val groupMap = words.groupBy(_.language).valuesIterator.flatMap(_.zipWithIndex.iterator).toSeq.groupBy(_._2);
+    val groups = for(group  <- groupMap.valuesIterator) yield {
+      val cogs = for( (cog,i) <- group) yield (cog.language,cog);
+      Map.empty ++ cogs;
+    };
+    State(groups.toSeq, factors,knownLanguages = words.iterator.map(_.language).toSeq.toSet);
+  }
+
+  final def calculateAffinities(s: State, group: Map[Language,Cognate], language: Language, words: Seq[Cognate]) = {
+    val io = makeIO(s,group)
+    val marg = io.marginalFor(language).get;
+    //println(group,marg);
+
+    val aff = new Array[Double](words.length);
+    for ( i <- 0 until words.length ) {
+      aff(i) = (marg(words(i).word));
+      //println(aff(i),words(i),group,prior);
+      assert(!aff(i).isNaN);
+    }
+    aff
+  }
+
+  final def doMatching(affinities: Array[Array[Double]]) = {
+    val bm = new BipartiteMatcher();
+    val size = affinities.size max affinities(0).size;
+    val paddedAffinities = Array.tabulate(size,size) { (x,y) =>
+      if (x < affinities.length && y < affinities(x).length) affinities(x)(y)
+      else 0.0;
+    };
+    val changes = bm.findMaxWeightAssignment(paddedAffinities);
+    changes.take(affinities.length);
+  }
+
+  final def step(s: State, language: Language):State = {
+    val current = cognates.filter(_.language == language);
+    val otherLanguages = s.groups.map(group => group - language).filter(!_.isEmpty);
+
+    val tasks = for ( j <- 0 until otherLanguages.length) yield { () =>
+      val aff = calculateAffinities(s,otherLanguages(j),language,current)
+      (j,aff)
+    }
+
+    val affinities = new Array[Array[Double]](otherLanguages.length);
+    TaskExecutor.doTasks(tasks) foreach { case (j,aff) =>
+      affinities(j) = aff;
+    }
+
+
+    val changes = doMatching(affinities);
+    assert(changes.toSet.size == changes.length);
+
+    // Compute the score, and patch anything that is lower score than just leaving it by itself.
+    var score = 0.0
+    var loners = Set[Cognate]();
+    for( (w,g) <- changes.zipWithIndex if w != -1 && w < current.length) {
+      val affScore = affinities(g)(w);
+      // i.e. if -log prob of recommended attachment is worse than going it alone, just go it alone
+      println(current(w) + " " +  affScore + " " + otherLanguages(g));
+      if(affScore >= threshold) {
+        score += affinities(g)(w);
+      } else {
+        changes(g) = -1;
+        loners += current(w);
+        score += 0.0;
+      }
+    }
+
+    val augmentedGroups = for {
+      (group,g) <- otherLanguages.zipWithIndex;
+      newWordIndex = changes(g)
+    } yield {
+      if(newWordIndex != -1 && newWordIndex < current.length) group + (language -> current(newWordIndex))
+      else group;
+    }
+
+    val newGroups = augmentedGroups ++ loners.map(c => Map.empty + (language -> c));
+
+    val newKnownLanguages = s.knownLanguages + language;
+
+    val newS = s.copy(groups = newGroups,
+                      likelihood = score,
+                      knownLanguages = newKnownLanguages
+                      );
+    nextAction(newS)
+  }
+
+  protected def nextAction(state: State): State = state;
+
+  def iterations = {
+    val state = initialState(cognates.filter(_.language == languages(0)),initialFactors);
+    val lang= Iterator.continually { languages.iterator.drop(1) ++ Iterator.single(languages(0)) } flatten;
+    scanLeft(lang,state)(step(_,_));
+  }
+
+  def scanLeft[A,B](it: Iterator[A], b: B)(f: (B,A)=>B):Iterator[B] = new Iterator[B] {
+    def hasNext = it.hasNext;
+    var c = b;
+    def next = {
+      val a = it.next;
+      c = f(c,a);
+      c;
+    }
+  }
+
+}
+
+class BaselineAdaptive(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], threshold: Double)
+                        extends BaselineX(tree,cognates,languages,threshold) {
+  override type MFactors = BigramFactors;
+  override def initialFactors: MFactors = new BigramFactors;
+}
+
+
 class BaselineBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double, allowSplitting: Boolean)
                         extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb,allowSplitting) {
   override type MFactors = BigramFactors;
@@ -275,6 +405,41 @@ object Accuracy {
   }
 
 
+}
+
+object RunBaselineX {
+  import Accuracy._;
+
+  def main(args: Array[String]) {
+    val languages = args(1).split(",");
+    val dataset = new Dataset(args(0),languages);
+    val threshold = args(2).toDouble;
+    val tree = dataset.tree;
+    val leaves = tree.leaves;
+    val gold = dataset.cognates.map(_.filter(cog => leaves(cog.language)));
+
+    val goldIndices = indexGold(gold);
+    val data = gold.flatten;
+    val randomized = Rand.permutation(data.length).draw().map(data);
+    val expectedNumTrees = data.length.toDouble / languages.size;
+    //val treePenalty = Math.log( (expectedNumTrees -1) / expectedNumTrees)
+    val treePenalty = 1; // Positive actually means a bonus.
+    val iter =  new BaselineAdaptive(tree,randomized, languages,threshold).iterations;
+    val numPositives = numberOfPositives(languages, gold);
+    for( state <- iter.take(1000)) {
+      val numGroups = state.groups.length;
+      for(g <- 0 until numGroups) {
+        val cognates = state.groups(g);
+        val indices = cognates.valuesIterator map goldIndices toSeq;
+        println(cognates.mkString(",") + " " + indices.mkString(","));
+      }
+      println("Conditional Likelihood" + state.likelihood)
+      val groundedGroups = state.groups map { group => group.mapValues(goldIndices).toMap };
+      val (precisions,recalls) = precisionAndRecall(languages,groundedGroups,numPositives);
+      println("Precisions" + precisions);
+      println("Recall" + recalls);
+    }
+  }
 }
 
 
