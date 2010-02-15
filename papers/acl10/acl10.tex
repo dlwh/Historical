@@ -21,17 +21,17 @@
 \maketitle
 \begin{abstract}
   A central problem in historical linguistics is the identification
-  of historically related \emph{cognate} words.  We present a phylogenetic model for
-  automatically inducing cognate group structure from unaligned word lists.
-  Our model uses
-  weighted transducers to represent distributions over unobserved
-  forms as well as the transformations from ancestor word to daughter
-  word. We also present a novel method for simplifying the complex
-  automata created during inference to counteract the otherwise
-  exponential growth of message sizes. We test our model on two
-  datasets where we significantly outperform a baseline approach.
-  Finally, we demonstrate that our automatically induced
-  groups can be used to successfully reconstruct ancestral words.
+  of historically related \emph{cognate} words.  We present a
+  phylogenetic model for automatically inducing cognate group
+  structure from unaligned word lists.  Our model uses weighted
+  transducers to represent distributions over unobserved forms as
+  well as the transformations from ancestor word to daughter word.
+  We also present a novel method for simplifying the complex automata
+  created during inference to counteract the otherwise exponential
+  growth of message sizes. We test our model on two datasets where
+  we significantly outperform a baseline approach.  Finally, we
+  demonstrate that our automatically induced groups can be used to
+  successfully reconstruct ancestral words.
 \end{abstract}
 \section{Introduction}
 
@@ -94,19 +94,38 @@ in the permutation model.
   \label{fig:gmodel}
 \end{figure*}
 
-In the message-passing phase, our model encodes distributions over strings as weighted finite
-state automata~\cite{mohri09weighted}.  Weighted automata have been
-successfully applied to speech processing \cite{Mohri96weightedautomata} and
-more recently to morphology \cite{dreyer2009graphical}.  Here, we present
-a new method for automatically compressing our message automata in a way that can take into account
-prior information about the expected outcome of inference.
+In the message-passing phase, our model encodes distributions over
+strings as weighted finite state automata~\cite{mohri09weighted}.
+Weighted automata have been successfully applied to speech processing
+\cite{Mohri96weightedautomata} and more recently to morphology
+\cite{dreyer2009graphical}.  Here, we present a new method for
+automatically compressing our message automata in a way that can
+take into account prior information about the expected outcome of
+inference.
 
-[XXX There should be a sentence or two about the results. Intro already too long.]
+XXX Version 1 (if Romance)
+
+In this paper, we focus on a transcribed word list of 583 cognate
+sets from three Romance languages (Portuguese, Italian and Spanish),
+as well as their common ancestor Latin~\cite{bouchard07probabilistic}.
+We consider both the case where we know that all cognate groups have a
+surface form in all languages, and where we do not know that.  On
+the former, easier, task we achieve accuracies of 90.6\%. On the
+latter task, we achieve accuracies of XXX. Both easily XXX beat
+baseline performance.
+
+XXX Version 2 (if Oceanic too)
+
+We evaluate our model on two datasets: one where all languages
+have word forms in all cognate groups, and one where they do not.
+On the former, easier, task we achieve accuracies of 90.6\%. On the
+latter task, we achieve accuracies of XXX. Both easily XXX beat
+baseline performance.
 
 \section{Datasets}
 
 In this paper, we focus on two datasets. One is an automatically
-transcribed word list of 584 cognate sets from three Romance languages
+transcribed word list of 583 cognate sets from three Romance languages
 (Portuguese, Italian and Spanish), as well as their common ancestor
 Latin~\cite{bouchard07probabilistic}.  The other is a hand-curated
 list of nearly 60,000 cognates sets from 64 modern Austronesian
@@ -121,6 +140,8 @@ Oceanic dataset only 1.6\% of possible slots are filled. Moreover,
 it is entirely possible that the Oceanic dataset is incomplete:
 there may be currently distinct cognate groups that are derived
 from a single ancestral word!
+
+XXX end Versioning.
 
 \section{Model}
 
@@ -431,7 +452,7 @@ least initially) fairly flat.
 % Put this here to make it come before the section heading Message Topologies
 \begin{figure*}
   \centering
-  \includegraphics[scale=0.4,height=2.1in]{fsa}
+  \includegraphics[scale=0.3]{fsa}
   \caption{Various topologies for approximating topologies: (a) a
   unigram model, (b) a bigram model, (c) the anchored unigram model,
   and (d) the n-best plus backoff model used in
@@ -539,24 +560,20 @@ The second topology we consider is the bigram topology, which is
 similar to the unigram topology except that, instead of a single
 state, we have a state for each character in $\Sigma$, along with
 a special start state. Each state $a$ has transitions with weights
-$\sigma_{b|a}= p(b|a)$. Normalization is straightforward:
-\begin{equation*}
-  \begin{split}
-    \sum_{b\in\Sigma} \sigma_{b|a}&= 1-\sigma_{\mathrm{stop}|a} \\
-    \sigma_{b|a} &\propto E[\#(b|a)]
-   \end{split}
- \end{equation*}
+$\sigma_{b|a}= p(b|a) \propto E[\#(b|a)]$. Normalization is similar
+to the unigram case, except that we normalize the transitions from
+each state.
 
 The final topology we consider takes positional information into
 account. Namely, for each position (up to some maximum position),
 we have a unigram model over characters emitted at that position,
-along with the probability of stopping at that position (i.e. a ``sausage lattice''). Estimating
-the parameters of this model is similar, except that the expected
-counts for the characters in the alphabet are conditioned on their
-position in the string. With the expected counts for each position,
-we normalize each state's final and outgoing weights. In our
-experiments, we set the maximum length to 7 + the
-longest observed string.
+along with the probability of stopping at that position (i.e. a
+``sausage lattice''). Estimating the parameters of this model is
+similar, except that the expected counts for the characters in the
+alphabet are conditioned on their position in the string. With the
+expected counts for each position, we normalize each state's final
+and outgoing weights. In our experiments, we set the maximum length
+to 7 + the length of the longest observed string.
 
 \section{Experiments}
 
@@ -577,6 +594,7 @@ from gold cognate groups.
 
 \begin{table*}
   \centering
+  \small
   \begin{tabular}{|c|c|c|c||c|c|c|c||}
     \hline
     \multicolumn{2}{|c|}{\phantom{aa}} &\multicolumn{2}{|c||}{Romance} & \multicolumn{4}{|c||}{Austronesian}\\
@@ -596,7 +614,7 @@ from gold cognate groups.
   \end{tabular}
   \caption{Accuracies for reconstructing cognate groups. Levenshtein
   refers to fixed parameter edit distance transducer. Learned refers
-  to automatically learned edit distances. ``P.'' means macro-averaged
+  to automatically learned edit distances. ``P.'' means micro-averaged
   pairwise, ``Rec.'' refers to percentage of completely and accurately
   reconstructed groups.}
   \label{tbl:exp1}
@@ -629,7 +647,7 @@ is, of course, an unrealistic scenario, but it represents a good
 test case of how well these models can perform without the
 non-parametric task of decided how many clusters to use.
 
-We scrambled the 584 cognate groups in the Romance dataset and ran
+We scrambled the 583 cognate groups in the Romance dataset and ran
 the algorithm to convergence. Besides the baseline, we tried using
 Unigrams, Bigrams and Anchored Unigrams, with and without learning
 the parametric edit distances. When we did not use learning, we set
@@ -642,8 +660,8 @@ for each pair of languages averaged across pairs. The other is
 accuracy measured in terms of the number of correctly and completely
 reconstructed cognate groups.
 
-The left half of Table \ref{tbl:exp1} shows the results under various
-configurations. As can easily be seen, the kind of approximation
+The XXX left half of Table \ref{tbl:exp1} shows the results under
+various configurations. As can easily be seen, the kind of approximation
 used matters quite a lot. In this application, positional information
 is extraordinarily important, more so than the context of the
 previous character. Both Unigrams and Bigrams significantly
@@ -657,13 +675,60 @@ that the learning procedure ends up flattening the distributions.
 In the case of unigrams--which has the least context--learning
 reduces performance to chance.
 
-\subsection{Experiment 2: Austronesian}
+\subsection{Experiment 2: Incomplete Data}
 
+\subsubsection{Version 1}
+
+As a more realistic example, we consider the case where we do not
+know that all cognate groups have words in all languages. To test
+our model, we randomly pruned 40\% of the words from the Romance
+dataset, leaving XXX words and XXX cognate groups.
+
+Because only Anchored Unigrams performed well in Experiment 1, we
+consider only it and the Dice's coefficient baseline. The baseline
+needs to be augmented to support the fact that some words may not
+appear in all cognate groups. To do this, we thresholded the bipartite
+matching process so that if the coefficient fell below some value,
+we started a new group for that word. We experimented on several (XXX how many)
+values for the baseline's threshold and report on the one that gave
+the best pairwise micro-averaged F1.
+
+The results are in Table \ref{tbl:partial}. Here again, we see that
 XXX
+
+
+\subsubsection{Version 2}
+
+XXX if Oceanic finishes
+
+As a more realistic example, we consider the case where we do not
+know that all cognate groups have words in all languages. We consider
+a subset of 10 Oceanic languages selected by relatedness and number
+of attested words, leaving XXX groups and XXX words.
+
+Because only positional unigrams performed well in Experiment 1,
+we consider only it and the Dice's coefficient baseline. The baseline
+needs to be augmented to support the fact that some words may not
+appear in all cognate groups. To do this, we thresholded the bipartite
+matching process so that if the coefficient fell below some value,
+we started a new group for that word. We experimented on several (XX how many)
+values for the threshold and report on the one that gave the best
+pairwise micro-averaged F1.
 
 \subsection{Experiment 3: Reconstructions}
 
-XXX
+As a final trial, we wanted to see how each automatically found
+cognate group faired as compared to the ``true groups'' for actual
+reconstruction of proto-words. Our model is not optimized for
+faithful reconstruction, and so we used the Ancestry Resampling
+system of \newcite{bouchard09improved}. We matched each Latin word
+with the best possible cognate group for that word. The process for
+the matching was as follows.
+
+For evaluation, we examined the edit distance between the reconstructed
+word and the chosen Latin word. As a skyline, we compare to the
+accuracy reported in \newcite{bouchard09improved}, which was based
+on complete knowledge of the cognate groups. As you can see XXX
 
 \section{Conclusion}
 
