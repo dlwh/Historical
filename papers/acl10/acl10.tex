@@ -203,10 +203,10 @@ $\pi_\ell$. All other hidden variables are auxiliary and are to be marginalized 
 In this section, we discuss the inference method for determining
 cognate assignments under fixed parameters $\phi$.  We are given a
 set of languages and a list of words in each language, and our
-objective is to determine which words are cognate with each other
-words. In the Romance dataset, we have the additional constraint
-that each cognate group supports exactly one word from each language
-(full cognate groups), while in the Austronesian dataset we have
+objective is to determine which words are cognate with each other.
+In the Romance dataset, we have the additional constraint that each
+cognate group supports exactly one word from each language (full
+cognate groups), while in the Austronesian dataset we have
 at most one word from each language (partial groups). In effect,
 the inference task is reduced to finding a permutation $\pi$ of the
 respective word lists to maximize the log probability of the observed
@@ -253,7 +253,7 @@ and for interior nodes $W_i$:
     \mu_{i\to a}(w_a) = \sum_{w_i} p(w_i|w_a) \prod_{d \in \mathrm{child}(w_i)} \mu_{d \to i}(w_i) 
   \end{split}
 \end{equation}
-In the downward pass (toward the held-out language), we sum over ancestors word $W_a$:
+In the downward pass (toward the held-out language), we sum over ancestral words $W_a$:
 \begin{equation}
   \begin{split}
     \mu_{a\to d}(w_d) = \sum_{w_a} p(w_d|w_a) \prod_{\stackrel{d' \in \mathrm{child}(w_a)}{d' \neq d}} \mu_{d' \to a}(w_a) 
@@ -314,7 +314,7 @@ $x$ and $y$ the quantity:
  \end{equation}
 where we denote $\#(x,y)$ to be the number of times the pair of characters
 appears in the pair of strings. The exact method for computing
-these counts is to use an expectation semiring described in \newcite{eisner2001expectation}.
+these counts is to use an expectation semiring~\cite{eisner2001expectation}.
 
 Given the expected counts, we now need to normalize them to ensure
 that the transducer represents a conditional probability distribution.
@@ -356,8 +356,8 @@ of all paths through the graph that accept a string.
 
 More specifically, a weighted transducer assigns real-valued
 weights\footnote{Strictly, the weights can be anything that form a
-semiring, but we for the sake of exposition we leave we specialize
-to reals.} to pairs of strings with characters in alphabets $\Sigma$
+semiring, but for the sake of exposition we leave we specialize
+to real numbers.} to pairs of strings with characters in alphabets $\Sigma$
 and $\Delta$. Each path through the transducer corresponds to an
 alignment between two strings, with an associated score for that
 alignment. (Weighted automata can be thought of as transducers which
@@ -383,7 +383,7 @@ input alphabet $\Delta$ and output alphabet $\Omega$. The composition
 $T_1 \circ T_2$ returns a new transducer over $\Sigma$ and $\Omega$
 such that $(T_1 \circ T_2)(x,y) = \sum_{u} T_1(x,u)\cdot T_2(u,y)$.
 In this paper, we use composition for marginalization and factor
-product. Given a factor $f_1(x,u;T_1)$ and another factor $f_2(u,y;T_2)$,
+products. Given a factor $f_1(x,u;T_1)$ and another factor $f_2(u,y;T_2)$,
 composition corresponds to the operation $\psi(x,y) = \sum_u f_1(x,u)
 f_2(u,y)$. For two messages $\mu_1(w)$ and $\mu_2(w)$, the same
 algorithm can be used to find the product $\mu(w) = \mu_1(w)\mu_2(w)$.
@@ -566,12 +566,12 @@ Romance data set, where all cognate groups have words in all three
 languages.  This task highlights the evolution and permutation
 models.  The second is a much harder ``partial data'' experiment,
 in which we examine a subset of 10 languages in the Oceanic dataset.
-Here, only a fraction of words appear in any cognate group, so this
-task crucially involves the survival model.  The ultimate purpose
-of the induced cognate groups is to feed richer evolutionary models,
-such as full reconstruction models.  Therefore, we also consider a
-proto-word reconstruction experiment.  For this experiment, using
-the system of \newcite{bouchard09improved}, we compare the
+Here, only a small fraction of words appear in any cognate group,
+so this task crucially involves the survival model.  The ultimate
+purpose of the induced cognate groups is to feed richer evolutionary
+models, such as full reconstruction models.  Therefore, we also
+consider a proto-word reconstruction experiment.  For this experiment,
+using the system of \newcite{bouchard09improved}, we compare the
 reconstructions produced from our automatic groups to those produced
 from gold cognate groups.
 
@@ -606,8 +606,8 @@ from gold cognate groups.
 
 As a baseline for cognate group detection, we use an iterative
 bipartite matching algorithm where instead of conditional likelihoods
-for affinities we use Dice's coefficient, defined, for sets X and
-Y, as:
+for affinities we use Dice's coefficient, defined for sets X and
+Y as:
 \begin{equation}
   \begin{split}
     \mathrm{Dice}(X,Y) &= \frac{2 |X\cap Y|}{|X| + |Y|}
@@ -631,7 +631,7 @@ non-parametric task of decided how many clusters to use.
 
 We scrambled the 584 cognate groups in the Romance dataset and ran
 the algorithm to convergence. Besides the baseline, we tried using
-Unigrams, Anchored Unigrams, and Bigrams with and without learning
+Unigrams, Bigrams and Anchored Unigrams, with and without learning
 the parametric edit distances. When we did not use learning, we set
 the parameters of the edit distance to (0, -3, -4) for matches,
 substitutions, and deletions/insertions, respectively. With learning
@@ -647,12 +647,12 @@ configurations. As can easily be seen, the kind of approximation
 used matters quite a lot. In this application, positional information
 is extraordinarily important, more so than the context of the
 previous character. Both Unigrams and Bigrams significantly
-under-perform the baseline, while Anchored Bigrams easily outperforms
+under-perform the baseline, while Anchored Unigrams easily outperforms
 it both with and without learning.
 
 An initially surprising result is that learning actually harms
 performance under the unanchored approximations. The explanation
-is that the topologies are not sensitive enough to context, and
+is that these topologies are not sensitive enough to context, and
 that the learning procedure ends up flattening the distributions.
 In the case of unigrams--which has the least context--learning
 reduces performance to chance.
@@ -679,12 +679,12 @@ Future directions for cognate identification include adding in
 semantic information and improving the reconstruction components
 for joint identification and reconstruction. \newcite{Kondrak03cognatescan}
 showed impressive gains on a bilingual cognate identification task
-using semantic distances based on English glosses in the word lists.
-Improving the reconstruction model could focus on using improved
-edit distance models (e.g. \newcite{bouchard09improved}), or further
-iterating on the approximations introduced in this paper.  Another
-important direction is to extract cognates from raw text, which
-would most likely require easing the bipartite assumption.
+using semantic distances based on English glosses.  Improving the
+reconstruction model could focus on using improved edit distance
+models (e.g. \newcite{bouchard09improved}), or further iterating
+on the approximations introduced in this paper.  Another important
+direction is to extract cognates from raw text, which would most
+likely require easing the bipartite assumption.
 
 XXX (conclude conclusively)
 
