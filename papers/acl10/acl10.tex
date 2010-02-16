@@ -24,17 +24,18 @@
 \begin{abstract}
   A central problem in historical linguistics is the identification
   of historically related \emph{cognate} words.  We present a
-  phylogenetic model for automatically inducing cognate group
-  structure from unaligned word lists.  Our model uses weighted
-  transducers to represent distributions over unobserved forms as
-  well as the transformations from ancestor word to daughter word.
-  We also present a novel method for simplifying the complex automata
-  created during inference to counteract the otherwise exponential
-  growth of message sizes. On the task of identifying cognates
-  in a dataset of Romance words, our model significantly outperform
-  a baseline approach, reducing error by as much as 80\%.  Finally,
-  we demonstrate that our automatically induced groups can be used
-  to successfully reconstruct ancestral words.
+  generative phylogenetic model for automatically inducing cognate
+  group structure from unaligned word lists. Our model represents
+  the process of transformation and transmission from ancestor word
+  to daughter word, as well as the permutation of those words into
+  the word lists of the observed languages. We also present a novel
+  method for simplifying complex weighted automata created during
+  inference to counteract the otherwise exponential growth of message
+  sizes. On the task of identifying cognates in a dataset of Romance
+  words, our model significantly outperforms a baseline approach,
+  increasing accuracy by as much as 80\%. Finally, we demonstrate
+  that our automatically induced groups can be used to successfully
+  reconstruct ancestral words.
 \end{abstract}
 \section{Introduction}
 
@@ -68,7 +69,7 @@ overlap is an inadequate measure of similarity.  Some authors have
 attempted to automatically detect cognate
 words~\cite{lowe94reconstruction,oakes00computer,Kondrak01identifyingcognates,mulloni07automatic},
 but these methods typically work on language pairs rather than on
-language families.  [more?]  To handle realistic scenarios, it is
+language families.  To handle realistic scenarios, it is
 necessary to consider multiple languages, and to do so in a model
 which couples cognate detection with similarity learning.
 
@@ -98,8 +99,8 @@ in the permutation model.
   each phoneme has weights $\eta$ and $\delta$ for insertion and
   deletion respectively.
   (c) A possible alignment produced by an edit distance between the
-  Latin word \textit{canere} and the Vulgar Latin word \textit{cantare},
-  both meaning ``to sing.''} \label{fig:gmodel}
+  Latin word \textit{focus} (``hearth'') and the Italian word \textit{fuoco} (``fire'').
+  } \label{fig:gmodel}
 \end{figure*}
 
 In the message-passing phase, our model encodes distributions over
@@ -110,8 +111,6 @@ Weighted automata have been successfully applied to speech processing
 automatically compressing our message automata in a way that can
 take into account prior information about the expected outcome of
 inference.
-
-%XXX Version 1 (if Romance)
 
 In this paper, we focus on a transcribed word list of 583 cognate
 sets from three Romance languages (Portuguese, Italian and Spanish),
@@ -124,30 +123,31 @@ performance.
 
 \section{Model}
 
-In this section we describe a new generative model for vocabulary lists
-in multiple related languages given the phylogenetic relationship
-between the languages (their family tree). The generative
-process factors into three subprocesses: survival, evolution, and
-permutation. Survival dictates, for each cognate group, which
-languages have words in that group. Evolution describes the process
-by which words are transformed from their parent word. Finally,
-permutation describes the ``scrambling'' of the word lists into a flat
-order that hides their lineage. Each process is described graphically
-in Figure (\ref{fig:gmodel}a) for the Romance languages, and we
-present each in detail in the following subsections.
+In this section we describe a new generative model for vocabulary
+lists in multiple related languages given the phylogenetic relationship
+between the languages (their family tree). The generative process
+factors into three subprocesses: survival, evolution, and permutation.
+Survival dictates, for each cognate group, which languages have
+words in that group. Evolution describes the process by which
+daughter words are transformed from their parent word. Finally,
+permutation describes the ``scrambling'' of the word lists into a
+flat order that hides their lineage. Each process is described
+graphically in Figure (\ref{fig:gmodel}a) and we present each
+subprocess in detail in the following subsections.
 
 \subsection{Survival}
 
 First, we choose a number of ancestral cognate groups from an
-exponential distribution.  For each cognate group, our generative
+geometric distribution.  For each cognate group, our generative
 process walks down the tree.  At each branch, the word may either
 survive or die.  This process is modeled in a ``death tree'' with
 variables $S_\ell$ specifying whether or not the word died before
 reaching that language. Death at any node in the tree causes all
 of that node's descendants to also be dead.  This process captures
 that a word is more likely to be found in two sibling languages
-(e.g. Spanish and Portuguese) than in two cousin languages
-(Portuguese and Italian); more independent death events occur in the latter case. 
+(e.g. Spanish and Portuguese) than in two cousin languages (Portuguese
+and Italian); more independent death events occur in the latter
+case.
 
 \subsection{Evolution}
 
@@ -166,19 +166,19 @@ edit distance similar to the standard Levenshtein distance.  Arbitrary
 models--such as the richer ones in \newcite{bouchard07probabilistic}--could
 instead be used, if at increased inferential cost.   The edit
 transducers are represented schematically in Figure (\ref{fig:gmodel}b).
-phonemes $x$ and $y$ are arbitrary phonemes, and $\sigma(x,y)$
+Characters $x$ and $y$ are arbitrary phonemes, and $\sigma(x,y)$
 represents the cost of substituting $x$ with $y$.  $\epsilon$
 represents the empty phoneme and is used as short hand for insertion
 and deletion, which have parameters $\eta$ and $\delta$, respectively.
 
 As an example, see the illustration in Figure (\ref{fig:gmodel}c).
-Here, the Vulgar Latin word \textit{cantare} is generated from its
-parent form \textit{canere} by a series of edits: 4 matches, 1
-substitution (from `e' to `a') and 1 insertion (`t').
-The probability of each individual edit is determined by $\phi$.
-Note that the marginal probability of a specific Vulgar Latin word
-conditioned on its Latin parent is the sum over all possible
-derivations that generate it.
+Here, the Italian word \textit{/fwoko/} (``fire'') is generated from
+its parent form \textit{/fokus/} (``hearth'') by a series of edits:
+three matches, one substitution (from `u' to `o'), one insertion (`w') and
+one deletion (`s').  The probability of each individual edit is
+determined by $\phi$.  Note that the marginal probability of a
+specific Italian word conditioned on its Vulgar Latin parent is the
+sum over all possible derivations that generate it.
 
 \subsection{Permutation}
 
@@ -204,49 +204,47 @@ In this section, we discuss the inference method for determining
 cognate assignments under fixed parameters $\phi$.  We are given a
 set of languages and a list of words in each language, and our
 objective is to determine which words are cognate with each other.
-In the Romance dataset, we have the additional constraint that each
-cognate group supports exactly one word from each language (full
-cognate groups), while in the Austronesian dataset we have
-at most one word from each language (partial groups). In effect,
+Because the parameters $\pi_\ell$ are either permutations or injections,
 the inference task is reduced to finding a permutation $\pi$ of the
 respective word lists to maximize the log probability of the observed
-words:
-\begin{equation}
+words.
+\begin{equation*}
   \begin{split}
-    \vec{\pi} = \arg\!\max_{\vec \pi} \sum_{g} \log p(\vec w_{(\ell,\pi_\ell(g))}|\vec \phi,\vec \pi)
+    \mathbf{\pi} = \arg\!\max_{\mathbf \pi} \sum_{g} \log p(w_{(\ell,\pi_\ell(g))}|\mathbf \phi,\mathbf \pi, \mathbf{w}_{-\ell})
    \end{split}
- \end{equation}
-Maximizing this equation directly is intractable, and so instead
-we use a coordinate ascent algorithm to iteratively maximize the
-permutation corresponding to a single language $\ell$ while holding
-the others fixed:
-\begin{equation}
+ \end{equation*}
+$w_{(\ell,\pi_\ell(g))}$ is the word in language $\ell$ that
+$\pi_\ell$ has assigned to group g. Maximizing this equation
+directly is intractable, and so instead we use a coordinate ascent
+algorithm to iteratively maximize the permutation corresponding to
+a single language $\ell$ while holding the others fixed:
+\begin{equation*}
   \begin{split}
-    \pi_\ell = \arg\!\max_{\pi_\ell} \sum_{g} \log p(\vec w_{(\ell,\pi_\ell(g))}|\vec \phi,\vec \pi_{-\ell},\pi_\ell)
+    \pi_\ell = \arg\!\max_{\pi_\ell} \sum_{g} \log p(w_{(\ell,\pi_\ell(g))}|\mathbf \phi,\mathbf \pi_{-\ell},\pi_\ell, \mathbf{w}_{-\ell})
   \end{split}
-\end{equation}
+\end{equation*}
 Each iteration is then actually an instance of bipartite graph
 matching, with the words in one language one set of nodes, and the
 current cognate groups in the other languages the other set of
-nodes, and the edge affinities $\mathrm{aff}$ between these nodes are the conditional
-probability of each word $w_\ell$ belonging to each cognate group $g$:
-\begin{equation}
+nodes. The edge affinities $\mathbf{aff}$ between these nodes are the conditional
+probabilities of each word $w_\ell$ belonging to each cognate group $g$:
+\begin{equation*}
   \begin{split}
-    \mathrm{aff}(w_\ell,g) = p(w_\ell|\vec w_{-\ell,\pi_{-\ell}(g)},\vec \phi,\vec\pi_{-\ell})
+    \mathbf{aff}(w_\ell,g) = p(w_\ell|\mathbf w_{-\ell,\pi_{-\ell}(g)},\mathbf \phi,\mathbf\pi_{-\ell})
    \end{split}
- \end{equation}
+ \end{equation*}
 
-To compute these affinities for each cognate group, inference in each
-tree computes the marginal distribution of the words from the ``held
-out'' language. For the marginals, we use an analog of the
-forward/backward algorithm. In the upward pass, we send messages
-from the leaves of the tree toward the root. For observed leaf nodes
-$W_d$, we have:
-\begin{equation}
+To compute these affinities, we perform
+inference in each tree to calculate the marginal distribution of
+the words from the language $\ell$. For the marginals, we use an
+analog of the forward/backward algorithm. In the upward pass, we
+send messages from the leaves of the tree toward the root. For
+observed leaf nodes $W_d$, we have:
+\begin{equation*}
   \begin{split}
-    \mu_{d\to a}(w_a) = \sum_{w_d} p(w_d|w_a,\phi)
+    \mu_{d\to a}(w_a) = p(W_d = w_d|w_a,\phi)
    \end{split}
- \end{equation}
+ \end{equation*}
 and for interior nodes $W_i$:
 \begin{equation}
   \label{eqn:summing}
@@ -254,15 +252,15 @@ and for interior nodes $W_i$:
     \mu_{i\to a}(w_a) = \sum_{w_i} p(w_i|w_a) \prod_{d \in \mathrm{child}(w_i)} \mu_{d \to i}(w_i) 
   \end{split}
 \end{equation}
-In the downward pass (toward the language $ll$), we sum over ancestral words $W_a$:
-\begin{equation}
+In the downward pass (toward the language $\ell$), we sum over ancestral words $W_a$:
+\begin{equation*}
   \begin{split}
     \mu_{a\to d}(w_d) = \sum_{w_a} p(w_d|w_a) \prod_{\stackrel{d' \in \mathrm{child}(w_a)}{d' \neq d}} \mu_{d' \to a}(w_a) 
   \end{split}
-\end{equation}
+\end{equation*}
 Computing these messages gives a posterior marginal distribution
-$p(w_\ell|\vec w_{-\ell,\pi_{-\ell}(g)},\vec \phi,\vec\pi_{-\ell})$
-over the language $ll$, which is precisely the affinity score
+$\mu_\ell(w_\ell) = p(w_\ell|\mathbf w_{-\ell,\pi_{-\ell}(g)},\mathbf \phi,\mathbf\pi_{-\ell})$,
+which is precisely the affinity score
 we need for the bipartite matching. We then use the Kuhn-Munkres
 algorithm \cite{Kuhn1955} to find the optimal assignment for the
 bipartite matching problem.
@@ -277,20 +275,21 @@ added, and then continued iterations on the full tree.
 
 So far we have only addressed searching for Viterbi permutations
 $\pi$ under fixed parameters. However, we also have two other sets
-of parameters: the transducers $\phi$, and the conditional probabilities
+of parameters: the transducers $\phi_\ell$, and the conditional probabilities
 over the survival variables $S_\ell$. The parameters can be learned
 through standard maximum likelihood estimation, which we detail in
 this section.
 
 Because we enforce that a word must be dead if its parent word is
-dead, we just need to learn the conditional probabilities $p(S_\ell|\neg
-S_{\mathrm{parent}(\ell)})$ Given fixed assignments $\pi$, we simply
-count the number of ``deaths'' that occurred under a live parent,
-apply smoothing--we found adding 0.5 to be reasonable--and divide
-by the total number of live parents.
+dead, we just need to learn the conditional probabilities
+$p(S_\ell=\mathrm{dead}| S_{\mathrm{parent}(\ell)}=\mathrm{alive})$.
+Given fixed assignments $\pi$, the maximum likelihood estimate can
+be found by counting the number of ``deaths'' that occurred under
+a live parent, applying smoothing--we found adding 0.5 to be
+reasonable--and dividing by the total number of live parents.
 
-For the edit transducers $\phi$, we learn parameterized edit
-distances.  For each $\phi_\ell$ we fit a non-uniform substitution,
+For the transducers $\phi$, we learn parameterized edit
+distances. For each $\phi_\ell$ we fit a non-uniform substitution,
 insertion, and deletion matrix $\sigma(x,y)$. These edit distances
 define a conditional exponential family distribution when conditioned
 on an ancestral word (or when multiplied by a prior distribution
@@ -298,46 +297,53 @@ over those words). That is, for any fixed $w_a$:
 \begin{equation*}
   \begin{split}
     \sum_{w_d} &p(w_d|w_a,\sigma) = \sum_{w_d} \sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \mathrm{score}(z;\sigma) \\
-    &= \sum_{w_d} \sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \exp( \sum_{(x,y)\in z} \sigma(x,y)) = 1
+    &= \sum_{w_d} \sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \prod_{(x,y)\in z} \sigma(x,y) = 1
    \end{split}
  \end{equation*}
 where $\mathrm{align}(w_a,w_d)$ is the set of possible alignments between words $w_a$ and $w_d$.
 
-To construct the transducers, we first compute the marginal
+We are seeking the maximum likelihood estimate of each $\phi$, given
+fixed permutations $\pi$:
+\begin{equation*}
+  \begin{split}
+    \hat\phi_{\ell} &= \arg\!\max_{\phi_{\ell}} p(\mathbf w|\mathbf \phi,\mathbf\pi)
+   \end{split}
+ \end{equation*}
+To find this maximizer for any given $\pi_\ell$, we need to find a marginal
 distribution over the edges connecting any two languages $a$ and
 $d$. With this distribution, we calculate the expected ``alignment
 unigrams.'' That is,  for each pair of phonemes $x$ and $y$ (or
 empty phoneme $\epsilon$), we need to find the quantity:
 \begin{equation*}
   \begin{split}
-    E_{p(w_a,w_d)}&[\#(x,y)] \\ = \sum_{w_a,w_d} &\sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \#(x,y;z) p(z|w_a,w_d)p(w_a,w_d)
+    E_{p(w_a,w_d)}&[\#(x,y;z)] \\ = \sum_{w_a,w_d} &\sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \#(x,y;z) p(z|w_a,w_d)p(w_a,w_d)
    \end{split}
  \end{equation*}
 where we denote $\#(x,y;z)$ to be the number of times the pair of
-phonemes $(x,y)$ are aligned in alignment $z$, and $\#(x,y)$ is the
-number of times those phonemes are aligned across all alignments.
-The exact method for computing these counts is to use an expectation
+phonemes $(x,y)$ are aligned in alignment $z$.  The exact method
+for computing these counts is to use an expectation
 semiring~\cite{eisner2001expectation}.
 
 Given the expected counts, we now need to normalize them to ensure
 that the transducer represents a conditional probability distribution.
-Based on the derivation by \newcite{Oncina20061575}, we have that,
-for each phoneme $x$ in the ancestor language:
+We have that, for each phoneme $x$ in the ancestor language:
 \begin{equation*}
   \begin{split}
-    \sum_{y \in \Sigma \cup \{\epsilon\}} \sigma(x,y) &= 1 - \sum_{y \in \Sigma} \sigma(\epsilon,y) \\
-    \sigma(x,y) &\propto \frac{E[\#(x,y)]}{E[\#(x,\cdot)]} \\
-    \sigma(\epsilon,y) &= \frac{E[\#(\epsilon,y)]}{E[\#(\cdot,\cdot)]} \\
+    \sigma(x,y) &\propto \frac{E[\#(x,y;z)]}{E[\#(x,\cdot;z)]} \\
+    \sigma(\epsilon,y) &= \frac{E[\#(\epsilon,y;z)]}{E[\#(\cdot,\cdot;z)]} \\
    \end{split}
  \end{equation*}
-Here, $\#(\cdot,\cdot) = \sum_{x,y} \#(x,y)$ and $\#(x,\cdot)=\sum_y
-\#(x,y)$. Also, $\sigma(\epsilon,y) = \eta_y$, the insertion
+Here, $\#(\cdot,\cdot;z) = \sum_{x,y} \#(x,y;z)$ and $\#(x,\cdot;z)=\sum_y
+\#(x,y;z)$. Also, $\sigma(\epsilon,y) = \eta_y$, the insertion
 parameter, and $\sigma(x,\epsilon) = \delta_x$, the deletion
-parameter.  These equations ensure that the three transition types
-(substitution/match, deletion, and insertion) are normalized for
-any ancestral phoneme.
+parameter. The normalizer should be computed such that, for any
+phoneme $x$, $\sum_y \sigma(\epsilon,y) + \sum_y \sigma(x,y) +
+\sigma(x,\epsilon) = 1$.  These equations ensure that the three
+transition types (insertion, substitution/match, deletion) are
+normalized for each ancestral phoneme. Details can be found in
+\newcite{Oncina20061575}.
 
-\section{Transducers and Approximations}
+\section{Transducers and Automata}
 
 In our model, it is not just the edit distances that are finite
 state machines. Indeed, the words themselves are string-valued
@@ -346,25 +352,21 @@ represent distributions and messages over these variables, we chose
 weighted finite state automata, which can compactly represent
 functions over strings. Unfortunately, while initially compact,
 these automata become unwieldy in inference, and so approximations
-must be used~\cite{dreyer2009graphical}.
-
-In this section, we summarize the algorithms and representations
-used for weighted finite state transducers.\footnote{For more
-detailed treatment of the general transducer operations, we direct
-readers to \newcite{mohri09weighted}.} We also describe a new
-procedure for approximating automata in a message-passing environment.
-
-\subsection{Weighted Automata}
+must be used~\cite{dreyer2009graphical}.  In this section, we
+summarize the standard algorithms and representations used for
+weighted finite state transducers. For more detailed treatment of
+the general transducer operations, we direct readers to
+\newcite{mohri09weighted}.
 
 A weighted automaton (resp. transducer) encodes a function over
 strings (resp. pairs of strings) as weighted paths through a directed
 graph. Each edge in the graph has a real-valued weight\footnote{The
 weights can be anything that form a semiring, but for the sake of
-exposition we specialize to real-valued weights} and a label, which
-a single phoneme in some alphabet $\Sigma$ or the empty phoneme
+exposition we specialize to real-valued weights.} and a label, which
+is a single phoneme in some alphabet $\Sigma$ or the empty phoneme
 $\epsilon$ (resp. pair of labels in some alphabet $\Sigma \times
-\Delta$). The weight of a string is then the sum of all paths
-through the graph that accept a string.
+\Delta$). The weight of a string is then the sum of all paths through
+the graph that accept that string.
 
 For our purposes, we are concerned with three fundamental operations
 on weighted transducers. The first is computing the sum of all paths
@@ -400,7 +402,7 @@ always collapse enough states. In the next section we discuss approaches
 to ``lossy'' minimization that produce automata that are not exactly
 the same but are much smaller.
 
-\subsection{Message Approximation}
+\section{Message Approximation}
 \label{sec:approx}
 
 Recall that in inference, when summing out interior nodes $w_i$ we
@@ -410,41 +412,41 @@ using transducer composition. Unfortunately, the maximal number of
 states in a message is exponential in the number of words in the
 cognate group. Minimization can only help so much: in order for two
 states to be collapsed, the distribution over transitions from those
-states must be indistinguishable, or indistinguishable to within
-some tolerance. In practice, for the automata generated in our
-model, minimization removes at most half the states, which is not
-sufficient to counteract the exponential growth. Thus, we need to
-find a way to approximate a message $\mu(w)$ using a simpler automata
-$\tilde\mu(w;\theta)$ taken from a restricted class parameterized
-by $\theta$.
+states must be indistinguishable. In practice, for the automata
+generated in our model, minimization removes at most half the states,
+which is not sufficient to counteract the exponential growth. Thus,
+we need to find a way to approximate a message $\mu(w)$ using a
+simpler automata $\tilde\mu(w;\theta)$ taken from a restricted class
+parameterized by $\theta$.
 
 In the context of transducers, previous authors have focused on a
 combination of n-best lists and unigram back-off
-models~\cite{dreyer2009graphical}.  For their problem, n-best lists
-are sensible: their nodes' local potentials already focus messages
-on a small number of hypotheses.  In our setting, however, n-best
-lists are problematic; early experiments showed that a 10,000-best
-list for a typical message only accounts for 50\% of message log
-perplexity. That is, the posterior marginals in our model are (at
-least initially) fairly flat.
+models~\cite{dreyer2009graphical}, a schematic diagram of which is
+in Figure (\ref{fig:fsa}d). For their problem, n-best lists are
+sensible: their nodes' local potentials already focus messages on
+a small number of hypotheses.  In our setting, however, n-best lists
+are problematic; early experiments showed that a 10,000-best list
+for a typical message only accounts for 50\% of message log perplexity.
+That is, the posterior marginals in our model are (at least initially)
+fairly flat.
 
 % Put this here to make it come before the section heading Message Topologies
-\begin{figure*}
+\begin{figure}
   \centering
-  \includegraphics[scale=0.3]{fsa}
+  \includegraphics[scale=0.35]{fsa}
   \caption{Various topologies for approximating topologies: (a) a
   unigram model, (b) a bigram model, (c) the anchored unigram model,
   and (d) the n-best plus backoff model used in
   \newcite{dreyer2009graphical}. In (c) and (d), the relative height
   of arcs is meant to convey approximate probabilities.}
   \label{fig:fsa}
-\end{figure*}
+\end{figure}
 
 An alternative approach might be to simply treat messages as
 unnormalized probability distributions, and to minimize the KL
 divergence between some approximating message $\tilde\mu(w)$ and
 the true message $\mu(w)$.  However, messages are not always
-probability distributions and--because the number of potential
+probability distributions and--because the number of possible
 strings is in principle infinite--they need not sum to a finite
 number.\footnote{In an extreme case, suppose we have observed that
 $W_d=w_d$ and that $p(W_d=w_d|w_a)=1$ for all ancestral words $w_a$.
@@ -463,7 +465,9 @@ between the ``expected'' marginal distribution and the approximated
 where $\tau$ is a prior distribution acting as a surrogate for the
 posterior distribution over $w$ without the information from $\mu$.
 That is, we seek to approximate $\mu$ not on its own, but as it
-functions in an environment representing its final context.
+functions in an environment representing its final context. For
+example, if $\mu(x)$ is a forward message, $\tau$ could be a stand-in
+for a backward probability.
 
 In this paper, $\mu(w)$ is a complex automaton with potentially
 many states, $\tilde\mu(w)$ is a simple parametric automaton with
@@ -474,7 +478,7 @@ deterministic automaton topology $\tilde\mu^*$, we created the
 composed unweighted automaton $\tau \circ \tilde\mu^*$, and calculate
 arc transitions weights to minimize the KL divergence between that
 composed transducer and $\tau\circ\mu$. The procedure for calculating
-these statistics was described in \newcite{li2009first}, which
+these statistics is described in \newcite{li2009first}, which
 amounts to using an expectation semiring \cite{eisner2001expectation}
 to compute expected transitions in $\tau\circ\tilde\mu^*$ under the
 probability distribution $\tau\circ\mu$.
@@ -487,7 +491,7 @@ $\tau\circ\tilde\mu$ by the corresponding arc weight in $\tau(w)$.
 For example, if $\tau$ encodes a geometric distribution over word
 lengths and a uniform distribution over phonemes (that is, $\tau(w)
 \propto {p^{|w|}}$), then computing $\tilde\mu$ is as simple as
-dividing each arc in $\tau\circ\tilde\mu$ by $p$.\footnote{Actually,
+dividing each non-$\epsilon$ arc in $\tau\circ\tilde\mu$ by $p$.\footnote{Also,
 we must be sure to divide each final weight in the transducer
 by $(1-|\Sigma| p)$, which is the stopping probability for a geometric
 transducer.}
@@ -497,11 +501,9 @@ the length of words. Another is to choose $\tau(w)$ to be a unigram
 language model over the language in question with a geometric
 probability over lengths. In our experiments, we find that $\tau(w)$
 can be a geometric distribution over lengths with a uniform
-distribution over phonemes and still obtain reasonable results.
+distribution over phonemes and still give reasonable results.
 This distribution captures the importance of shorter strings while
 still maintaining a relatively weak prior.
-
-\subsection{Message Topologies}
 
 What remains is the selection of the topologies for the approximating
 message $\tilde\mu$. We consider three possible approximations,
@@ -510,23 +512,22 @@ model, the second is a bigram model, and the third is an anchored
 unigram topology: a position-specific unigram model for each position
 up to some maximum length.
 
-The standard unigram model has $|\Sigma|+2$ parameters:
-one weight $\sigma_a$ for each phoneme $a \in \Sigma$, a ``starting
+The first we consider is a standard unigram model, which is illustrated
+in Figure (\ref{fig:fsa}a). It has $|\Sigma|+2$ parameters: one
+weight $\sigma_a$ for each phoneme $a \in \Sigma$, a ``starting
 weight'' $\lambda$, and a stopping probability. Estimating this
 model involves only computing the expected count of each phoneme,
 along with the expected length of a word, $E[|w|]$. We then normalize
-the counts according to the maximum likelihood estimate, which
-gives: 
+the counts according to the maximum likelihood estimate, with arc
+weights set as:
 \begin{equation*}
   \begin{split}
-    \sum_{a\in\Sigma} \sigma_a &= \frac{E[|w|]-1}{E[|w|} \\
     \sigma_a &\propto E[\#(a)]
    \end{split}
  \end{equation*}
-with the stop probability taking the remaining mass. Recall that
-these expectations can be computed using an expectation semiring.
+Recall that these expectations can be computed using an expectation semiring.
 
-$\lambda$ can be computed by ensuring that the
+Finally, $\lambda$ can be computed by ensuring that the
 approximate and exact expected marginals have the same partition
 function. That is, with the other parameters fixed solve:
 \begin{equation*}
@@ -535,16 +536,17 @@ function. That is, with the other parameters fixed solve:
   \end{split}
 \end{equation*}
 
-The second topology we consider is the bigram topology, which is
-similar to the unigram topology except that, instead of a single
-state, we have a state for each phoneme in $\Sigma$, along with
-a special start state. Each state $a$ has transitions with weights
-$\sigma_{b|a}= p(b|a) \propto E[\#(b|a)]$. Normalization is similar
-to the unigram case, except that we normalize the transitions from
-each state.
+The second topology we consider is the bigram topology, illustrated
+in Figure (\ref{fig:fsa}b). It is similar to the unigram topology
+except that, instead of a single state, we have a state for each
+phoneme in $\Sigma$, along with a special start state. Each state
+$a$ has transitions with weights $\sigma_{b|a}= p(b|a) \propto
+E[\#(b|a)]$. Normalization is similar to the unigram case, except
+that we normalize the transitions from each state.
 
-The final topology we consider takes positional information into
-account. Namely, for each position (up to some maximum position),
+The final topology we consider is the positional unigram model in
+Figure (\ref{fig:fsa}c). This topology takes positional information
+into account. Namely, for each position (up to some maximum position),
 we have a unigram model over phonemes emitted at that position,
 along with the probability of stopping at that position (i.e. a
 ``sausage lattice''). Estimating the parameters of this model is
@@ -561,8 +563,8 @@ experiment, in which we reconstitute the cognate groups from the
 Romance data set, where all cognate groups have words in all three
 languages.  This task highlights the evolution and permutation
 models.  The second is a much harder ``partial data'' experiment,
-in which we examine a subset of 10 languages in the Oceanic dataset.
-Here, only a small fraction of words appear in any cognate group,
+in which we randomly prune 40\% of the words from the dataset.
+Here, only a fraction of words appear in any cognate group,
 so this task crucially involves the survival model.  The ultimate
 purpose of the induced cognate groups is to feed richer evolutionary
 models, such as full reconstruction models.  Therefore, we also
@@ -574,7 +576,7 @@ from gold cognate groups.
 \subsection{Baseline}
 \label{sec:baseline}
 
-As a baseline for cognate group detection, we use an iterative
+As a heuristic baseline for cognate group detection, we use an iterative
 bipartite matching algorithm where instead of conditional likelihoods
 for affinities we use Dice's coefficient, defined for sets X and
 Y as:
@@ -584,10 +586,10 @@ Y as:
    \end{split}
  \end{equation}
 Dice's coefficients are commonly used in bilingual detection of
-cognates~\cite{Kondrak01identifyingcognates,Kondrak03cognatescan}.We
+cognates~\cite{Kondrak01identifyingcognates,Kondrak03cognatescan}. We
 follow prior work and use sets of bigrams within words. In our case,
 during bipartite matching the set X is the set of bigrams in the
-language $\ell$, and Y is the union of bigrams in the other languages.
+language being re-permuted, and Y is the union of bigrams in the other languages.
 
 \subsection{Experiment 1: Complete Data}
 
@@ -599,31 +601,39 @@ perform without the non-parametric task of decided how many clusters
 to use.
 
 We scrambled the 583 cognate groups in the Romance dataset and ran
-the algorithm to convergence. Besides the baseline, we tried using
-Unigrams, Bigrams and Anchored Unigrams, with and without learning
-the parametric edit distances. When we did not use learning, we set
-the parameters of the edit distance to (0, -3, -4) for matches,
-substitutions, and deletions/insertions, respectively. With learning
-enabled, transducers were initialized with these parameters.
+the algorithm to convergence. Besides the heuristic baseline, we
+tried our model-based approach using Unigrams, Bigrams and Anchored
+Unigrams, with and without learning the parametric edit distances.
+When we did not use learning, we set the parameters of the edit
+distance to (0, -3, -4) for matches, substitutions, and
+deletions/insertions, respectively. With learning enabled, transducers
+were initialized with these parameters.
 
 For evaluation, we report two metrics. The first is pairwise accuracy
-for each pair of languages averaged across pairs. The other is
-accuracy measured in terms of the number of correctly and completely
-reconstructed cognate groups.
+for each pair of languages micro-averaged across pairs of words.
+The other is accuracy measured in terms of the number of correctly
+and completely reconstructed cognate groups.
 
 \begin{table}
   \small
   { 
   \begin{tabular}{|c|c|c|c|}
+    \cline{3-4} 
+    \multicolumn{2}{c|}{} & Pairwise & Exact \\
+    \multicolumn{2}{c|}{} & Acc. & Match \\
+    \hline 
+    \multicolumn{4}{|c|}{\textbf{Heuristic}} \\
     \hline
-    Transducers & Messages & P. Acc. & Rec. Acc. \\
+    \multicolumn{1}{|c}{} & \multicolumn{1}{l|}{Baseline} & 48.1 & 35.4  \\
     \hline
-    N/A & Baseline & 48.1 & 35.4  \\
+    \hline
+    \multicolumn{4}{|c|}{\textbf{Model}} \\
+    \hline
+    Transducers & Messages & \multicolumn{2}{c}{} \\
     \hline
     Levenshtein&Unigrams & 37.2 & 26.2 \\
     Levenshtein&Bigrams & 43.0 & 26.5 \\
     Levenshtein&Anch. Unigrams & 68.6 & 56.8\\
-    \hline 
     Learned&Unigrams & 0.1 & 0.0 \\
     Learned&Bigrams & 38.7 & 11.3 \\
     Learned&Anch. Unigrams & \textbf{90.3}  & \textbf{86.6} \\
@@ -631,16 +641,16 @@ reconstructed cognate groups.
   \end{tabular}
   \caption{Accuracies for reconstructing cognate groups. Levenshtein
   refers to fixed parameter edit distance transducer. Learned refers
-  to automatically learned edit distances. ``P.'' means micro-averaged
-  pairwise, ``Rec.'' refers to percentage of completely and accurately
+  to automatically learned edit distances. Pairwise Accuracy means micro-averaged
+  on each word pair; Exact Match refers to percentage of completely and accurately
   reconstructed groups. For a description of the baseline, see Section \ref{sec:baseline}. }
   \label{tbl:exp1}
  }
 \end{table}
 
 Table \ref{tbl:exp1} shows the results under various configurations.
-As can easily be seen, the kind of approximation used matters quite
-a lot. In this application, positional information is important,
+As can easily be seen, the kind of approximation used matters
+immensely. In this application, positional information is important,
 more so than the context of the previous phoneme. Both Unigrams and
 Bigrams significantly under-perform the baseline, while Anchored
 Unigrams easily outperforms it both with and without learning.
@@ -659,10 +669,18 @@ unigrams, learning reduces the error rate by more than two-thirds.
   \small
   { 
   \begin{tabular}{|c|c|c|c|c|}
+    \cline{3-5} 
+    \multicolumn{2}{c|}{\textbf{}} & Prec. & Recall & F1 \\
+    \hline 
+    \multicolumn{5}{|c|}{\textbf{Heuristic}} \\
     \hline
-    Transducers & Messages & Prec. & Recall & F1 \\
+    \multicolumn{1}{|c}{} & \multicolumn{1}{c|}{Baseline} & 53.3 & 38.2 & 44.5  \\
     \hline
-    N/A & Baseline & 53.3 & 38.2 & 44.5 \\
+    \hline
+    \multicolumn{5}{|c|}{\textbf{Model}} \\
+    \hline
+    Transducers & Messages & \multicolumn{2}{c}{} \\
+    \hline
     Levenshtein&Anch. Unigrams & \textbf{95.3} & 31.5 & 47.3\\
     Learned&Anch. Unigrams  & 62.8 & \textbf{84.3} & \textbf{72.9} \\
     \hline
@@ -683,7 +701,7 @@ consider only it and the Dice's coefficient baseline. The baseline
 needs to be augmented to support the fact that some words may not
 appear in all cognate groups. To do this, we thresholded the bipartite
 matching process so that if the coefficient fell below some value,
-we started a new group for that word. We experimented on 10 value
+we started a new group for that word. We experimented on 10 values
 in the range (0,1) for the baseline's threshold and report on the
 one (0.3) that gives the best pairwise micro-averaged F1.
 
@@ -693,7 +711,7 @@ The learned transducers seem to sacrifice precision for the sake
 of increased recall. This makes sense because the default edit
 distance parameter settings strongly favor exact matches, while the
 learned transducer learns more realistic substitution and deletion
-matrices.
+matrices, at the expense of making more mistakes.
 
 \subsection{Experiment 3: Reconstructions}
 
@@ -703,34 +721,31 @@ reconstruction of proto-words. Our model is not optimized for
 faithful reconstruction, and so we used the Ancestry Resampling
 system of \newcite{bouchard09improved}. We matched each Latin word
 with the best possible cognate group for that word. The process for
-the matching was as follows.
+the matching was as follows. If two or three of the words in an
+constructed cognate group agreed, we assigned the Latin word
+associated with the true group to it. With the remainder, we executed
+a bipartite matching based on bigram overlap.
 
-For evaluation, we examined the edit distance between the reconstructed
-word and the chosen Latin word. As a skyline, we compare to the
-accuracy reported in \newcite{bouchard09improved}, which was based
-on complete knowledge of the cognate groups. As you can see XXX
+For evaluation, we examined the Levenshtein distance between the
+reconstructed word and the chosen Latin word. As a skyline, we
+compare to the edit distances reported in \newcite{bouchard09improved},
+which was based on complete knowledge of the cognate groups. On
+this task, our reconstructed cognate groups had an average edit
+distance of 3.8 from the assigned Latin word. This compares favorably to the
+edit distances reported in \newcite{bouchard09improved}, who using oracle
+cognate assignments achieved an average Levenshtein distance of 3.0.
 
 \section{Conclusion}
 
-In this paper, we presented a new generative model of word lists
-that automatically finds cognate groups from scrambled vocabulary
-lists. This model jointly models the origin, propagation, and
-evolution of cognate groups from a common root word. Using the new
-approximation technique we introduced in this paper, our model can
-reduce the error rate by 80\% over a baseline approach.
-
-Future directions for cognate identification include adding in
-semantic information and improving the reconstruction components
-for joint identification and reconstruction. \newcite{Kondrak03cognatescan}
-showed impressive gains on a bilingual cognate identification task
-using semantic distances based on English glosses.  Improving the
-reconstruction model could focus on using improved edit distance
-models (e.g. \newcite{bouchard09improved}), or further improving
-the automata approximations used in this paper. Another important
-direction is to extract cognates from raw text, which would most
-likely require easing the bipartite assumption.
-
-XXX (conclude conclusively)
+We presented a new generative model of word lists that automatically
+finds cognate groups from scrambled vocabulary lists. This model
+jointly models the origin, propagation, and evolution of cognate
+groups from a common root word. We also introduced a novel technique
+for approximating automata. Using these approximations, our model
+can reduce the error rate by 80\% over a baseline approach. Finally,
+we demonstrate that these automatically generated cognate groups
+can be used to automatically reconstruct proto-words faithfully,
+with a small increase in error.
 
 \bibliographystyle{acl}
 \bibliography{refs}
