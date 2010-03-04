@@ -324,7 +324,12 @@ class NoLearningBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Lan
   def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with PosUniPruning
 }
 
-class TransBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double,allowSplitting:Boolean)
+class TransBipartite(tree: Tree,
+                     cognates: Seq[Cognate],
+                     languages: Seq[Language],
+                     treePenalty: Double,
+                     initDeathProb: Double,
+                     allowSplitting:Boolean)
                      extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb,allowSplitting) with TransducerLearning {
   val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
 
