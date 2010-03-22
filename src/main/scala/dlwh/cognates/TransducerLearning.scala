@@ -46,7 +46,7 @@ trait TransducerLearning {
       io <- ios.toSeq
     } yield { () =>
       println(io.assignments);
-      val edges = ((for { pair@ (fromL,toL) <- edgesToLearn.iterator;
+      val edges = (for { pair@ (fromL,toL) <- edgesToLearn.iterator;
         trans <- io.edgeMarginal(fromL, toL).iterator
       } yield {
 
@@ -54,7 +54,7 @@ trait TransducerLearning {
         assert(!cost._2.isInfinite);
 
         (fromL,toL) -> cost._1;
-      } ).toSeq);
+      } ).toSeq;
 
       val root = io.rootMarginal;
       (edges,rootCompressor.gatherStatistics(alphabet + eps,root.fsa)._1);

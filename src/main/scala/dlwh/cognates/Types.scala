@@ -18,4 +18,6 @@ object Types {
     val total = r.totalMemory / (1024 * 1024);
     ((total - free) + "M used; " + free  + "M free; " + total  + "M total");
   }
+
+  type MessageCompressor[T] = Compressor[T,Char] with dlwh.cognates.NormalizedTransitions[T,Char];
 }

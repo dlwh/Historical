@@ -4,7 +4,7 @@ import scalanlp.fst._;
 import scalanlp.util.Index;
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.PriorityQueue
-import scalanlp.counters.LogCounters._;
+import scalanlp.counters.LogCounters.{logSum=>_,log=> _ ,_};
 import scalanlp.math.Numerics._;
 import scalanlp.math.Semiring.LogSpace._;
 import scalala.Scalala._;
@@ -21,6 +21,7 @@ trait Compressor[State,T] {
    */
   def gatherStatistics(validChars: Set[T], auto: Automaton[Double,_,T]):(Statistics,Double)
   def interpolate(stats1: Statistics, eta1: Double, stats2: Statistics, eta2:Double):Statistics
+  def transformCounts(stats: Statistics)(f: (T,Double)=>Double):Statistics;
   def smooth(stats: Statistics, counts: LogDoubleCounter[T]): Statistics
 
   final def compress(auto: Automaton[Double,_,T], validChars: Set[T]):Automaton[Double,State,T] = {
@@ -119,6 +120,14 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
     c
   }
 
+  def transformCounts(stats: Statistics)(f: (T,Double)=>Double):Statistics = {
+    val r = LogPairedDoubleCounter[T,T];
+    for( (k,v) <- stats) {
+      r(k) = f(k._2,v);
+    }
+    r;
+  }
+
   def gatherStatistics(chars: Set[T], auto: Automaton[Double,_,T]): (Statistics,Double) = {
     // Set up the semiring
     val tgs = new BigramSemiring[T](chars,beginningUnigram,cheatOnEquals=true);
@@ -189,22 +198,23 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
   }
 }
 
-class SafeBiCompression( klThreshold: Double, maxStates: Int, val beginningUnigram: Char, expLength: Double) extends Compressor[Option[Char], Char] {
-  def destinationFor(a: Option[Char], c: Char) = inner.destinationFor(a,c);
+class SafeCompression[S](val chars: Set[Char],
+                         val inner: Compressor[S,Char] with NormalizedTransitions[S,Char],
+                         expLength: Double) extends Compressor[S, Char] {
+  val beginningUnigram = inner.beginningUnigram;
+  def destinationFor(a: S, c: Char) = inner.destinationFor(a,c);
   import scalanlp.fst.Alphabet._;
-  val inner = new BiCompression(beginningUnigram=beginningUnigram, klThreshold=this.klThreshold, maxStates=this.maxStates) with NormalizedTransitions[Option[Char],Char];
   def alphabet = inner.alphabet;
   type Statistics = inner.Statistics;
+
   def gatherStatistics(chars: Set[Char], auto: Automaton[Double,_,Char]) = {
     val decayAuto = new DecayAutomaton(expLength, chars);
     val (stats,total) = inner.gatherStatistics(chars,auto & decayAuto);
-    val retVal = LogPairedDoubleCounter[Char,Char]
-    for( (k1,k2,v) <- stats.triples) {
-      if(k2 == beginningUnigram)
-        retVal(k1,k2) = v - decayAuto.stopProb;
-      else if(k2 != implicitly[Alphabet[Char]].epsilon)
-        retVal(k1,k2) = v - decayAuto.arcCost;
-      else retVal(k1,k2) = v;
+    val retVal = inner.transformCounts(stats) { (k,v) =>
+      if(k == beginningUnigram) v - decayAuto.stopProb;
+      else if(k != implicitly[Alphabet[Char]].epsilon)
+        v - decayAuto.arcCost;
+      else v;
     }
     // TODO: what to do with total
     val ret = (retVal,total)
@@ -213,10 +223,11 @@ class SafeBiCompression( klThreshold: Double, maxStates: Int, val beginningUnigr
 
   def interpolate(a: Statistics, eta1: Double, b: Statistics, eta2: Double) = inner.interpolate(a,eta1,b,eta2);
   def smooth(a: Statistics, ctr: LogDoubleCounter[Char]) = inner.smooth(a,ctr);
+  def transformCounts(a: Statistics)(f: (Char,Double)=>Double) = inner.transformCounts(a)(f);
 
   def compress(prob: Double, counts: Statistics) = {
     val auto = inner.compress(0.0,counts);
-    val decayAuto = new DecayAutomaton(expLength, Set.empty ++ counts.keysIterator.map(_._2) - beginningUnigram);
+    val decayAuto = new DecayAutomaton(expLength, chars);
     val currentCost = (auto & decayAuto cost);
     val difference = prob - currentCost;
     val ret = auto.scaleInitialWeights(difference);

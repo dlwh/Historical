@@ -4,8 +4,10 @@ import scalanlp.fst._
 import scalanlp.stats.sampling.Rand;
 import scala.actors.Future
 import scala.collection.mutable.ArrayBuffer
-//import scalala.Scalala.{iArrayToPartialMap=>_,iArrayToVector=>_,_};
-//import scalala.Scalala.{iArrayToVector=>_,_};
+import java.io.FileInputStream
+import java.io.File
+import java.util.Properties
+import scalanlp.config._;
 import scalala.Scalala._;
 import scalanlp.counters.LogCounters._;
 import scalanlp.counters.Counters;
@@ -15,37 +17,81 @@ import scalanlp.util.Index
 import scalanlp.util.Log._;
 import fig.basic.BipartiteMatcher;
 
-abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double, allowSplitting: Boolean) {
-  type MFactors <: Factors
-  case class State(groups: Seq[Map[Language,Cognate]],
-                   factors: MFactors,
-                   deathScores:Map[(Language,Language),Double] = Map().withDefaultValue(initDeathProb),
-                   likelihood:Double = Double.NegativeInfinity,
-                   knownLanguages: Set[Language] = Set.empty);
+object Bipartite {
 
-  def makeIO(s:State, words: Map[Language,Cognate]) = {
+  trait FactorBroker[F<:Factors] {
+    def initialFactors: F
+    def nextFactors(ios: Iterator[InsideOutside[F]], state: State[F]): F;
+  }
+
+  class ConstantBroker[F<:Factors](val initialFactors: F) extends FactorBroker[F] {
+    def nextFactors(ios: Iterator[InsideOutside[F]], state: State[F]) = initialFactors;
+  }
+
+  class TransducerBroker(val tree: Tree,
+                         val alphabet: Set[Char],
+                         val initialFactors: TransducerFactors,
+                         val messageCompression: MessageCompressor[_],
+                         val transducerCompressor: Compressor[_,(Char,Char)],
+                         val rootCompressor: Compressor[_,Char])
+                         extends FactorBroker[TransducerFactors] with TransducerLearning {
+
+    override def nextFactors(ios: Iterator[InsideOutside[TransducerFactors]], s: State[TransducerFactors]) = {
+      val (stats,root) = gatherStatistics(ios);
+      val newFactors = mkFactors(stats,root);
+      newFactors
+    }
+
+    def mkFactors(statistics: Statistics,root:RootStats):TransducerFactors = {
+      val transducers = mkTransducers(statistics);
+      val rootM = mkRoot(root);
+      val factors = new TransducerFactors(tree,alphabet,messageCompression,transducers,root=Some(rootM)) ;
+      globalLog.log(INFO)("Trans out " + memoryString);
+      factors
+    }
+  }
+
+
+  case class State[F](groups: Seq[Map[Language,Cognate]],
+                      factors: F,
+                      deathScores:Map[(Language,Language),Double],
+                      likelihood:Double = Double.NegativeInfinity,
+                      knownLanguages: Set[Language] = Set.empty);
+}
+
+
+import Bipartite._;
+
+class Bipartite[F<:Factors](val tree: Tree,
+                         cognates: Seq[Cognate],
+                         languages: Seq[Language],
+                         treePenalty: Double,
+                         initDeathProb: Double,
+                         allowSplitting: Boolean,
+                         factorBroker: FactorBroker[F]) {
+
+  def makeIO(s:State[F], words: Map[Language,Cognate]) = {
     println("Looking at " + words);
     val io = new InsideOutside(tree, s.factors, Map.empty ++ words.mapValues(_.word));
     io;
   }
 
-  def treeScore(s: State, io: InsideOutside[MFactors]):Double = (
+  def treeScore(s: State[F], io: InsideOutside[F]):Double = (
     io.treePrior(s.deathScores)
   )
 
-  def initialFactors: MFactors
 
-  def initialState(words :Seq[Cognate], factors: MFactors): State = {
+  def initialState(words :Seq[Cognate], factors: F): State[F] = {
     // the n'th word in each language is assigned to the n'th cognate group
     val groupMap = words.groupBy(_.language).valuesIterator.flatMap(_.zipWithIndex.iterator).toSeq.groupBy(_._2);
     val groups = for(group  <- groupMap.valuesIterator) yield {
       val cogs = for( (cog,i) <- group) yield (cog.language,cog);
       Map.empty ++ cogs;
     };
-    State(groups.toSeq, factors,knownLanguages = words.iterator.map(_.language).toSeq.toSet);
+    State(groups.toSeq, factors, Map.empty.withDefaultValue(initDeathProb), knownLanguages = words.iterator.map(_.language).toSeq.toSet);
   }
 
-  final def calculateAffinities(s: State, group: Map[Language,Cognate], language: Language, words: Seq[Cognate]) = {
+  final def calculateAffinities(s: State[F], group: Map[Language,Cognate], language: Language, words: Seq[Cognate]) = {
     val io = makeIO(s,group)
     val marg = io.marginalFor(language).get;
     //println(group,marg);
@@ -72,7 +118,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
     changes.take(affinities.length);
   }
 
-  def baselineScores(s: State, language: Language, words: Seq[Cognate]) = {
+  def baselineScores(s: State[F], language: Language, words: Seq[Cognate]) = {
     val arr = calculateAffinities(s,Map.empty,language,words);
     for( i <- 0 until arr.length) {
       arr(i) += treePenalty;
@@ -80,7 +126,7 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
     arr
   }
 
-  final def step(s: State, language: Language):State = {
+  final def step(s: State[F], language: Language):State[F] = {
     val current = cognates.filter(_.language == language);
     val otherLanguages = s.groups.map(group => group - language).filter(!_.isEmpty);
 
@@ -137,10 +183,12 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
                       deathScores = deathProbs,
                       knownLanguages = newKnownLanguages
                       );
-    nextAction(newS)
+    val nextIOs = newS.groups.iterator.map(makeIO(newS,_));
+    val newFactors = factorBroker.nextFactors(nextIOs, newS);
+    newS.copy(factors = newFactors);
   }
 
-  def learnDeathProbs(s: State, groups: Seq[Map[Language,Cognate]]) = {
+  def learnDeathProbs(s: State[F], groups: Seq[Map[Language,Cognate]]) = {
     val deathCounts = scalanlp.counters.Counters.IntCounter[(Language,Language)];
     val availableCounts = scalanlp.counters.Counters.IntCounter[(Language,Language)];
     for {
@@ -160,10 +208,9 @@ abstract class Bipartite(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
     normalized.toMap.withDefaultValue(initDeathProb);
   }
 
-  protected def nextAction(state: State): State = state;
 
   def iterations = {
-    val state = initialState(cognates.filter(_.language == languages(0)),initialFactors);
+    val state = initialState(cognates.filter(_.language == languages(0)),factorBroker.initialFactors);
     val lang= Iterator.continually { languages.iterator.drop(1) ++ Iterator.single(languages(0)) } flatten;
     scanLeft(lang,state)(step(_,_));
   }
@@ -278,12 +325,9 @@ abstract class BaselineX(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
     val newS = s.copy(groups = newGroups,
                       likelihood = score,
-                      knownLanguages = newKnownLanguages
-                      );
-    nextAction(newS)
+                      knownLanguages = newKnownLanguages);
+    newS;
   }
-
-  protected def nextAction(state: State): State = state;
 
   def iterations = {
     val state = initialState(cognates.filter(_.language == languages(0)),initialFactors);
@@ -310,58 +354,14 @@ class BaselineAdaptive(tree: Tree, cognates: Seq[Cognate], languages: Seq[Langua
 }
 
 
-class BaselineBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double, allowSplitting: Boolean)
-                        extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb,allowSplitting) {
-  override type MFactors = BigramFactors;
-  override def initialFactors: MFactors = new BigramFactors;
-}
-
-class NoLearningBipartite(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], treePenalty: Double, initDeathProb: Double, allowSplitting: Boolean)
-                      extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb,allowSplitting) {
-  val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
-  type MFactors = TransducerFactors
-
-  def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with PosUniPruning
-}
-
-class TransBipartite(tree: Tree,
-                     cognates: Seq[Cognate],
-                     languages: Seq[Language],
-                     treePenalty: Double,
-                     initDeathProb: Double,
-                     allowSplitting:Boolean)
-                     extends Bipartite(tree,cognates,languages,treePenalty,initDeathProb,allowSplitting) with TransducerLearning {
-  val alphabet = Set.empty ++ cognates.iterator.flatMap(_.word.iterator);
-
-  type MFactors = TransducerFactors
-  val transducerCompressor = new UniCompression(('#','#')) with NormalizedByFirstChar[Unit,Char];
-  val rootCompressor = new BiCompression(1E-4,alphabet.size + 3, '#') with NormalizedTransitions[Option[Char],Char];
-
-  override def nextAction(s: State) = learnFactors(s);
-
-  def learnFactors(s: State):State = {
-    var ll = 0.0;
-    val numGroups = s.groups.length;
-    val ios = for(i <- 0 until numGroups iterator) yield {
-      val io = makeIO(s,s.groups(i));
-      io;
-    }
-
-    val (stats,root) = gatherStatistics(ios);
-    val newFactors = mkFactors(stats,root);
-    s.copy(factors = newFactors);
-  }
-
-  def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with PosUniPruning;
-
-  def mkFactors(statistics: Statistics,root:RootStats):TransducerFactors = {
-    val transducers = mkTransducers(statistics);
-    val rootM = mkRoot(root);
-    val factors = new TransducerFactors(tree,alphabet,transducers,root=Some(rootM)) with PosUniPruning;
-    globalLog.log(INFO)("Trans out " + memoryString);
-    factors
-  }
-
+class BaselineBipartite(tree: Tree,
+                        cognates: Seq[Cognate],
+                        languages: Seq[Language],
+                        treePenalty: Double,
+                        initDeathProb: Double,
+                        allowSplitting: Boolean)
+                        extends Bipartite(tree,cognates,languages,treePenalty,
+                                          initDeathProb,allowSplitting,new ConstantBroker(new BigramFactors)) {
 }
 
 object Accuracy {
@@ -451,23 +451,48 @@ object RunBaselineX {
 trait BipartiteRunner {
   import Accuracy._;
 
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double): Bipartite
-
   def main(args: Array[String]) {
-    val languages = args(1).split(",");
-    val dataset = new Dataset(args(0),languages);
+    val props = new Properties();
+    props.load(new FileInputStream(new File(args(0))));
+    val config = Configuration.fromProperties(props);
+    val languages = config.readIn[String]("dataset.languages").split(",");
+
+    val dataset_name = config.readIn[String]("dataset");
+    val dataset = new Dataset(dataset_name,languages);
     val tree = dataset.tree;
     val leaves = tree.leaves;
-    val gold = dataset.cognates.map(_.filter(cog => leaves(cog.language)));
 
+    val gold = dataset.cognates.map(_.filter(cog => leaves(cog.language)));
     val goldIndices = indexGold(gold);
+
     val data = gold.flatten;
     val randomized = Rand.permutation(data.length).draw().map(data);
-    val expectedNumTrees = data.length.toDouble / languages.size;
-    //val treePenalty = Math.log( (expectedNumTrees -1) / expectedNumTrees)
-    val treePenalty = 1; // Positive actually means a bonus.
-    val iter = bip(tree,randomized, languages,treePenalty,0.5).iterations;
+    val alphabet = Set.empty ++ data.iterator.flatMap(_.word.iterator);
+
+    val treePenalty = config.readIn[Double]("tree.penalty");
+    val deathProb = config.readIn[Double]("death.init_prob");
+    val allowDeath = config.readIn[Boolean]("death.allow");
+    val messageCompression = readAutomataCompressor(config, config.readIn[String]("transducers.message"));
+
+    val transducerCompression = config.readIn[String]("transducers.editdistance","uni") match {
+      case "unigram" | "uni" =>
+        new UniCompression(('#','#')) with NormalizedByFirstChar[Unit,Char];
+    }
+
+    val rootCompression = readAutomataCompressor(config, config.readIn[String]("transducers.root"));
+
+    val shouldLearn = config.readIn[Boolean]("transducers.learning");
+    val initialFactors = new TransducerFactors(tree,alphabet,messageCompression);
+    val broker = (
+      if(!shouldLearn) new ConstantBroker(initialFactors)
+      else new TransducerBroker(tree, alphabet, initialFactors, messageCompression, transducerCompression, rootCompression)
+    );
+
+
+    val bipartite = new Bipartite[TransducerFactors](tree, randomized, languages, treePenalty, deathProb, allowDeath, broker);
+    val iter = bipartite.iterations;
     val numPositives = numberOfPositives(languages, gold);
+
     for( state <- iter.take(1000)) {
       val numGroups = state.groups.length;
       for(g <- 0 until numGroups) {
@@ -482,126 +507,17 @@ trait BipartiteRunner {
       println("Recall" + recalls);
     }
   }
-}
 
-object RunBipartite extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new TransBipartite(tree,cogs,languages, treePenalty, initDP,false);
-  }
-}
-
-object RunUniBipartite extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new TransBipartite(tree,cogs,languages, treePenalty, initDP,false) {
-
-      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with UniPruning;
-
-      override def mkFactors(statistics: Statistics, rootStats: RootStats):TransducerFactors = {
-        val transducers = mkTransducers(statistics);
-        val root = mkRoot(rootStats)
-        val factors = new TransducerFactors(tree,alphabet,transducers,root=Some(root)) with UniPruning;
-        globalLog.log(INFO)("Trans out " + memoryString);
-        factors
-      }
-    }
-  }
-}
-
-
-object RunBiBipartite extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new TransBipartite(tree,cogs,languages, treePenalty, initDP,false) {
-
-      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with BiPruning;
-
-      override def mkFactors(statistics: Statistics, root: RootStats):TransducerFactors = {
-        val transducers = mkTransducers(statistics);
-        val rootM = mkRoot(root);
-        val factors = new TransducerFactors(tree,alphabet,transducers,root=Some(rootM)) with BiPruning;
-        globalLog.log(INFO)("Trans out " + memoryString);
-        factors
-      }
-    }
-  }
-}
-
-object RunAdaptiveBiBipartite extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new TransBipartite(tree,cogs,languages, treePenalty, initDP,true) {
-
-      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with BiPruning;
-
-      override def mkFactors(statistics: Statistics, root: RootStats):TransducerFactors = {
-        val transducers = mkTransducers(statistics);
-        val rootM = mkRoot(root);
-        val factors = new TransducerFactors(tree,alphabet,transducers) with BiPruning;
-        globalLog.log(INFO)("Trans out " + memoryString);
-        factors
-      }
-    }
-  }
-}
-
-object RunAdaptiveBipartite extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new TransBipartite(tree,cogs,languages, treePenalty, initDP,true);
-  }
-}
-
-
-object RunBaseline extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new BaselineBipartite(tree,cogs,languages, treePenalty, initDP,false);
-  }
-
-}
-object RunAdaptiveBaseline extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new BaselineBipartite(tree,cogs,languages, treePenalty, initDP,true);
-  }
-}
-
-
-
-object RunNoLearning extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP,false);
-  }
-}
-
-object RunAdaptiveNoLearning extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP,true);
-  }
-}
-
-object RunUniNoLearning extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP,false) {
-
-      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with UniPruning;
-
-    }
-  }
-}
-
-
-object RunBiNoLearning extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP,false) {
-
-      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with BiPruning;
-
-    }
-  }
-}
-
-object RunBiAdaptiveNoLearning extends BipartiteRunner {
-  def bip(tree: Tree, cogs: Seq[Cognate], languages: Seq[String], treePenalty:Double, initDP: Double) = {
-    new NoLearningBipartite(tree,cogs,languages, treePenalty, initDP,true) {
-
-      override def initialFactors:TransducerFactors = new TransducerFactors(tree,alphabet) with BiPruning;
-
-    }
+  private def readAutomataCompressor(config: Configuration, tpe: String): MessageCompressor[_] = tpe match {
+      case "bigram" | "bi" =>
+        val klThreshold = config.readIn[Double]("transducers.message.klThreshold",0.01);
+        val maxStates = config.readIn[Int]("transducers.message.maxStates",20);
+        val beginningUnigram = '#';
+        new BiCompression(klThreshold,maxStates,beginningUnigram) with NormalizedTransitions[Option[Char],Char] : MessageCompressor[_];
+      case "unigram" | "uni" =>
+        new UniCompression('#') with NormalizedTransitions[Unit,Char] : MessageCompressor[_];
+      case "posunigram" | "posuni" =>
+        val maxLength = config.readIn[Int]("transducers.message.maxStates",10);
+        new PosUniCompression(maxLength,'#') with NormalizedTransitions[Int,Char] : MessageCompressor[_];
   }
 }

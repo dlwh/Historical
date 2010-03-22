@@ -2,7 +2,7 @@ package dlwh.cognates;
 
 import scalanlp.fst._;
 import scalanlp.util.Index;
-import scalanlp.counters.LogCounters._;
+import scalanlp.counters.LogCounters.{logSum => _, _};
 import scalanlp.math.Numerics._;
 import scalala.Scalala._;
 import scala.collection.mutable.PriorityQueue;
@@ -37,6 +37,16 @@ abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(imp
       c
     }
   }
+
+  def transformCounts(stats: Statistics)(f: (T,Double)=>Double):Statistics = {
+    val r = Seq.fill(stats.length)(LogDoubleCounter[T]);
+    for((ctr,i) <- stats zipWithIndex;
+        (k,v) <- ctr) {
+      r(i)(k) = f(k,v);
+    }
+    r;
+  }
+
   
   def smooth(stats: Statistics, counts: LogDoubleCounter[T]): Statistics = {
     val res = stats.map(_.copy);
@@ -78,37 +88,5 @@ abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(imp
       (arcs).toSeq :_*
     );
     auto
-  }
-}
-
-class SafePosUniCompression(length: Int, val beginningUnigram: Char, expLength: Double) extends Compressor[Int, Char] {
-  def destinationFor(a: Int, c: Char) = a;
-  import scalanlp.fst.Alphabet._;
-  val inner = new PosUniCompression(length, beginningUnigram) with NormalizedTransitions[Int,Char];
-  def alphabet = inner.alphabet;
-  type Statistics = inner.Statistics;
-  def gatherStatistics(chars: Set[Char], auto: Automaton[Double,_,Char]):(Statistics,Double) = {
-    val decayAuto = new DecayAutomaton(expLength, chars);
-    val (allStats,total) = inner.gatherStatistics(chars,auto & decayAuto);
-    val retVal = Array.fill(allStats.length)(LogDoubleCounter[Char]());
-    for( (stats,i) <- allStats zipWithIndex; (k,v) <- stats) {
-      if(k == beginningUnigram)
-        retVal(i)(k) = v - decayAuto.stopProb;
-      else
-        retVal(i)(k) = v - decayAuto.arcCost;
-    }
-    // TODO: what to do with total
-    (retVal,total)
-  }
-
-  def interpolate(a: Statistics, eta1: Double, b: Statistics, eta2: Double) = inner.interpolate(a,eta1,b,eta2);
-  def smooth(a: Statistics, ctr: LogDoubleCounter[Char]) = inner.smooth(a,ctr);
-
-  def compress(prob: Double, counts: Statistics) = {
-    val auto = inner.compress(0.0,counts);
-    val decayAuto = new DecayAutomaton(expLength, Set.empty ++ counts.iterator.flatMap(_.keysIterator) - beginningUnigram);
-    val difference = prob - (auto & decayAuto cost)
-    val ret = auto.scaleInitialWeights(difference);
-    ret
   }
 }

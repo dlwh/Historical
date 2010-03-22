@@ -28,75 +28,11 @@ trait Factors {
   def marginalForWord(w: String, score: Double=0.0): Marginal;
 }
 
-trait MarginalPruning { this: TransducerFactors =>
-   def prune(upward: Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Psi
-}
-
-trait NullPruning { this: TransducerFactors =>
-  def prune(upward: Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) =fsa
-}
-
-trait CompressionPruning extends MarginalPruning { this: TransducerFactors =>
-   def compressor(upward:Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char];
-   def prune(upward: Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Psi = {
-     val compression = compressor(upward, fsa,length,interestingChars,intBigrams);
-     val ret = compression.compress( fsa, fullAlphabet)
-     ret;
-  }
-}
-
-trait PosUniPruning extends CompressionPruning { this: TransducerFactors =>
-  def compressor(upward: Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char] = {
-    val compression = if(upward) new SafePosUniCompression(length+7,'#',length + 40) else new PosUniCompression(length+7,'#') with NormalizedTransitions[Int,Char]
-    compression
-  }
-}
-
-trait UniPruning extends CompressionPruning { this: TransducerFactors =>
-   def compressor(upward: Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char] = {
-    val compression = if(upward) new SafeUniCompression('#',length + 40) else new UniCompression('#') with NormalizedTransitions[Unit,Char];
-    compression;
-  }
-}
-
-trait BiPruning extends CompressionPruning { this: TransducerFactors =>
-   def compressor(upward: Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]):Compressor[_,Char] = {
-    val compression = if(upward) new SafeBiCompression(1E-4,interestingChars.size + 2,'#',length + 40) else new BiCompression(1E-4,interestingChars.size + 2,'#') with NormalizedTransitions[Option[Char],Char];
-    compression;
-  }
-}
-
-/*
-trait TriPruning { this: TransducerFactors =>
-   def prune(fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val compression = new TriCompression[Char](0.0001,15,intBigrams,'#') with NormalizedTransitions[Seq[Char],Char];
-    val ret = compression.compress(fsa,interestingChars)
-    ret;
-  }
-}
-*/
-
-trait BackedOffKBestPruning { this: TransducerFactors =>
-  val numBest = 300;
-  def prune(upward: Boolean, fsa: Psi, length: Int, interestingChars: Set[Char], intBigrams: Set[(Char,Char)]) = {
-    val kbest : Seq[(Seq[Char],Double)] = KBest.extractList(fsa,numBest);
-    val trueCost = fsa.cost;
-    val totalCost = logSum(kbest.map(_._2));
-    assert(trueCost > totalCost);
-    val unigramCost = logDiff(trueCost,totalCost);
-    val comp = new UniCompression('#') with NormalizedTransitions[Unit,Char];
-    val unigramModel : Automaton[Double,Int,Char] = comp.compress(fsa,interestingChars).scaleInitialWeights( unigramCost - trueCost).relabel;
-    import ApproximatePartitioner._;
-    val result = kbest.foldLeft(unigramModel) { (fsa,stringscore) =>
-      Minimizer.minimize(fsa | Automaton.constant(stringscore._1,stringscore._2))
-    }
-    result;
-  }
-}
-
-abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
+class TransducerFactors(t: Tree,
+                        fullAlphabet: Set[Char],
+                        compression: MessageCompressor[_],
                         editDistances: Map[(Language,Language),Transducer[Double,_,Char,Char]]=Map.empty,
-                        root: Option[Psi]=None) extends Factors with MarginalPruning {
+                        root: Option[Psi]=None) extends Factors {
   type Self = TransducerFactors;
   type Marginal = TransducerMarginal;
   type EdgeFactor = TransducerEdge;
@@ -105,12 +41,14 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
     //val ed =  new EditDistance(-5,-6,alphabet,fullAlphabet.size - alphabet.size)
     val ed = (for( ed <- editDistances.get((parent,child)))
               yield ed) getOrElse new EditDistance(-11,-14,fullAlphabet);
-    new EdgeFactor(ed,alphabet);
+    new EdgeFactor(ed);
   }
 
   def rootMarginal(alphabet: Set[Char]) = {
-    new Marginal(root.getOrElse(new DecayAutomaton(8,fullAlphabet)) : Psi, 0, Set.empty: Set[Char], Set.empty);
+    new Marginal(root.getOrElse(new DecayAutomaton(8,fullAlphabet)) : Psi, 0);
   }
+
+  private val upwardCompressor = new SafeCompression(fullAlphabet,compression,8);
 
   def product(upward: Boolean, ms: Seq[Marginal]):Marginal = {
     if(ms.length == 1) ms.head
@@ -120,21 +58,19 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
       import ApproximatePartitioner._;
       val minned = minimize(inter.relabel).filterArcs(_.weight != Double.NegativeInfinity);
       val length = ms.map(_.length).max;
-      val chars = ms.foldLeft(Set[Char]()) { _ ++ _.interestingChars };
-      val bigs = ms.foldLeft(Set[(Char,Char)]()) { _ ++ _.intBigrams };
-      val pruned = prune(upward, minned,length, chars, bigs);
+      val pruned = (
+          if(upward) upwardCompressor.compress(minned,fullAlphabet)
+          else compression.compress(minned,fullAlphabet)
+      );
       //globalLog.log(INFO)("* out " + memoryString);
-      new Marginal( pruned,length,chars,bigs);
+      new Marginal( pruned,length);
     }
   }
 
   def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
 
-  class TransducerMarginal(val fsa: Psi,
-                           val length: Int,
-                           val interestingChars: Set[Char],
-                           val intBigrams: Set[(Char,(Char))]) extends MarginalBase {
-    def this(w: String, cost: Double) = this(Automaton.constant(w,cost), w.length, unigramsOfWord(w), bigramsOfWord(w) );
+  class TransducerMarginal(val fsa: Psi, val length: Int) extends MarginalBase {
+    def this(w: String, cost: Double) = this(Automaton.constant(w,cost), w.length);
 
     /**
     * The log-normalizer of this automata
@@ -152,7 +88,7 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
   }
 
   // parent to child (argument order)
-  class TransducerEdge(val fst: Transducer[Double,_,Char,Char], alphabet: Set[Char]) extends EdgeFactorBase {
+  class TransducerEdge(val fst: Transducer[Double,_,Char,Char]) extends EdgeFactorBase {
     def childMarginalize(c: Marginal) = {
       val composed = (fst >> c.fsa.asTransducer).inputProjection;
       val minned = {
@@ -160,7 +96,7 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
         import ApproximatePartitioner._;
         minimize(composed.relabel);
       }
-      new Marginal(minned, c.length, alphabet, c.intBigrams);
+      new Marginal(minned, c.length);
     }
     def parentMarginalize(p: Marginal) = {
       val composed = (p.fsa.asTransducer >> fst).outputProjection.relabel;
@@ -169,28 +105,11 @@ abstract class TransducerFactors(t: Tree, protected val fullAlphabet: Set[Char],
         import ApproximatePartitioner._;
         minimize(composed);
       }
-      new Marginal(minned, p.length, alphabet, p.intBigrams);
+      new Marginal(minned, p.length);
     }
 
     def withMarginals(from: Marginal, to: Marginal) = {
-      new TransducerEdge(from.fsa.asTransducer >> fst >> to.fsa.asTransducer, alphabet);
-    }
-  }
-
-  private def bigramsOfWord(s: String): Set[(Char,Char)] = {
-    Set.empty ++ (s.take(s.length-1) zip s.drop(1));
-  }
-
-  private def unigramsOfWord(s: String) = Set.empty ++ s;
-
-  // XXX renormalize edges (maybe, or just let them die)
-  private def pruneToAlphabet[S](ed: Transducer[Double,S,Char,Char], validCh: Set[Char]): Transducer[Double,S,Char,Char] = {
-    new Transducer[Double,S,Char,Char] {
-      def edgesMatching(s: S, ch: (Char,Char)) = {
-        ed.edgesMatching(s,ch).filter { case Arc(_,_,(a,b),_) => (validCh(a) && validCh(b)) }
-      }
-      val initialStateWeights = ed.initialStateWeights;
-      def finalWeight(s:S) = ed.finalWeight(s: S);
+      new TransducerEdge(from.fsa.asTransducer >> fst >> to.fsa.asTransducer);
     }
   }
 
