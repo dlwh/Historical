@@ -6,7 +6,7 @@ import scalanlp.fst.Transducer
 import scalanlp.util.Log._;
 import Types._;
 import scalanlp.math.Semiring.LogSpace._;
-import scalanlp.counters.LogCounters._;
+import scalala.tensor.counters.LogCounters._;
 
 trait TransducerLearning {
   val transducerCompressor: Compressor[_,(Char,Char)];

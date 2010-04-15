@@ -3,6 +3,8 @@ package dlwh.cognates;
 import Types._;
 import scalanlp.util.Log._;
 
+/** InsideOutside is the wrong name. This does message passing on phylogenetic trees with words
+   optionally observed */
 class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Language,Word]=Map.empty) {
   import factors._;
   val alphabet = Set.empty ++ (for( word <- bottomWords.valuesIterator;

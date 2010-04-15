@@ -3,16 +3,12 @@ package dlwh.cognates;
 import scalanlp.math.Semiring.LogSpace._;
 import scalanlp.fst._;
 import scalanlp.util.Log._;
-import scalanlp.math.Numerics._;
-import scalanlp.counters._;
-import scalanlp.counters.Counters._;
 import scalala.Scalala._;
-import scalanlp.counters.LogCounters._;
+import scalala.tensor.counters.LogCounters._;
 
 import Types._;
 
 class BigramFactors extends Factors {
-  type Self = BigramFactors
   type Marginal = BigramMarginal
   type EdgeFactor = BigramEdge
   def edgeFor(parent: Language, child: Language, alphabet: Set[Char]) = new EdgeFactor();

@@ -9,9 +9,8 @@ import java.io.File
 import java.util.Properties
 import scalanlp.config._;
 import scalala.Scalala._;
-import scalanlp.counters.LogCounters._;
-import scalanlp.counters.Counters;
-import scalanlp.math.Numerics._;
+import scalala.tensor.counters.LogCounters._;
+import scalala.tensor.counters.Counters;
 import Types._;
 import scalanlp.util.Index
 import scalanlp.util.Log._;
@@ -189,8 +188,8 @@ class Bipartite[F<:Factors](val tree: Tree,
   }
 
   def learnDeathProbs(s: State[F], groups: Seq[Map[Language,Cognate]]) = {
-    val deathCounts = scalanlp.counters.Counters.IntCounter[(Language,Language)];
-    val availableCounts = scalanlp.counters.Counters.IntCounter[(Language,Language)];
+    val deathCounts = scalala.tensor.counters.Counters.IntCounter[(Language,Language)];
+    val availableCounts = scalala.tensor.counters.Counters.IntCounter[(Language,Language)];
     for {
       group <- groups;
       io = makeIO(s,group);
@@ -347,11 +346,13 @@ abstract class BaselineX(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
 }
 
+/*
 class BaselineAdaptive(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], threshold: Double)
                         extends BaselineX(tree,cognates,languages,threshold) {
   override type MFactors = BigramFactors;
   override def initialFactors: MFactors = new BigramFactors;
 }
+*/
 
 
 class BaselineBipartite(tree: Tree,
@@ -367,8 +368,8 @@ class BaselineBipartite(tree: Tree,
 object Accuracy {
 
   def precisionAndRecall(languages:Seq[Language], indices: Seq[Map[Language,Int]], numPositive: Counters.IntCounter[(Language,Language)])  = {
-    val numRight = scalanlp.counters.Counters.IntCounter[(Language,Language)];
-    val numGuesses = scalanlp.counters.Counters.IntCounter[(Language,Language)];
+    val numRight = scalala.tensor.counters.Counters.IntCounter[(Language,Language)];
+    val numGuesses = scalala.tensor.counters.Counters.IntCounter[(Language,Language)];
     for {
       map <- indices;
       (l1,i1) <- languages.zipWithIndex;
@@ -395,7 +396,7 @@ object Accuracy {
   }
 
   def numberOfPositives(languages: Seq[Language], groups: Seq[Seq[Cognate]]) = {
-    val numPositive = scalanlp.counters.Counters.IntCounter[(Language,Language)];
+    val numPositive = scalala.tensor.counters.Counters.IntCounter[(Language,Language)];
     for {
       cogs <- groups;
       set = cogs.map(_.language).toSet;
@@ -412,43 +413,10 @@ object Accuracy {
 
 }
 
-object RunBaselineX {
-  import Accuracy._;
-
-  def main(args: Array[String]) {
-    val languages = args(1).split(",");
-    val dataset = new Dataset(args(0),languages);
-    val threshold = args(2).toDouble;
-    val tree = dataset.tree;
-    val leaves = tree.leaves;
-    val gold = dataset.cognates.map(_.filter(cog => leaves(cog.language)));
-
-    val goldIndices = indexGold(gold);
-    val data = gold.flatten;
-    val randomized = Rand.permutation(data.length).draw().map(data);
-    val expectedNumTrees = data.length.toDouble / languages.size;
-    //val treePenalty = Math.log( (expectedNumTrees -1) / expectedNumTrees)
-    val treePenalty = 1; // Positive actually means a bonus.
-    val iter =  new BaselineAdaptive(tree,randomized, languages,threshold).iterations;
-    val numPositives = numberOfPositives(languages, gold);
-    for( state <- iter.take(1000)) {
-      val numGroups = state.groups.length;
-      for(g <- 0 until numGroups) {
-        val cognates = state.groups(g);
-        val indices = cognates.valuesIterator map goldIndices toSeq;
-        println(cognates.mkString(",") + " " + indices.mkString(","));
-      }
-      println("Conditional Likelihood" + state.likelihood)
-      val groundedGroups = state.groups map { group => group.mapValues(goldIndices).toMap };
-      val (precisions,recalls) = precisionAndRecall(languages,groundedGroups,numPositives);
-      println("Precisions" + precisions);
-      println("Recall" + recalls);
-    }
-  }
-}
+case class Params(treePenalty: Double, initDeathProb: Double, allowDeath: Boolean);
 
 
-trait BipartiteRunner {
+object BipartiteRunner {
   import Accuracy._;
 
   def main(args: Array[String]) {
@@ -457,7 +425,7 @@ trait BipartiteRunner {
     val config = Configuration.fromProperties(props);
     val languages = config.readIn[String]("dataset.languages").split(",");
 
-    val dataset_name = config.readIn[String]("dataset");
+    val dataset_name = config.readIn[String]("dataset.name");
     val dataset = new Dataset(dataset_name,languages);
     val tree = dataset.tree;
     val leaves = tree.leaves;
@@ -469,17 +437,15 @@ trait BipartiteRunner {
     val randomized = Rand.permutation(data.length).draw().map(data);
     val alphabet = Set.empty ++ data.iterator.flatMap(_.word.iterator);
 
-    val treePenalty = config.readIn[Double]("tree.penalty");
-    val deathProb = config.readIn[Double]("death.init_prob");
-    val allowDeath = config.readIn[Boolean]("death.allow");
-    val messageCompression = readAutomataCompressor(config, config.readIn[String]("transducers.message"));
+    val Params(treePenalty,initDeathProb,allowDeath) = config.readIn[Params]("params");
+    val messageCompression = readAutomataCompressor(config, "transducers.message");
 
     val transducerCompression = config.readIn[String]("transducers.editdistance","uni") match {
       case "unigram" | "uni" =>
         new UniCompression(('#','#')) with NormalizedByFirstChar[Unit,Char];
     }
 
-    val rootCompression = readAutomataCompressor(config, config.readIn[String]("transducers.root"));
+    val rootCompression = readAutomataCompressor(config, "transducers.root");
 
     val shouldLearn = config.readIn[Boolean]("transducers.learning");
     val initialFactors = new TransducerFactors(tree,alphabet,messageCompression);
@@ -489,7 +455,7 @@ trait BipartiteRunner {
     );
 
 
-    val bipartite = new Bipartite[TransducerFactors](tree, randomized, languages, treePenalty, deathProb, allowDeath, broker);
+    val bipartite = new Bipartite[TransducerFactors](tree, randomized, languages, treePenalty, initDeathProb, allowDeath, broker);
     val iter = bipartite.iterations;
     val numPositives = numberOfPositives(languages, gold);
 
@@ -508,16 +474,19 @@ trait BipartiteRunner {
     }
   }
 
-  private def readAutomataCompressor(config: Configuration, tpe: String): MessageCompressor[_] = tpe match {
+  case class MessageParams(`type`: String, klThreshold: Double, maxStates: Int);
+
+  private def readAutomataCompressor(config: Configuration, prefix: String): MessageCompressor[_] = {
+    val MessageParams(tpe, klThreshold, maxStates) = config.readIn[MessageParams](prefix);
+    val beginningUnigram = '#';
+    tpe match {
       case "bigram" | "bi" =>
-        val klThreshold = config.readIn[Double]("transducers.message.klThreshold",0.01);
-        val maxStates = config.readIn[Int]("transducers.message.maxStates",20);
-        val beginningUnigram = '#';
         new BiCompression(klThreshold,maxStates,beginningUnigram) with NormalizedTransitions[Option[Char],Char] : MessageCompressor[_];
       case "unigram" | "uni" =>
-        new UniCompression('#') with NormalizedTransitions[Unit,Char] : MessageCompressor[_];
+        new UniCompression(beginningUnigram) with NormalizedTransitions[Unit,Char] : MessageCompressor[_];
       case "posunigram" | "posuni" =>
-        val maxLength = config.readIn[Int]("transducers.message.maxStates",10);
-        new PosUniCompression(maxLength,'#') with NormalizedTransitions[Int,Char] : MessageCompressor[_];
+        new PosUniCompression(maxStates,beginningUnigram) with NormalizedTransitions[Int,Char] : MessageCompressor[_];
+    }
   }
 }
+

@@ -2,8 +2,7 @@ package dlwh.cognates;
 
 import scalanlp.fst._;
 import scalanlp.util.Index;
-import scalanlp.counters.LogCounters.{logSum => _, _};
-import scalanlp.math.Numerics._;
+import scalala.tensor.counters.LogCounters.{logSum => _, _};
 import scalala.Scalala._;
 import scala.collection.mutable.PriorityQueue;
 import scala.reflect.OptManifest;

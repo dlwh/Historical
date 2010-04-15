@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.scalanlp.dlwh</groupId>
   <artifactId>historical</artifactId>
-  <version>1.0-SNAPSHOT</version>
+  <version>1.1-SNAPSHOT</version>
   <inceptionYear>2009</inceptionYear>
   <build>
     <sourceDirectory>src/main/scala</sourceDirectory>
@@ -87,6 +87,16 @@
       <url>http://nlp.millennium.berkeley.edu:8082/archiva/repository/snapshots/</url>
       <id>berkeley-nlp-snapshots</id>
     </repository>
+    <repository>
+      <id>info-bliki-repository</id>
+      <url>http://gwtwiki.googlecode.com/svn/maven-repository/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+      </repository>
   </repositories>
   <pluginRepositories>
     <pluginRepository>
@@ -117,19 +127,34 @@
     </dependency>
     <dependency>
       <groupId>org.scalanlp</groupId>
-      <artifactId>scalanlp-core</artifactId>
-      <version>0.2.2-SNAPSHOT</version>
+      <artifactId>scalanlp-learn</artifactId>
+      <version>0.3.1-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+      <groupId>org.scalanlp</groupId>
+      <artifactId>scalanlp-data</artifactId>
+      <version>0.3.1-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.scalanlp</groupId>
       <artifactId>fst</artifactId>
-      <version>0.1-SNAPSHOT</version>
+      <version>0.2-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-compress</artifactId>
+      <version>1.0</version>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <version>3.8.1</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>info.bliki.wiki</groupId>
+      <artifactId>bliki-core</artifactId>
+      <version>3.0.13</version>
     </dependency>
   </dependencies>
   <reporting>
@@ -150,5 +175,6 @@
   </properties>
     <name>Historical</name>
 </project>
+
 
 

@@ -8,7 +8,6 @@ import scalanlp.math.Numerics._;
 import Types._;
 
 trait Factors {
-  type Self <: Factors;
   trait EdgeFactorBase {
     def childMarginalize(c: Marginal):Marginal;
     def parentMarginalize(p: Marginal):Marginal;
@@ -33,7 +32,6 @@ class TransducerFactors(t: Tree,
                         compression: MessageCompressor[_],
                         editDistances: Map[(Language,Language),Transducer[Double,_,Char,Char]]=Map.empty,
                         root: Option[Psi]=None) extends Factors {
-  type Self = TransducerFactors;
   type Marginal = TransducerMarginal;
   type EdgeFactor = TransducerEdge;
 

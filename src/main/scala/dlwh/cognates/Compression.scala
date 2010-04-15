@@ -4,34 +4,53 @@ import scalanlp.fst._;
 import scalanlp.util.Index;
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.PriorityQueue
-import scalanlp.counters.LogCounters.{logSum=>_,log=> _ ,_};
-import scalanlp.math.Numerics._;
+import scalala.tensor.counters.LogCounters.{logSum=>_,log=> _ ,_};
 import scalanlp.math.Semiring.LogSpace._;
 import scalala.Scalala._;
 
 import Types._;
 
+/**
+ * A Compressor provides a mechanism for taking an automaton,
+ *  gathering suff stats about that automaton, and then creating
+ *  a smaller automaton from those stats.
+ *
+ *  Actual creation of arcs is usually managed by a ArcCreator mixin.
+ *
+ *  @author dlwh
+ */
 trait Compressor[State,T] {
+  /** When creating, where should this arc go? */
   def destinationFor(state: State, trans: T): State
+  /** What is represented as the beginning unigram in destinationFor? */
   def beginningUnigram: T
+  /** Useful utility info */
   def alphabet: Alphabet[T];
+  /** The kind of information we collect */
   type Statistics
   /**
    * @return statistics and the total probability accumulated.
    */
   def gatherStatistics(validChars: Set[T], auto: Automaton[Double,_,T]):(Statistics,Double)
+  /** Take two statistics with mixing weights eta1 and eta2 and combine them into another Statistics */
   def interpolate(stats1: Statistics, eta1: Double, stats2: Statistics, eta2:Double):Statistics
+  /** For each kind of thing we're keeping track of, take a transition it represents,
+   * and its current weight, and say how to transform it */
   def transformCounts(stats: Statistics)(f: (T,Double)=>Double):Statistics;
+  /** Similar to transform. */
   def smooth(stats: Statistics, counts: LogDoubleCounter[T]): Statistics
 
+  /** Takes an automaton, and a set of valid characters, and returns a new Automaton */
   final def compress(auto: Automaton[Double,_,T], validChars: Set[T]):Automaton[Double,State,T] = {
     val stats = gatherStatistics(validChars,auto);
     compress(stats._2,stats._1);
   }
 
+  /** Takes a set of statistics, and a target weight, and makes an automata just like it */
   def compress(totalProb: Double, stats: Statistics): Automaton[Double,State,T];
 }
 
+/** A Compressor to produce Bigram approximations of an automaton */
 abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
                                                       maxStates: Int,
                                                       val beginningUnigram: T)
@@ -198,6 +217,7 @@ abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
   }
 }
 
+/** SafeCompressors handle the case where the partition of passed in automata may be infinite */
 class SafeCompression[S](val chars: Set[Char],
                          val inner: Compressor[S,Char] with NormalizedTransitions[S,Char],
                          expLength: Double) extends Compressor[S, Char] {
@@ -232,60 +252,5 @@ class SafeCompression[S](val chars: Set[Char],
     val difference = prob - currentCost;
     val ret = auto.scaleInitialWeights(difference);
     ret
-  }
-}
-
-import scalanlp.fst.Arc;
-trait ArcCreator[S,T] { this : Compressor[S,T] =>
-  def arcsForCounter(state: S, ctr: LogDoubleCounter[T]): Iterator[Arc[Double,S,T]];
-  def finalWeight(state: S, ctr: LogDoubleCounter[T]): Double
-}
-
-trait NormalizedTransitions[S,T] extends ArcCreator[S,T] { this: Compressor[S,T] =>
-  def arcsForCounter(state: S, ctr: LogDoubleCounter[T]) = {
-    val normalizer = ctr.logTotal;
-    assert(!normalizer.isNaN,ctr)
-    for{
-      (ch2,w) <- ctr.iterator
-      dest = destinationFor(state,ch2);
-      if (ch2 != beginningUnigram)
-    } yield Arc(state,dest,ch2,w-normalizer);
-  }
-
-    def finalWeight(state: S, ctr: LogDoubleCounter[T]): Double = {
-       ctr(beginningUnigram) - ctr.logTotal;
-    }
-}
-
-
-trait NormalizedByFirstChar[S,T] extends ArcCreator[S,(T,T)] { this: Compressor[S,(T,T)] =>
-  private val eps = alphabet.epsilon._1;
-
-  def arcsForCounter(state: S, ctr: LogDoubleCounter[(T,T)]) = {
-    val paired = LogPairedDoubleCounter[T,T]();
-    require(!ctr.logTotal.isInfinite && !ctr.logTotal.isNaN);
-
-    val insertWeights = new ArrayBuffer[Double]();
-    for( ((ch1,ch2),w) <- ctr) {
-      paired(ch1,ch2) = w;
-      if(ch1 == eps)
-        insertWeights += w;
-    }
-
-    val extraNormalizer = Math.log(1-Math.exp(logSum(insertWeights)-ctr.logTotal));
-    for {
-      (ch1,inner) <- paired.rows
-      trueTotal = if(ch1 == eps) paired.logTotal else inner.logTotal - extraNormalizer;
-      (ch2,w) <- inner.iterator
-      if ((ch1,ch2) != beginningUnigram)
-      dest = destinationFor(state,(ch1,ch2))
-    } yield Arc(state,dest,(ch1,ch2),w-trueTotal);
-  }
-
-  def finalWeight(state: S, ctr: LogDoubleCounter[(T,T)]): Double = {
-    val insertWeights = for ( ((a,b),w) <- ctr if a == eps) yield w;
-    val score = logSum(insertWeights.toSeq);
-
-    Math.log(1 - Math.exp(score-ctr.logTotal));
   }
 }
