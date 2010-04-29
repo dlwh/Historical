@@ -154,7 +154,7 @@
     <dependency>
       <groupId>info.bliki.wiki</groupId>
       <artifactId>bliki-core</artifactId>
-      <version>3.0.14-dlwh-SNAPSHOT</version>
+      <version>3.0.14-SNAPSHOT</version>
     </dependency>
   </dependencies>
   <reporting>
