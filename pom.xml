@@ -89,12 +89,12 @@
     </repository>
     <repository>
       <id>info-bliki-repository</id>
-      <url>http://gwtwiki.googlecode.com/svn/maven-repository/</url>
+      <url>http://gwtwiki.googlecode.com/svn/maven-snapshot-repository/</url>
       <releases>
         <enabled>true</enabled>
       </releases>
       <snapshots>
-        <enabled>false</enabled>
+        <enabled>true</enabled>
       </snapshots>
       </repository>
   </repositories>
@@ -154,7 +154,7 @@
     <dependency>
       <groupId>info.bliki.wiki</groupId>
       <artifactId>bliki-core</artifactId>
-      <version>3.0.13</version>
+      <version>3.0.14-dlwh-SNAPSHOT</version>
     </dependency>
   </dependencies>
   <reporting>
