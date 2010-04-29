@@ -91,7 +91,7 @@ in the permutation model.
   \caption{(a) The process by which cognate words are generated.
   Here, we show the derivation of Romance language words $W_\ell$
   from their respective Latin ancestor, parameterized by transformations
-  $\phi_\ell$ and survival variables $S_\ell$. Languages shown are
+  $\varphi_\ell$ and survival variables $S_\ell$. Languages shown are
   Latin (la), Vulgar Latin (VL), Proto-Iberian (PI), Italian (it),
   Portuguese (pt), and Spanish (es). 
   (b) The class of parameterized edit distances used in this paper.
@@ -137,8 +137,8 @@ subprocess in detail in the following subsections.
 
 \subsection{Survival}
 
-First, we choose a number of ancestral cognate groups from an
-geometric distribution.  For each cognate group, our generative
+First, we choose a number $G$ of ancestral cognate groups from an
+geometric distribution. For each cognate group $g$, our generative
 process walks down the tree.  At each branch, the word may either
 survive or die.  This process is modeled in a ``death tree'' with
 variables $S_\ell$ specifying whether or not the word died before
@@ -155,13 +155,15 @@ Once we know which languages will have an attested word and which
 will not, we generate the actual word forms. The evolution component of
 the model generates words according to a branch-specific transformation from a node's 
 immediate ancestor.  The figure graphically describes our generative
-model for three Romance languages: Italian, Portuguese, and Spanish.
+model for three Romance languages: Italian, Portuguese, and Spanish.\footnote{Though we have data for Latin, we treat it
+as unobserved to represent the more common case where the ancestral language is unattested; we also evaluate our system
+using the Latin data.}
 In each cognate group, each word $W_\ell$ is generated from its
-parent according to a conditional distribution with parameter $\phi_\ell$,
+parent according to a conditional distribution with parameter $\varphi_\ell$,
 which is specific to that edge in the tree, but shared between all
 cognate groups.
 
-In this paper, each $\phi_\ell$ takes the form of a parameterized
+In this paper, each $\varphi_\ell$ takes the form of a parameterized
 edit distance similar to the standard Levenshtein distance.  Arbitrary
 models--such as the richer ones in \newcite{bouchard07probabilistic}--could
 instead be used, if at increased inferential cost.   The edit
@@ -176,14 +178,14 @@ Here, the Italian word \textit{/fwoko/} (``fire'') is generated from
 its parent form \textit{/fokus/} (``hearth'') by a series of edits:
 three matches, one substitution (from `u' to `o'), one insertion (`w') and
 one deletion (`s').  The probability of each individual edit is
-determined by $\phi$.  Note that the marginal probability of a
+determined by $\varphi$.  Note that the marginal probability of a
 specific Italian word conditioned on its Vulgar Latin parent is the
 sum over all possible derivations that generate it.
 
 \subsection{Permutation}
 
 Finally, at the leaves of the trees are the observed words. (We
-take interior nodes to be unobserved.) Here, we make the (false)
+take non-leaf nodes to be unobserved.) Here, we make the (false)
 simplifying assumption that in any language there is at most one
 word per language per cognate group. Because the assignments of
 words to cognates is unknown, we specify an unknown parameter
@@ -201,7 +203,7 @@ marginalized to the greatest extent possible.
 
 \section{Inference}
 In this section, we discuss the inference method for determining
-cognate assignments under fixed parameters $\phi$.  We are given a
+cognate assignments under fixed parameters $\varphi$.  We are given a
 set of languages and a list of words in each language, and our
 objective is to determine which words are cognate with each other.
 Because the parameters $\pi_\ell$ are either permutations or injections,
@@ -210,17 +212,17 @@ respective word lists to maximize the log probability of the observed
 words.
 \begin{equation*}
   \begin{split}
-    \mathbf{\pi} = \arg\!\max_{\mathbf \pi} \sum_{g} \log p(w_{(\ell,\pi_\ell(g))}|\mathbf \phi,\mathbf \pi, \mathbf{w}_{-\ell})
+    \mathbf{\pi} = \arg\!\max_{\mathbf \pi} \sum_{g} \log p(w_{(\ell,\pi_\ell(g))}|\mathbf \varphi,\mathbf \pi, \mathbf{w}_{-\ell})
    \end{split}
  \end{equation*}
 $w_{(\ell,\pi_\ell(g))}$ is the word in language $\ell$ that
-$\pi_\ell$ has assigned to group g. Maximizing this equation
+$\pi_\ell$ has assigned to cognate group $g$. Maximizing this equation
 directly is intractable, and so instead we use a coordinate ascent
 algorithm to iteratively maximize the permutation corresponding to
 a single language $\ell$ while holding the others fixed:
 \begin{equation*}
   \begin{split}
-    \pi_\ell = \arg\!\max_{\pi_\ell} \sum_{g} \log p(w_{(\ell,\pi_\ell(g))}|\mathbf \phi,\mathbf \pi_{-\ell},\pi_\ell, \mathbf{w}_{-\ell})
+    \pi_\ell = \arg\!\max_{\pi_\ell} \sum_{g} \log p(w_{(\ell,\pi_\ell(g))}|\mathbf \varphi,\mathbf \pi_{-\ell},\pi_\ell, \mathbf{w}_{-\ell})
   \end{split}
 \end{equation*}
 Each iteration is then actually an instance of bipartite graph
@@ -230,7 +232,7 @@ nodes. The edge affinities $\mathbf{aff}$ between these nodes are the conditiona
 probabilities of each word $w_\ell$ belonging to each cognate group $g$:
 \begin{equation*}
   \begin{split}
-    \mathbf{aff}(w_\ell,g) = p(w_\ell|\mathbf w_{-\ell,\pi_{-\ell}(g)},\mathbf \phi,\mathbf\pi_{-\ell})
+    \mathbf{aff}(w_\ell,g) = p(w_\ell|\mathbf w_{-\ell,\pi_{-\ell}(g)},\mathbf \varphi,\mathbf\pi_{-\ell})
    \end{split}
  \end{equation*}
 
@@ -242,7 +244,7 @@ send messages from the leaves of the tree toward the root. For
 observed leaf nodes $W_d$, we have:
 \begin{equation*}
   \begin{split}
-    \mu_{d\to a}(w_a) = p(W_d = w_d|w_a,\phi)
+    \mu_{d\to a}(w_a) = p(W_d = w_d|w_a,\varphi)
    \end{split}
  \end{equation*}
 and for interior nodes $W_i$:
@@ -252,14 +254,14 @@ and for interior nodes $W_i$:
     \mu_{i\to a}(w_a) = \sum_{w_i} p(w_i|w_a) \prod_{d \in \mathrm{child}(w_i)} \mu_{d \to i}(w_i) 
   \end{split}
 \end{equation}
-In the downward pass (toward the language $\ell$), we sum over ancestral words $W_a$:
+In the downward pass (toward the language $\ell$), we sum over ancestral words $w_a$:
 \begin{equation*}
   \begin{split}
     \mu_{a\to d}(w_d) = \sum_{w_a} p(w_d|w_a) \prod_{\stackrel{d' \in \mathrm{child}(w_a)}{d' \neq d}} \mu_{d' \to a}(w_a) 
   \end{split}
 \end{equation*}
 Computing these messages gives a posterior marginal distribution
-$\mu_\ell(w_\ell) = p(w_\ell|\mathbf w_{-\ell,\pi_{-\ell}(g)},\mathbf \phi,\mathbf\pi_{-\ell})$,
+$\mu_\ell(w_\ell) = p(w_\ell|\mathbf w_{-\ell,\pi_{-\ell}(g)},\mathbf \varphi,\mathbf\pi_{-\ell})$,
 which is precisely the affinity score
 we need for the bipartite matching. We then use the Kuhn-Munkres
 algorithm \cite{Kuhn1955} to find the optimal assignment for the
@@ -273,10 +275,19 @@ added, and then continued iterations on the full tree.
 
 \section{Learning}
 
+XXX a fake or real example here about why learning transducers is useful.
+
 So far we have only addressed searching for Viterbi permutations
 $\pi$ under fixed parameters. However, we also have two other sets
-of parameters: the transducers $\phi_\ell$, and the conditional probabilities
-over the survival variables $S_\ell$. The parameters can be learned
+of parameters: the transducers $\varphi_\ell$, and the conditional
+probabilities over the survival variables $S_\ell$.  At a high
+level, our learning algorithm is much like ``hard'' Expectation
+Maximization: after we update the permutation variables $\pi$, we
+re-estimate our model's parameters to maximize the likelihood of
+the assignments.\footnote{Strictly, we can cast this problem 
+in a variational framework where we iteratively maximize parameters
+to minimize a KL-divergence. We omit details on this perspective because they seem to
+only obfuscate, rather than clarify, our presentation.} The parameters can be learned
 through standard maximum likelihood estimation, which we detail in
 this section.
 
@@ -288,8 +299,8 @@ be found by counting the number of ``deaths'' that occurred under
 a live parent, applying smoothing--we found adding 0.5 to be
 reasonable--and dividing by the total number of live parents.
 
-For the transducers $\phi$, we learn parameterized edit
-distances. For each $\phi_\ell$ we fit a non-uniform substitution,
+For the transducers $\varphi$, we learn parameterized edit
+distances. For each $\varphi_\ell$ we fit a non-uniform substitution,
 insertion, and deletion matrix $\sigma(x,y)$. These edit distances
 define a conditional exponential family distribution when conditioned
 on an ancestral word (or when multiplied by a prior distribution
@@ -302,11 +313,11 @@ over those words). That is, for any fixed $w_a$:
  \end{equation*}
 where $\mathrm{align}(w_a,w_d)$ is the set of possible alignments between words $w_a$ and $w_d$.
 
-We are seeking the maximum likelihood estimate of each $\phi$, given
+We are seeking the maximum likelihood estimate of each $\varphi$, given
 fixed permutations $\pi$:
 \begin{equation*}
   \begin{split}
-    \hat\phi_{\ell} &= \arg\!\max_{\phi_{\ell}} p(\mathbf w|\mathbf \phi,\mathbf\pi)
+    \hat\varphi_{\ell} &= \arg\!\max_{\varphi_{\ell}} p(\mathbf w|\mathbf \varphi,\mathbf\pi)
    \end{split}
  \end{equation*}
 To find this maximizer for any given $\pi_\ell$, we need to find a marginal
@@ -457,9 +468,9 @@ between the ``expected'' marginal distribution and the approximated
 ``expected'' marginal distribution:
 \begin{equation}
   \begin{split}
-    \hat\theta &= \arg\!\min_{\theta} D_{KL}(\tau(w)\tilde\mu(w;\theta)||\tau(w)\mu(w) ) \\
-    &= \arg\!\min_{\theta} \sum_w \tau(w) \tilde\mu(w;\theta) \log \frac{\tau(w)\tilde\mu(w;\theta)}{\tau(w)\mu(w)} \\
-    &= \arg\!\min_{\theta} \sum_w \tau(w) \tilde\mu(w;\theta) \log \frac{\tilde\mu(w;\theta)}{\mu(w)} \\
+    \hat\theta &= \arg\!\min_{\theta} D_{KL}(\tau(w)\mu(w;\theta)||\tau(w)\tilde\mu(w) ) \\
+    &= \arg\!\min_{\theta} \sum_w \tau(w) \mu(w;\theta) \log \frac{\tau(w)\mu(w;\theta)}{\tau(w)\tilde\mu(w)} \\
+    &= \arg\!\min_{\theta} \sum_w \tau(w) \mu(w;\theta) \log \frac{\mu(w;\theta)}{\tilde\mu(w)} \\
    \end{split}
  \end{equation}
 where $\tau$ is a prior distribution acting as a surrogate for the
@@ -597,7 +608,7 @@ In this experiment, we know precisely how many cognate groups there
 are and that every cognate group has a word in each language. While
 this scenario does not include all of the features of the real-world
 task, it represents a good test case of how well these models can
-perform without the non-parametric task of decided how many clusters
+perform without the non-parametric task of deciding how many clusters
 to use.
 
 We scrambled the 583 cognate groups in the Romance dataset and ran
@@ -734,6 +745,10 @@ this task, our reconstructed cognate groups had an average edit
 distance of 3.8 from the assigned Latin word. This compares favorably to the
 edit distances reported in \newcite{bouchard09improved}, who using oracle
 cognate assignments achieved an average Levenshtein distance of 3.0.
+
+\section{Analysis}
+
+In this section we describe a few of the examples XXX
 
 \section{Conclusion}
 
