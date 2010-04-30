@@ -15,7 +15,8 @@
 
 \title{Finding Cognate Groups using Phylogenies}
 
-\author{}
+\author{David Hall and Dan Klein \\ Computer Science Division \\ University of California at Berkeley \\
+\texttt{\{dlwh,klein\}}@cs.berkeley.edu}
 
 \date{}
 
@@ -54,7 +55,9 @@ linguists are currently required to make qualitative judgments
 regarding the relative likelihood of certain sound changes, cognate
 groups, and so on.  Recent statistical methods have been introduced
 to provide increased quantitative backing to the comparative
-method~\cite{oakes00computer,bouchard07probabilistic,bouchard09improved}.
+method~\cite{oakes00computer,bouchard07probabilistic,bouchard09improved},
+and still others have modeled the spread of language
+change and speciation~\cite{ringe02IE,daume07implication,daume09areal,nerbonne08measuring}
 These automated methods, while providing robustness and scale in
 the induction of ancestral word forms and evolutionary parameters,
 assume that both guide trees and cognate words are already given.
@@ -65,9 +68,25 @@ discovered.
 Finding cognate groups is not an easy task, because underlying
 morphological and phonological changes can obscure relationships
 between words, especially for distant cognates, where simple string
-overlap is an inadequate measure of similarity.  Some authors have
+overlap is an inadequate measure of similarity. Indeed, a standard
+string similarity metric like Levenshtein distance can lead to false
+positives. Consider the often cited example of Greek
+\textit{/mati/} and Malay \textit{/mata/}, both meaning
+``eye.'' (XXX cite bloomfield--I think) If we were to rely on
+Levenshtein distance, these words would seem to be highly attractive
+match for cognates: they are nearly identical, differing in only a
+single character.  However, no linguist would posit that these two
+words are related. To correctly learn that they are not related,
+linguists typically rely on two kinds of evidence. First, because
+sound change is largely regular, we would need to commonly see
+\textit{/i/} in Greek wherever we see \textit{/a/} in
+Malay.~\cite{ross50philological} Second,
+we should look at languages closely related to Greek and Malay, to
+see if similar patterns hold there, too.
+
+(XXX transition?) Some authors have
 attempted to automatically detect cognate
-words~\cite{lowe94reconstruction,oakes00computer,Kondrak01identifyingcognates,mulloni07automatic},
+words~\cite{lowe94reconstruction,oakes00computer,Kondrak01identifyingcognates,mulloni07automatic,mann01multipath},
 but these methods typically work on language pairs rather than on
 language families.  To handle realistic scenarios, it is
 necessary to consider multiple languages, and to do so in a model
@@ -762,6 +781,7 @@ we demonstrate that these automatically generated cognate groups
 can be used to automatically reconstruct proto-words faithfully,
 with a small increase in error.
 
+\nocite{Yarowsky00inducingmultilingual}
 \bibliographystyle{acl}
 \bibliography{refs}
 
