@@ -11,12 +11,13 @@
 \usepackage{comment}
 \usepackage{enumerate}
 \usepackage{latexsym}
+\usepackage{tipa}
 %\setlength\titlebox{6.5cm}    % Expanding the titlebox
 
 \title{Finding Cognate Groups using Phylogenies}
 
 \author{David Hall and Dan Klein \\ Computer Science Division \\ University of California at Berkeley \\
-\texttt{\{dlwh,klein\}}@cs.berkeley.edu}
+\texttt{\{dlwh,klein\}@cs.berkeley.edu}}
 
 \date{}
 
@@ -56,14 +57,13 @@ regarding the relative likelihood of certain sound changes, cognate
 groups, and so on.  Recent statistical methods have been introduced
 to provide increased quantitative backing to the comparative
 method~\cite{oakes00computer,bouchard07probabilistic,bouchard09improved},
-and still others have modeled the spread of language
-change and speciation~\cite{ringe02IE,daume07implication,daume09areal,nerbonne08measuring}
+and still others have modeled the spread of language change and
+speciation~\cite{ringe02IE,daume07implication,daume09areal,nerbonne08measuring}
 These automated methods, while providing robustness and scale in
 the induction of ancestral word forms and evolutionary parameters,
-assume that both guide trees and cognate words are already given.
-In this work, we address the latter, more severe limitation,
-presenting a model in which cognate groups can automatically be
-discovered.
+assume that cognate words are already given.  In this work, we
+address this limitation, presenting a model in which cognate groups
+can be discovered automatically.
 
 Finding cognate groups is not an easy task, because underlying
 morphological and phonological changes can obscure relationships
@@ -71,22 +71,23 @@ between words, especially for distant cognates, where simple string
 overlap is an inadequate measure of similarity. Indeed, a standard
 string similarity metric like Levenshtein distance can lead to false
 positives. Consider the often cited example of Greek
-\textit{/mati/} and Malay \textit{/mata/}, both meaning
-``eye.'' (XXX cite bloomfield--I think) If we were to rely on
+\textit{\textipa{/ma:ti/}} and Malay \textit{/mata/}, both meaning
+``eye.''~\cite{bloomfield38language} If we were to rely on
 Levenshtein distance, these words would seem to be highly attractive
 match for cognates: they are nearly identical, differing in only a
 single character.  However, no linguist would posit that these two
 words are related. To correctly learn that they are not related,
 linguists typically rely on two kinds of evidence. First, because
 sound change is largely regular, we would need to commonly see
-\textit{/i/} in Greek wherever we see \textit{/a/} in
+\textit{\textipa{/i/}} in Greek wherever we see
+\textit{\textipa{/a/}} in
 Malay.~\cite{ross50philological} Second,
 we should look at languages closely related to Greek and Malay, to
 see if similar patterns hold there, too.
 
 (XXX transition?) Some authors have
 attempted to automatically detect cognate
-words~\cite{lowe94reconstruction,oakes00computer,Kondrak01identifyingcognates,mulloni07automatic,mann01multipath},
+words~\cite{mann01multipath,lowe94reconstruction,oakes00computer,Kondrak01identifyingcognates,mulloni07automatic},
 but these methods typically work on language pairs rather than on
 language families.  To handle realistic scenarios, it is
 necessary to consider multiple languages, and to do so in a model
@@ -156,7 +157,7 @@ subprocess in detail in the following subsections.
 
 \subsection{Survival}
 
-First, we choose a number $G$ of ancestral cognate groups from an
+First, we choose a number $G$ of ancestral cognate groups from a
 geometric distribution. For each cognate group $g$, our generative
 process walks down the tree.  At each branch, the word may either
 survive or die.  This process is modeled in a ``death tree'' with
@@ -172,15 +173,16 @@ case.
 
 Once we know which languages will have an attested word and which
 will not, we generate the actual word forms. The evolution component of
-the model generates words according to a branch-specific transformation from a node's 
-immediate ancestor.  The figure graphically describes our generative
-model for three Romance languages: Italian, Portuguese, and Spanish.\footnote{Though we have data for Latin, we treat it
-as unobserved to represent the more common case where the ancestral language is unattested; we also evaluate our system
-using the Latin data.}
-In each cognate group, each word $W_\ell$ is generated from its
-parent according to a conditional distribution with parameter $\varphi_\ell$,
-which is specific to that edge in the tree, but shared between all
-cognate groups.
+the model generates words according to a branch-specific transformation
+from a node's immediate ancestor.  The figure graphically describes
+our generative model for three Romance languages: Italian, Portuguese,
+and Spanish.\footnote{Though we have data for Latin, we treat it
+as unobserved to represent the more common case where the ancestral
+language is unattested; we also evaluate our system using the Latin
+data.} In each cognate group, each word $W_\ell$ is generated from
+its parent according to a conditional distribution with parameter
+$\varphi_\ell$, which is specific to that edge in the tree, but
+shared between all cognate groups.
 
 In this paper, each $\varphi_\ell$ takes the form of a parameterized
 edit distance similar to the standard Levenshtein distance.  Arbitrary
@@ -193,13 +195,15 @@ represents the empty phoneme and is used as short hand for insertion
 and deletion, which have parameters $\eta$ and $\delta$, respectively.
 
 As an example, see the illustration in Figure (\ref{fig:gmodel}c).
-Here, the Italian word \textit{/fwoko/} (``fire'') is generated from
-its parent form \textit{/fokus/} (``hearth'') by a series of edits:
-three matches, one substitution (from `u' to `o'), one insertion (`w') and
-one deletion (`s').  The probability of each individual edit is
-determined by $\varphi$.  Note that the marginal probability of a
-specific Italian word conditioned on its Vulgar Latin parent is the
-sum over all possible derivations that generate it.
+Here, the Italian word \textit{\textipa{/fwOko/}} (``fire'') is
+generated from its parent form \textit{\textipa{/fokus/}} (``hearth'')
+by a series of edits: two matches, two substitutions (\textit{/u/}$\to$
+\textit{/o/}, and \textit{/o/}$\to$\textit{\textipa{/O/}}), one
+insertion (\textit{w}) and one deletion (\textit{/s/}).  The
+probability of each individual edit is determined by $\varphi$.
+Note that the marginal probability of a specific Italian word
+conditioned on its Vulgar Latin parent is the sum over all possible
+derivations that generate it.
 
 \subsection{Permutation}
 
@@ -231,7 +235,7 @@ respective word lists to maximize the log probability of the observed
 words.
 \begin{equation*}
   \begin{split}
-    \mathbf{\pi} = \arg\!\max_{\mathbf \pi} \sum_{g} \log p(w_{(\ell,\pi_\ell(g))}|\mathbf \varphi,\mathbf \pi, \mathbf{w}_{-\ell})
+    \mathbf{\pi} = \arg\negthinspace\max_{\mathbf \pi} \sum_{g} \log p(w_{(\ell,\pi_\ell(g))}|\mathbf \varphi,\mathbf \pi, \mathbf{w}_{-\ell})
    \end{split}
  \end{equation*}
 $w_{(\ell,\pi_\ell(g))}$ is the word in language $\ell$ that
@@ -241,7 +245,7 @@ algorithm to iteratively maximize the permutation corresponding to
 a single language $\ell$ while holding the others fixed:
 \begin{equation*}
   \begin{split}
-    \pi_\ell = \arg\!\max_{\pi_\ell} \sum_{g} \log p(w_{(\ell,\pi_\ell(g))}|\mathbf \varphi,\mathbf \pi_{-\ell},\pi_\ell, \mathbf{w}_{-\ell})
+    \pi_\ell = \arg\negthinspace\max_{\pi_\ell} \sum_{g} \log p(w_{(\ell,\pi_\ell(g))}|\mathbf \varphi,\mathbf \pi_{-\ell},\pi_\ell, \mathbf{w}_{-\ell})
   \end{split}
 \end{equation*}
 Each iteration is then actually an instance of bipartite graph
@@ -273,7 +277,7 @@ and for interior nodes $W_i$:
     \mu_{i\to a}(w_a) = \sum_{w_i} p(w_i|w_a) \prod_{d \in \mathrm{child}(w_i)} \mu_{d \to i}(w_i) 
   \end{split}
 \end{equation}
-In the downward pass (toward the language $\ell$), we sum over ancestral words $w_a$:
+In the downward pass (toward the language $\ell$), we sum over ancestral words $W_a$:
 \begin{equation*}
   \begin{split}
     \mu_{a\to d}(w_d) = \sum_{w_a} p(w_d|w_a) \prod_{\stackrel{d' \in \mathrm{child}(w_a)}{d' \neq d}} \mu_{d' \to a}(w_a) 
@@ -294,21 +298,39 @@ added, and then continued iterations on the full tree.
 
 \section{Learning}
 
-XXX a fake or real example here about why learning transducers is useful.
-
 So far we have only addressed searching for Viterbi permutations
-$\pi$ under fixed parameters. However, we also have two other sets
-of parameters: the transducers $\varphi_\ell$, and the conditional
-probabilities over the survival variables $S_\ell$.  At a high
-level, our learning algorithm is much like ``hard'' Expectation
-Maximization: after we update the permutation variables $\pi$, we
+$\pi$ under fixed parameters. In practice, it is important to
+estimate better parameters of the transducers $\varphi_\ell$ and
+survival variables $S_\ell$. To motivate the transducers, consider
+the example of English ``day'' \textit{/\textipa{deI}/} and Latin
+``di\=es,'' \textit{/\textipa{dIe:s}/} both with the same meaning.
+Surprisingly, these words are in no way related, with English ``day''
+probably coming from a verb meaning ``to burn.''~\cite{oedDay}
+However, a na\:ively constructed edit distance, which for example
+might penalize vowel substitutions lightly, would fail to learn
+that Latin words that are borrowed into English would not undergo
+the sound change \textit{/\textipa{I}/}$ \to $\textit{/\textipa{eI}/}.
+Therefore, our model must learn not only which sound changes are
+plausible (e.g. vowels turning into other vowels is more common
+than vowels turning into consonants), but which changes are appropriate
+for a given language.\footnote{We note two further difficulties:
+our model does not handle ``borrowings,'' which would be necessary
+to capture a significant portion of English vocabulary; nor can it
+seamlessly handle words that are inherited later in the evolution
+of language than others. For instance, French borrowed words from
+its parent language Latin during the Renaissance and the Enlightenment
+which have not undergone the same changes as words that evolved
+``naturally'' from Latin. See \cite{bloomfield38language}.}
+
+At a high level, our learning algorithm is much like Expectation
+Maximization with hard assignments: after we update the permutation
+variables $\pi$ and thus form new potential cognate sets, we
 re-estimate our model's parameters to maximize the likelihood of
-the assignments.\footnote{Strictly, we can cast this problem 
-in a variational framework where we iteratively maximize parameters
-to minimize a KL-divergence. We omit details on this perspective because they seem to
-only obfuscate, rather than clarify, our presentation.} The parameters can be learned
-through standard maximum likelihood estimation, which we detail in
-this section.
+those assignments.\footnote{Strictly, we can cast this problem in
+a variational framework similar to mean field where we iteratively
+maximize parameters to minimize a KL-divergence. We omit details
+for clarity.} The parameters can be learned through standard maximum
+likelihood estimation, which we detail in this section.
 
 Because we enforce that a word must be dead if its parent word is
 dead, we just need to learn the conditional probabilities
@@ -318,16 +340,19 @@ be found by counting the number of ``deaths'' that occurred under
 a live parent, applying smoothing--we found adding 0.5 to be
 reasonable--and dividing by the total number of live parents.
 
-For the transducers $\varphi$, we learn parameterized edit
-distances. For each $\varphi_\ell$ we fit a non-uniform substitution,
-insertion, and deletion matrix $\sigma(x,y)$. These edit distances
-define a conditional exponential family distribution when conditioned
-on an ancestral word (or when multiplied by a prior distribution
-over those words). That is, for any fixed $w_a$:
-\begin{equation*}
+For the transducers $\varphi$, we learn parameterized edit distances
+that model the probabilities of different sound changes. For each
+$\varphi_\ell$ we fit a non-uniform substitution, insertion, and
+deletion matrix $\sigma(x,y)$. These edit distances define a
+conditional exponential family distribution when conditioned on an
+ancestral word (or when multiplied by a prior distribution over
+those words). That is, for any fixed $w_a$: \begin{equation*}
   \begin{split}
-    \sum_{w_d} &p(w_d|w_a,\sigma) = \sum_{w_d} \sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \mathrm{score}(z;\sigma) \\
-    &= \sum_{w_d} \sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \prod_{(x,y)\in z} \sigma(x,y) = 1
+    \sum_{w_d} &p(w_d|w_a,\sigma) = \sum_{w_d}
+    \sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}}
+    \mathrm{score}(z;\sigma) \\ &= \sum_{w_d}
+    \sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}}
+    \prod_{(x,y)\in z} \sigma(x,y) = 1
    \end{split}
  \end{equation*}
 where $\mathrm{align}(w_a,w_d)$ is the set of possible alignments between words $w_a$ and $w_d$.
@@ -336,7 +361,7 @@ We are seeking the maximum likelihood estimate of each $\varphi$, given
 fixed permutations $\pi$:
 \begin{equation*}
   \begin{split}
-    \hat\varphi_{\ell} &= \arg\!\max_{\varphi_{\ell}} p(\mathbf w|\mathbf \varphi,\mathbf\pi)
+    \hat\varphi_{\ell} &= \arg\negthinspace\max_{\varphi_{\ell}} p(\mathbf w|\mathbf \varphi,\mathbf\pi)
    \end{split}
  \end{equation*}
 To find this maximizer for any given $\pi_\ell$, we need to find a marginal
@@ -487,9 +512,9 @@ between the ``expected'' marginal distribution and the approximated
 ``expected'' marginal distribution:
 \begin{equation}
   \begin{split}
-    \hat\theta &= \arg\!\min_{\theta} D_{KL}(\tau(w)\mu(w;\theta)||\tau(w)\tilde\mu(w) ) \\
-    &= \arg\!\min_{\theta} \sum_w \tau(w) \mu(w;\theta) \log \frac{\tau(w)\mu(w;\theta)}{\tau(w)\tilde\mu(w)} \\
-    &= \arg\!\min_{\theta} \sum_w \tau(w) \mu(w;\theta) \log \frac{\mu(w;\theta)}{\tilde\mu(w)} \\
+    \hat\theta &= \arg\negthinspace\min_{\theta} D_{KL}(\tau(w)\mu(w;\theta)||\tau(w)\tilde\mu(w) ) \\
+    &= \arg\negthinspace\min_{\theta} \sum_w \tau(w) \mu(w;\theta) \log \frac{\tau(w)\mu(w;\theta)}{\tau(w)\tilde\mu(w)} \\
+    &= \arg\negthinspace\min_{\theta} \sum_w \tau(w) \mu(w;\theta) \log \frac{\mu(w;\theta)}{\tilde\mu(w)} \\
    \end{split}
  \end{equation}
 where $\tau$ is a prior distribution acting as a surrogate for the
@@ -544,8 +569,8 @@ up to some maximum length.
 
 The first we consider is a standard unigram model, which is illustrated
 in Figure (\ref{fig:fsa}a). It has $|\Sigma|+2$ parameters: one
-weight $\sigma_a$ for each phoneme $a \in \Sigma$, a ``starting
-weight'' $\lambda$, and a stopping probability. Estimating this
+weight $\sigma_a$ for each phoneme $a \in \Sigma$, a starting
+weight $\lambda$, and a stopping probability. Estimating this
 model involves only computing the expected count of each phoneme,
 along with the expected length of a word, $E[|w|]$. We then normalize
 the counts according to the maximum likelihood estimate, with arc
@@ -592,7 +617,7 @@ We conduct three experiments. The first is a ``complete data''
 experiment, in which we reconstitute the cognate groups from the
 Romance data set, where all cognate groups have words in all three
 languages.  This task highlights the evolution and permutation
-models.  The second is a much harder ``partial data'' experiment,
+models.  The second is a much harder (XXX rerunning)``partial data'' experiment,
 in which we randomly prune 40\% of the words from the dataset.
 Here, only a fraction of words appear in any cognate group,
 so this task crucially involves the survival model.  The ultimate
@@ -780,6 +805,11 @@ can reduce the error rate by 80\% over a baseline approach. Finally,
 we demonstrate that these automatically generated cognate groups
 can be used to automatically reconstruct proto-words faithfully,
 with a small increase in error.
+
+\section*{Acknowledgments}
+
+Thanks to Alexandre Bouchard-C\^ot\'e for the many insights. This work was supported by XXX. David Hall was funded by a National
+Science Foundation Fellowship (XXX ?).
 
 \nocite{Yarowsky00inducingmultilingual}
 \bibliographystyle{acl}
