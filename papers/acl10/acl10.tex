@@ -58,7 +58,7 @@ groups, and so on.  Recent statistical methods have been introduced
 to provide increased quantitative backing to the comparative
 method~\cite{oakes00computer,bouchard07probabilistic,bouchard09improved},
 and still others have modeled the spread of language change and
-speciation~\cite{ringe02IE,daume07implication,daume09areal,nerbonne08measuring}
+speciation~\cite{ringe02IE,daume07implication,daume09areal,nerbonne08measuring}.
 These automated methods, while providing robustness and scale in
 the induction of ancestral word forms and evolutionary parameters,
 assume that cognate words are already given.  In this work, we
@@ -85,7 +85,7 @@ Malay.~\cite{ross50philological} Second,
 we should look at languages closely related to Greek and Malay, to
 see if similar patterns hold there, too.
 
-(XXX transition?) Some authors have
+Some authors have
 attempted to automatically detect cognate
 words~\cite{mann01multipath,lowe94reconstruction,oakes00computer,Kondrak01identifyingcognates,mulloni07automatic},
 but these methods typically work on language pairs rather than on
@@ -97,9 +97,9 @@ In this paper we present a new generative model for the automatic
 induction of cognate groups given only (1) a known family tree of
 languages and (2) word lists from those languages.  A prior on word
 survival generates a number of cognate groups and decides which
-modern languages attest each group.  An evolutionary model captures
-how each word is generated from its parent word.  Finally, a
-permutation model describes how cognate groups are collapsed into
+groups are attested by each modern language.  An evolutionary model
+captures how each word is generated from its parent word.  Finally,
+a permutation model describes how cognate groups are collapsed into
 flat word lists.  Inference requires a combination of message-passing
 in the evolutionary model and iterative bipartite graph matching
 in the permutation model.
@@ -107,13 +107,14 @@ in the permutation model.
 % This needs to be here to convince latex to put it on page 2. 
 \begin{figure*}
   \centering
-  \includegraphics[scale=0.35]{gmodel}
+  \includegraphics[scale=0.435]{gmodel}
   \caption{(a) The process by which cognate words are generated.
   Here, we show the derivation of Romance language words $W_\ell$
   from their respective Latin ancestor, parameterized by transformations
   $\varphi_\ell$ and survival variables $S_\ell$. Languages shown are
-  Latin (la), Vulgar Latin (VL), Proto-Iberian (PI), Italian (it),
-  Portuguese (pt), and Spanish (es). 
+  Latin (LA), Vulgar Latin (VL), Proto-Iberian (PI), Italian (IT),
+  Portuguese (PT), and Spanish (ES). Note that only modern language
+  words are observed (shaded).
   (b) The class of parameterized edit distances used in this paper.
   Each pair of phonemes has a weight $\sigma$ for deletion, and
   each phoneme has weights $\eta$ and $\delta$ for insertion and
@@ -156,33 +157,36 @@ graphically in Figure (\ref{fig:gmodel}a) and we present each
 subprocess in detail in the following subsections.
 
 \subsection{Survival}
+\label{sec:survival}
 
 First, we choose a number $G$ of ancestral cognate groups from a
 geometric distribution. For each cognate group $g$, our generative
 process walks down the tree.  At each branch, the word may either
 survive or die.  This process is modeled in a ``death tree'' with
-variables $S_\ell$ specifying whether or not the word died before
-reaching that language. Death at any node in the tree causes all
-of that node's descendants to also be dead.  This process captures
-that a word is more likely to be found in two sibling languages
-(e.g. Spanish and Portuguese) than in two cousin languages (Portuguese
-and Italian); more independent death events occur in the latter
-case.
+a Bernoulli random variable $S_{\ell g}$ for each language $\ell$
+and cognate group $g$ specifying whether or not the word died before
+reaching that language.  Death at any node in the tree causes all
+of that node's descendants to also be dead. This process captures
+the intuition that a word is more likely to be found in two sibling
+languages (e.g. Spanish and Portuguese) than in two cousin languages
+(Portuguese and Italian); more independent death events occur in
+the latter case.
 
 \subsection{Evolution}
 
 Once we know which languages will have an attested word and which
-will not, we generate the actual word forms. The evolution component of
-the model generates words according to a branch-specific transformation
-from a node's immediate ancestor.  The figure graphically describes
-our generative model for three Romance languages: Italian, Portuguese,
-and Spanish.\footnote{Though we have data for Latin, we treat it
-as unobserved to represent the more common case where the ancestral
-language is unattested; we also evaluate our system using the Latin
-data.} In each cognate group, each word $W_\ell$ is generated from
-its parent according to a conditional distribution with parameter
-$\varphi_\ell$, which is specific to that edge in the tree, but
-shared between all cognate groups.
+will not, we generate the actual word forms. The evolution component
+of the model generates words according to a branch-specific
+transformation from a node's immediate ancestor. Figure (\ref{fig:gmodel}a)
+graphically describes our generative model for three Romance
+languages: Italian, Portuguese, and Spanish.\footnote{Though we
+have data for Latin, we treat it as unobserved to represent the
+more common case where the ancestral language is unattested; we
+also evaluate our system using the Latin data.} In each cognate
+group, each word $W_\ell$ is generated from its parent according
+to a conditional distribution with parameter $\varphi_\ell$, which
+is specific to that edge in the tree, but shared between all cognate
+groups.
 
 In this paper, each $\varphi_\ell$ takes the form of a parameterized
 edit distance similar to the standard Levenshtein distance.  Arbitrary
@@ -243,16 +247,21 @@ $\pi_\ell$ has assigned to cognate group $g$. Maximizing this equation
 directly is intractable, and so instead we use a coordinate ascent
 algorithm to iteratively maximize the permutation corresponding to
 a single language $\ell$ while holding the others fixed:
+\resizebox{3in}{!} {
+\begin{minipage}[b]{0.5\textwidth}
 \begin{equation*}
   \begin{split}
     \pi_\ell = \arg\negthinspace\max_{\pi_\ell} \sum_{g} \log p(w_{(\ell,\pi_\ell(g))}|\mathbf \varphi,\mathbf \pi_{-\ell},\pi_\ell, \mathbf{w}_{-\ell})
   \end{split}
 \end{equation*}
+\end{minipage}
+}
 Each iteration is then actually an instance of bipartite graph
 matching, with the words in one language one set of nodes, and the
 current cognate groups in the other languages the other set of
-nodes. The edge affinities $\mathbf{aff}$ between these nodes are the conditional
-probabilities of each word $w_\ell$ belonging to each cognate group $g$:
+nodes. The edge affinities $\mathbf{aff}$ between these nodes are
+the conditional probabilities of each word $w_\ell$ belonging to
+each cognate group $g$:
 \begin{equation*}
   \begin{split}
     \mathbf{aff}(w_\ell,g) = p(w_\ell|\mathbf w_{-\ell,\pi_{-\ell}(g)},\mathbf \varphi,\mathbf\pi_{-\ell})
@@ -267,26 +276,31 @@ send messages from the leaves of the tree toward the root. For
 observed leaf nodes $W_d$, we have:
 \begin{equation*}
   \begin{split}
-    \mu_{d\to a}(w_a) = p(W_d = w_d|w_a,\varphi)
+    \mu_{d\to a}(w_a) = p(W_d = w_d|w_a,\varphi_d)
    \end{split}
  \end{equation*}
-and for interior nodes $W_i$:
+ and for interior nodes $W_i$:\phantom{stupid Latex spacing\dots}
+\resizebox{3in}{!} {
+\begin{minipage}[b]{0.5\textwidth}
 \begin{equation}
   \label{eqn:summing}
   \begin{split}
-    \mu_{i\to a}(w_a) = \sum_{w_i} p(w_i|w_a) \prod_{d \in \mathrm{child}(w_i)} \mu_{d \to i}(w_i) 
+    \mu_{i\to a}(w_a) = \sum_{w_i} p(w_i|w_a,\varphi_i) \prod_{d \in \mathrm{child}(w_i)} \mu_{d \to i}(w_i) 
   \end{split}
 \end{equation}
+\end{minipage}
+}
 In the downward pass (toward the language $\ell$), we sum over ancestral words $W_a$:
 \begin{equation*}
   \begin{split}
-    \mu_{a\to d}(w_d) = \sum_{w_a} p(w_d|w_a) \prod_{\stackrel{d' \in \mathrm{child}(w_a)}{d' \neq d}} \mu_{d' \to a}(w_a) 
+    \mu_{a\to d}(w_d)& \\
+    = &\sum_{w_a} p(w_d|w_a,\varphi_d) \prod_{\stackrel{d' \in \mathrm{child}(w_a)}{d' \neq d}} \mu_{d' \to a}(w_a) 
   \end{split}
 \end{equation*}
 Computing these messages gives a posterior marginal distribution
 $\mu_\ell(w_\ell) = p(w_\ell|\mathbf w_{-\ell,\pi_{-\ell}(g)},\mathbf \varphi,\mathbf\pi_{-\ell})$,
 which is precisely the affinity score
-we need for the bipartite matching. We then use the Kuhn-Munkres
+we need for the bipartite matching. We then use the Hungarian
 algorithm \cite{Kuhn1955} to find the optimal assignment for the
 bipartite matching problem.
 
@@ -301,26 +315,28 @@ added, and then continued iterations on the full tree.
 So far we have only addressed searching for Viterbi permutations
 $\pi$ under fixed parameters. In practice, it is important to
 estimate better parameters of the transducers $\varphi_\ell$ and
-survival variables $S_\ell$. To motivate the transducers, consider
-the example of English ``day'' \textit{/\textipa{deI}/} and Latin
-``di\=es,'' \textit{/\textipa{dIe:s}/} both with the same meaning.
-Surprisingly, these words are in no way related, with English ``day''
-probably coming from a verb meaning ``to burn.''~\cite{oedDay}
-However, a na\:ively constructed edit distance, which for example
-might penalize vowel substitutions lightly, would fail to learn
-that Latin words that are borrowed into English would not undergo
-the sound change \textit{/\textipa{I}/}$ \to $\textit{/\textipa{eI}/}.
-Therefore, our model must learn not only which sound changes are
-plausible (e.g. vowels turning into other vowels is more common
-than vowels turning into consonants), but which changes are appropriate
-for a given language.\footnote{We note two further difficulties:
-our model does not handle ``borrowings,'' which would be necessary
-to capture a significant portion of English vocabulary; nor can it
-seamlessly handle words that are inherited later in the evolution
-of language than others. For instance, French borrowed words from
-its parent language Latin during the Renaissance and the Enlightenment
-which have not undergone the same changes as words that evolved
-``naturally'' from Latin. See \cite{bloomfield38language}.}
+survival variables $S_\ell$. To motivate the need for good transducers,
+consider the example of English ``day'' \textit{/\textipa{deI}/}
+and Latin ``di\=es'' \textit{/\textipa{dIe:s}/}, both with the same
+meaning.  Surprisingly, these words are in no way related, with
+English ``day'' probably coming from a verb meaning ``to
+burn''~\cite{oedDay}. However, a na\:ively constructed edit distance,
+which for example might penalize vowel substitutions lightly, would
+fail to learn that Latin words that are borrowed into English would
+not undergo the sound change \textit{/\textipa{I}/}$ \to
+$\textit{/\textipa{eI}/}.  Therefore, our model must learn not only
+which sound changes are plausible (e.g. vowels turning into other
+vowels is more common than vowels turning into consonants), but
+which changes are appropriate for a given language.\footnote{We
+note two further difficulties: our model does not handle ``borrowings,''
+which would be necessary to capture a significant portion of English
+vocabulary; nor can it seamlessly handle words that are inherited
+later in the evolution of language than others. For instance, French
+borrowed words from its parent language Latin during the Renaissance
+and the Enlightenment which have not undergone the same changes as
+words that evolved ``naturally'' from Latin. See
+\newcite{bloomfield38language}. Handling these is a direction for
+future research.}
 
 At a high level, our learning algorithm is much like Expectation
 Maximization with hard assignments: after we update the permutation
@@ -369,11 +385,17 @@ distribution over the edges connecting any two languages $a$ and
 $d$. With this distribution, we calculate the expected ``alignment
 unigrams.'' That is,  for each pair of phonemes $x$ and $y$ (or
 empty phoneme $\epsilon$), we need to find the quantity:
-\begin{equation*}
-  \begin{split}
-    E_{p(w_a,w_d)}&[\#(x,y;z)] \\ = \sum_{w_a,w_d} &\sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \#(x,y;z) p(z|w_a,w_d)p(w_a,w_d)
-   \end{split}
- \end{equation*}
+\resizebox{3in}{!} {
+\begin{minipage}[b]{0.5\textwidth}
+  \begin{equation*}
+    \begin{split}
+    E_{p(w_a,w_d)}[\#(x,y;z)] = \\
+    \sum_{ w_a,w_d} \sum_{\stackrel{z\in}{\scriptscriptstyle\mathrm{align}(w_a,w_d)}} \#(x,&y;z) p(z|w_a,w_d)p(w_a,w_d)
+  \end{split}
+  \end{equation*}
+\end{minipage}
+\phantom{\tiny test}
+}
 where we denote $\#(x,y;z)$ to be the number of times the pair of
 phonemes $(x,y)$ are aligned in alignment $z$.  The exact method
 for computing these counts is to use an expectation
@@ -381,7 +403,8 @@ semiring~\cite{eisner2001expectation}.
 
 Given the expected counts, we now need to normalize them to ensure
 that the transducer represents a conditional probability distribution.
-We have that, for each phoneme $x$ in the ancestor language:
+~\cite{eisner2002parameter,Oncina20061575} We have that, for each
+phoneme $x$ in the ancestor language:
 \begin{equation*}
   \begin{split}
     \sigma(x,y) &\propto \frac{E[\#(x,y;z)]}{E[\#(x,\cdot;z)]} \\
@@ -395,8 +418,7 @@ parameter. The normalizer should be computed such that, for any
 phoneme $x$, $\sum_y \sigma(\epsilon,y) + \sum_y \sigma(x,y) +
 \sigma(x,\epsilon) = 1$.  These equations ensure that the three
 transition types (insertion, substitution/match, deletion) are
-normalized for each ancestral phoneme. Details can be found in
-\newcite{Oncina20061575}.
+normalized for each ancestral phoneme. 
 
 \section{Transducers and Automata}
 
@@ -570,7 +592,14 @@ up to some maximum length.
 The first we consider is a standard unigram model, which is illustrated
 in Figure (\ref{fig:fsa}a). It has $|\Sigma|+2$ parameters: one
 weight $\sigma_a$ for each phoneme $a \in \Sigma$, a starting
-weight $\lambda$, and a stopping probability. Estimating this
+weight $\lambda$, and a stopping probability $\rho$. $\tilde\mu$ then has
+the form:
+\begin{equation*}
+  \begin{split}
+    \tilde\mu(w) = \lambda \rho \prod_{i \le |w|} \sigma_{w_i}
+   \end{split}
+ \end{equation*}
+Estimating this
 model involves only computing the expected count of each phoneme,
 along with the expected length of a word, $E[|w|]$. We then normalize
 the counts according to the maximum likelihood estimate, with arc
@@ -590,13 +619,14 @@ function. That is, with the other parameters fixed solve:
     \sum_w \tau(w) \tilde\mu(w) = \sum_w \tau(w) \mu(w)
   \end{split}
 \end{equation*}
+which amounts to rescaling $\tilde\mu$ by some constant.
 
 The second topology we consider is the bigram topology, illustrated
 in Figure (\ref{fig:fsa}b). It is similar to the unigram topology
 except that, instead of a single state, we have a state for each
 phoneme in $\Sigma$, along with a special start state. Each state
 $a$ has transitions with weights $\sigma_{b|a}= p(b|a) \propto
-E[\#(b|a)]$. Normalization is similar to the unigram case, except
+E[\#(b|a)]$.  Normalization is similar to the unigram case, except
 that we normalize the transitions from each state.
 
 The final topology we consider is the positional unigram model in
@@ -617,8 +647,9 @@ We conduct three experiments. The first is a ``complete data''
 experiment, in which we reconstitute the cognate groups from the
 Romance data set, where all cognate groups have words in all three
 languages.  This task highlights the evolution and permutation
-models.  The second is a much harder (XXX rerunning)``partial data'' experiment,
-in which we randomly prune 40\% of the words from the dataset.
+models.  The second is a much harder ``partial data'' experiment,
+in which we randomly prune 20\% of the branches from the dataset according to
+the survival process described in Section \ref{sec:survival}.
 Here, only a fraction of words appear in any cognate group,
 so this task crucially involves the survival model.  The ultimate
 purpose of the induced cognate groups is to feed richer evolutionary
@@ -665,7 +696,7 @@ deletions/insertions, respectively. With learning enabled, transducers
 were initialized with these parameters.
 
 For evaluation, we report two metrics. The first is pairwise accuracy
-for each pair of languages micro-averaged across pairs of words.
+for each pair of languages averaged across pairs of words.
 The other is accuracy measured in terms of the number of correctly
 and completely reconstructed cognate groups.
 
@@ -696,7 +727,7 @@ and completely reconstructed cognate groups.
   \end{tabular}
   \caption{Accuracies for reconstructing cognate groups. Levenshtein
   refers to fixed parameter edit distance transducer. Learned refers
-  to automatically learned edit distances. Pairwise Accuracy means micro-averaged
+  to automatically learned edit distances. Pairwise Accuracy means averaged
   on each word pair; Exact Match refers to percentage of completely and accurately
   reconstructed groups. For a description of the baseline, see Section \ref{sec:baseline}. }
   \label{tbl:exp1}
@@ -721,35 +752,36 @@ unigrams, learning reduces the error rate by more than two-thirds.
 \subsection{Experiment 2: Incomplete Data}
 
 \begin{table}
-  \small
-  { 
+\resizebox{3in}{!} {
   \begin{tabular}{|c|c|c|c|c|}
     \cline{3-5} 
     \multicolumn{2}{c|}{\textbf{}} & Prec. & Recall & F1 \\
     \hline 
     \multicolumn{5}{|c|}{\textbf{Heuristic}} \\
     \hline
-    \multicolumn{1}{|c}{} & \multicolumn{1}{c|}{Baseline} & 53.3 & 38.2 & 44.5  \\
+    \multicolumn{1}{|c}{} & \multicolumn{1}{c|}{Baseline} & 49.0 &
+    43.5 & 46.1 \\
     \hline
     \hline
     \multicolumn{5}{|c|}{\textbf{Model}} \\
     \hline
     Transducers & Messages & \multicolumn{2}{c}{} \\
     \hline
-    Levenshtein&Anch. Unigrams & \textbf{95.3} & 31.5 & 47.3\\
-    Learned&Anch. Unigrams  & 62.8 & \textbf{84.3} & \textbf{72.9} \\
+    Levenshtein&Anch. Unigrams & \textbf{86.5} & 36.1 & 50.9 \\
+    Learned&Anch. Unigrams  & 66.9 & \textbf{82.0} & \textbf{73.6} \\
     \hline
   \end{tabular}
-  \caption{Accuracies for reconstructing incomplete groups. Scores
-  reported are precision, recall, and F1, micro-averaged over pairs of words.}
-  \label{tbl:partial}
  }
+  \caption{Accuracies for reconstructing incomplete groups. Scores
+  reported are precision, recall, and F1, averaged over pairs of words.}
+  \label{tbl:partial}
 \end{table}
 
 As a more realistic scenario, we consider the case where we do not
 know that all cognate groups have words in all languages. To test
-our model, we randomly pruned 40\% of the words from the Romance
-dataset.
+our model, we randomly pruned 20\% of the branches according the
+survival process of our model.\footnote{This dataset will be made available at
+{\scriptsize{\texttt{http://nlp.cs.berkeley.edu/Main.html\#Historical}}}}
 
 Because only Anchored Unigrams performed well in Experiment 1, we
 consider only it and the Dice's coefficient baseline. The baseline
@@ -758,7 +790,7 @@ appear in all cognate groups. To do this, we thresholded the bipartite
 matching process so that if the coefficient fell below some value,
 we started a new group for that word. We experimented on 10 values
 in the range (0,1) for the baseline's threshold and report on the
-one (0.3) that gives the best pairwise micro-averaged F1.
+one (0.2) that gives the best pairwise F1.
 
 The results are in Table \ref{tbl:partial}. Here again, we see that
 the positional unigrams perform much better than the baseline system.
@@ -767,6 +799,25 @@ of increased recall. This makes sense because the default edit
 distance parameter settings strongly favor exact matches, while the
 learned transducer learns more realistic substitution and deletion
 matrices, at the expense of making more mistakes.
+
+For example, the learned transducers enable our model to correctly
+infer that Portuguese \textit{/d\textipa{1}femdu/}, Spanish
+\textit{/defiendo/}, and Italian \textit{/dif\textipa{E}ndo/} are
+all derived from Latin \textit{\textipa{/de:fendo:/}} ``defend.''
+The simple Levenshtein transducers, on the other hand, cannot
+find--among other things--that Portuguese \textit{/\textipa{1}/},
+Spanish \textit{/e/}, and Italian \textit{/i/} are commonly substituted
+for one another, and so all three are kept separated. Unfortunately,
+because the transducers used cannot learn contextual rules, certain
+transformations can be over-applied.  For instance, Spanish
+\textit{\textipa{/nombRar/}} ``name'' is grouped together with
+Portuguese \textit{/num\textipa{1RaR}/} ``number'' and Italian
+\textit{/numerare/} ``number,'' largely because the rule Portuguese
+\textit{/u/} $\to$ Spanish \textit{/o/} is applied outside of its
+normal context. This sound change occurs primarily with final vowels,
+and does not usually occur  word medially. Thus, more sophisticated
+transducers could learn better sound laws, which could translate
+into improved accuracy.
 
 \subsection{Experiment 3: Reconstructions}
 
@@ -790,9 +841,6 @@ distance of 3.8 from the assigned Latin word. This compares favorably to the
 edit distances reported in \newcite{bouchard09improved}, who using oracle
 cognate assignments achieved an average Levenshtein distance of 3.0.
 
-\section{Analysis}
-
-In this section we describe a few of the examples XXX
 
 \section{Conclusion}
 

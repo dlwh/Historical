@@ -31,21 +31,20 @@ object Bipartite {
                          val alphabet: Set[Char],
                          val initialFactors: TransducerFactors,
                          val messageCompression: MessageCompressor[_],
-                         val transducerCompressor: Compressor[_,(Char,Char)],
-                         val rootCompressor: Compressor[_,Char])
+                         val transducerCompressor: Compressor[_,(Char,Char)]
+                        // val rootCompressor: Compressor[_,Char]
+                        )
                          extends FactorBroker[TransducerFactors] with TransducerLearning {
 
     override def nextFactors(ios: Iterator[InsideOutside[TransducerFactors]], s: State[TransducerFactors]) = {
-      val (stats,root) = gatherStatistics(ios);
-      val newFactors = mkFactors(stats,root);
+      val (stats) = gatherStatistics(ios);
+      val newFactors = mkFactors(stats);
       newFactors
     }
 
-    def mkFactors(statistics: Statistics,root:RootStats):TransducerFactors = {
+    def mkFactors(statistics: Statistics):TransducerFactors = {
       val transducers = mkTransducers(statistics);
-      val rootM = mkRoot(root);
-      val factors = new TransducerFactors(tree,alphabet,messageCompression,transducers,root=Some(rootM)) ;
-      globalLog.log(INFO)("Trans out " + memoryString);
+      val factors = new TransducerFactors(tree,alphabet,messageCompression,transducers) ;
       factors
     }
   }
@@ -130,6 +129,9 @@ class Bipartite[F<:Factors](val tree: Tree,
     val otherLanguages = s.groups.map(group => group - language).filter(!_.isEmpty);
 
     println(language);
+    globalLog.log(INFO)("pre aff pregc " + memoryString);
+    System.gc();
+    globalLog.log(INFO)("pre aff postgc " + memoryString);
 
     val tasks = for ( j <- 0 until otherLanguages.length) yield { () =>
       val aff = calculateAffinities(s,otherLanguages(j),language,current)
@@ -144,6 +146,10 @@ class Bipartite[F<:Factors](val tree: Tree,
 
     val changes = doMatching(affinities);
     assert(changes.toSet.size == changes.length);
+
+    globalLog.log(INFO)("post aff pregc " + memoryString);
+    System.gc();
+    globalLog.log(INFO)("post aff postgc " + memoryString);
 
     // Calculate baseline scores for all words
     val baselines = baselineScores(s,language,current);
@@ -346,13 +352,11 @@ abstract class BaselineX(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
 }
 
-/*
 class BaselineAdaptive(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], threshold: Double)
                         extends BaselineX(tree,cognates,languages,threshold) {
   override type MFactors = BigramFactors;
   override def initialFactors: MFactors = new BigramFactors;
 }
-*/
 
 
 class BaselineBipartite(tree: Tree,
@@ -416,6 +420,65 @@ object Accuracy {
 case class Params(treePenalty: Double, initDeathProb: Double, allowDeath: Boolean);
 
 
+object BaselineRunner {
+  import Accuracy._;
+
+  def main(args: Array[String]) {
+    val props = new Properties();
+    props.load(new FileInputStream(new File(args(0))));
+    val config = Configuration.fromProperties(props);
+    val languages = config.readIn[String]("dataset.languages").split(",");
+
+    val dataset_name = config.readIn[String]("dataset.name");
+    val dataset = new Dataset(dataset_name,languages);
+    val tree = dataset.tree;
+    val leaves = tree.leaves;
+
+    val gold = dataset.cognates.map(_.filter(cog => leaves(cog.language)));
+    val goldIndices = indexGold(gold);
+
+    val data = gold.flatten;
+    val randomized = Rand.permutation(data.length).draw().map(data);
+    val alphabet = Set.empty ++ data.iterator.flatMap(_.word.iterator);
+
+    val Params(treePenalty,initDeathProb,allowDeath) = config.readIn[Params]("params");
+
+    val threshold = config.readIn[Double]("threshold");
+
+    val bipartite = new BaselineAdaptive(tree, randomized, languages, threshold);
+    val iter = bipartite.iterations;
+    val numPositives = numberOfPositives(languages, gold);
+
+    for( state <- iter.take(1000)) {
+      val numGroups = state.groups.length;
+      for(g <- 0 until numGroups) {
+        val cognates = state.groups(g);
+        val indices = cognates.valuesIterator map goldIndices toSeq;
+        println(cognates.mkString(",") + " " + indices.mkString(","));
+      }
+      println("Conditional Likelihood" + state.likelihood)
+      val groundedGroups = state.groups map { group => group.mapValues(goldIndices).toMap };
+      val (precisions,recalls) = precisionAndRecall(languages,groundedGroups,numPositives);
+      println("Precisions" + precisions);
+      println("Recall" + recalls);
+    }
+  }
+
+  case class MessageParams(`type`: String, klThreshold: Double, maxStates: Int);
+
+  private def readAutomataCompressor(config: Configuration, prefix: String): MessageCompressor[_] = {
+    val MessageParams(tpe, klThreshold, maxStates) = config.readIn[MessageParams](prefix);
+    val beginningUnigram = '#';
+    tpe match {
+      case "bigram" | "bi" =>
+        new BiCompression(klThreshold,maxStates,beginningUnigram) with NormalizedTransitions[Option[Char],Char] : MessageCompressor[_];
+      case "unigram" | "uni" =>
+        new UniCompression(beginningUnigram) with NormalizedTransitions[Unit,Char] : MessageCompressor[_];
+      case "posunigram" | "posuni" =>
+        new PosUniCompression(maxStates,beginningUnigram) with NormalizedTransitions[Int,Char] : MessageCompressor[_];
+    }
+  }
+}
 object BipartiteRunner {
   import Accuracy._;
 
@@ -445,13 +508,13 @@ object BipartiteRunner {
         new UniCompression(('#','#')) with NormalizedByFirstChar[Unit,Char];
     }
 
-    val rootCompression = readAutomataCompressor(config, "transducers.root");
+    //val rootCompression = readAutomataCompressor(config, "transducers.root");
 
     val shouldLearn = config.readIn[Boolean]("transducers.learning");
     val initialFactors = new TransducerFactors(tree,alphabet,messageCompression);
     val broker = (
       if(!shouldLearn) new ConstantBroker(initialFactors)
-      else new TransducerBroker(tree, alphabet, initialFactors, messageCompression, transducerCompression, rootCompression)
+      else new TransducerBroker(tree, alphabet, initialFactors, messageCompression, transducerCompression)
     );
 
 

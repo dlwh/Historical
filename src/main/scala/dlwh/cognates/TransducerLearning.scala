@@ -10,12 +10,12 @@ import scalala.tensor.counters.LogCounters._;
 
 trait TransducerLearning {
   val transducerCompressor: Compressor[_,(Char,Char)];
-  val rootCompressor: Compressor[_,Char];
+  //val rootCompressor: Compressor[_,Char];
   def alphabet: Set[Char];
   def eps = implicitly[Alphabet[Char]].epsilon;
   def tree: Tree;
   type Statistics = Map[(Language,Language),transducerCompressor.Statistics];
-  type RootStats = rootCompressor.Statistics;
+ // type RootStats = rootCompressor.Statistics;
   private val edgesToLearn = tree.edges.toSeq;
   private lazy val allPairs = for {
     a <- alphabet + eps;
@@ -28,9 +28,11 @@ trait TransducerLearning {
   def initialSubCounts = initialMatchCounts-4;
   def initialDelCounts = initialMatchCounts-6;
 
+  /*
   def mkRoot(stats: RootStats): Automaton[Double,_,Char] = {
     rootCompressor.compress(0.0,stats);
   }
+  */
 
   def mkTransducers(statistics: Statistics):Map[(Language,Language),Transducer[Double,_,Char,Char]] = {
     globalLog.log(INFO)("Trans in " + memoryString);
@@ -40,7 +42,7 @@ trait TransducerLearning {
     transducers
   }
 
-  def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]): (Statistics,RootStats) = {
+  def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]): (Statistics) = {
 
     val trigramStats = (TaskExecutor.doTasks {for{
       io <- ios.toSeq
@@ -56,19 +58,12 @@ trait TransducerLearning {
         (fromL,toL) -> cost._1;
       } ).toSeq;
 
-      val root = io.rootMarginal;
-      (edges,rootCompressor.gatherStatistics(alphabet + eps,root.fsa)._1);
+      edges;
    } })
 
     import collection.mutable.{Map=>MMap}
     val stats = MMap[(Language,Language),transducerCompressor.Statistics]();
-    var rootStats: Option[RootStats] = None;
-    for ( (ts,rStats) <- trigramStats) {
-      if(rootStats.isEmpty) {
-        rootStats = Some(rStats)
-      } else {
-        rootStats = Some(rootCompressor.interpolate(rootStats.get,1,rStats,1));
-      }
+    for ( (ts) <- trigramStats) {
       for( (lpair,ctr) <- ts) {
         if(stats.contains(lpair)) stats(lpair) = transducerCompressor.interpolate(stats(lpair),1,ctr,1);
         else stats(lpair) = ctr;
@@ -87,8 +82,7 @@ trait TransducerLearning {
 
 
     val finalTransducerStats = Map.empty ++ stats.mapValues(transducerCompressor.smooth(_,smoothingCounter));
-    val finalRootStats = rootCompressor.smooth(rootStats.get,charSmoothing);
-    (finalTransducerStats,finalRootStats);
+    (finalTransducerStats);
   }
 
   def interpolate(a: Statistics, b: Statistics, eta: Double) = {
