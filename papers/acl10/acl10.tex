@@ -73,7 +73,7 @@ string similarity metric like Levenshtein distance can lead to false
 positives. Consider the often cited example of Greek
 \textit{\textipa{/ma:ti/}} and Malay \textit{/mata/}, both meaning
 ``eye.''~\cite{bloomfield38language} If we were to rely on
-Levenshtein distance, these words would seem to be highly attractive
+Levenshtein distance, these words would seem to be a highly attractive
 match for cognates: they are nearly identical, differing in only a
 single character.  However, no linguist would posit that these two
 words are related. To correctly learn that they are not related,
@@ -139,7 +139,7 @@ as well as their common ancestor Latin~\cite{bouchard07probabilistic}.
 We consider both the case where we know that all cognate groups
 have a surface form in all languages, and where we do not know that.
 On the former, easier task we achieve accuracies of 90.6\%. On the
-latter task, we achieve F1 scores of 72.6\%. Both easily beat baseline
+latter task, we achieve F1 scores of 73.6\%. Both easily beat baseline
 performance.
 
 \section{Model}
@@ -402,8 +402,8 @@ for computing these counts is to use an expectation
 semiring~\cite{eisner2001expectation}.
 
 Given the expected counts, we now need to normalize them to ensure
-that the transducer represents a conditional probability distribution.
-~\cite{eisner2002parameter,Oncina20061575} We have that, for each
+that the transducer represents a conditional probability distribution
+~\cite{eisner2002parameter,Oncina20061575}. We have that, for each
 phoneme $x$ in the ancestor language:
 \begin{equation*}
   \begin{split}
@@ -551,7 +551,7 @@ many states, $\tilde\mu(w)$ is a simple parametric automaton with
 forms that we discuss below, and $\tau(w)$ is an arbitrary (but
 hopefully fairly simple) automaton. The actual method we use is as
 follows. Given a deterministic prior automaton $\tau$, and a
-deterministic automaton topology $\tilde\mu^*$, we created the
+deterministic automaton topology $\tilde\mu^*$, we create the
 composed unweighted automaton $\tau \circ \tilde\mu^*$, and calculate
 arc transitions weights to minimize the KL divergence between that
 composed transducer and $\tau\circ\mu$. The procedure for calculating
@@ -804,20 +804,20 @@ For example, the learned transducers enable our model to correctly
 infer that Portuguese \textit{/d\textipa{1}femdu/}, Spanish
 \textit{/defiendo/}, and Italian \textit{/dif\textipa{E}ndo/} are
 all derived from Latin \textit{\textipa{/de:fendo:/}} ``defend.''
-The simple Levenshtein transducers, on the other hand, cannot
-find--among other things--that Portuguese \textit{/\textipa{1}/},
+Using the simple Levenshtein transducers, on the other hand, our
+model keeps all three separated, because the transducers cannot
+know--among other things--that Portuguese \textit{/\textipa{1}/},
 Spanish \textit{/e/}, and Italian \textit{/i/} are commonly substituted
-for one another, and so all three are kept separated. Unfortunately,
-because the transducers used cannot learn contextual rules, certain
-transformations can be over-applied.  For instance, Spanish
-\textit{\textipa{/nombRar/}} ``name'' is grouped together with
-Portuguese \textit{/num\textipa{1RaR}/} ``number'' and Italian
-\textit{/numerare/} ``number,'' largely because the rule Portuguese
-\textit{/u/} $\to$ Spanish \textit{/o/} is applied outside of its
-normal context. This sound change occurs primarily with final vowels,
-and does not usually occur  word medially. Thus, more sophisticated
-transducers could learn better sound laws, which could translate
-into improved accuracy.
+for one another. Unfortunately, because the transducers used cannot
+learn contextual rules, certain transformations can be over-applied.
+For instance, Spanish \textit{\textipa{/nombRar/}} ``name'' is
+grouped together with Portuguese \textit{/num\textipa{1RaR}/}
+``number'' and Italian \textit{/numerare/} ``number,'' largely
+because the rule Portuguese \textit{/u/} $\to$ Spanish \textit{/o/}
+is applied outside of its normal context. This sound change occurs
+primarily with final vowels, and does not usually occur word
+medially. Thus, more sophisticated transducers could learn better
+sound laws, which could translate into improved accuracy.
 
 \subsection{Experiment 3: Reconstructions}
 
@@ -825,7 +825,7 @@ As a final trial, we wanted to see how each automatically found
 cognate group faired as compared to the ``true groups'' for actual
 reconstruction of proto-words. Our model is not optimized for
 faithful reconstruction, and so we used the Ancestry Resampling
-system of \newcite{bouchard09improved}. We matched each Latin word
+system of \newcite{bouchard09improved}. To evaluate, we matched each Latin word
 with the best possible cognate group for that word. The process for
 the matching was as follows. If two or three of the words in an
 constructed cognate group agreed, we assigned the Latin word
@@ -833,14 +833,13 @@ associated with the true group to it. With the remainder, we executed
 a bipartite matching based on bigram overlap.
 
 For evaluation, we examined the Levenshtein distance between the
-reconstructed word and the chosen Latin word. As a skyline, we
+reconstructed word and the chosen Latin word. As a kind of ``skyline,'' we
 compare to the edit distances reported in \newcite{bouchard09improved},
 which was based on complete knowledge of the cognate groups. On
 this task, our reconstructed cognate groups had an average edit
 distance of 3.8 from the assigned Latin word. This compares favorably to the
 edit distances reported in \newcite{bouchard09improved}, who using oracle
 cognate assignments achieved an average Levenshtein distance of 3.0.
-
 
 \section{Conclusion}
 
