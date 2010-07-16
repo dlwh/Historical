@@ -10,7 +10,7 @@ import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
 
 
-abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(implicit alpha: Alphabet[T], implicit man:
+abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(implicit alpha: Alphabet[T], man:
                                       OptManifest[T]) extends Compressor[Int,T] with ArcCreator[Int,T] {
   require(maxLength >= 1);
 

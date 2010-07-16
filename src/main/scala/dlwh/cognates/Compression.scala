@@ -51,7 +51,7 @@ trait Compressor[State,T] {
 }
 
 /** A Compressor to produce Bigram approximations of an automaton */
-abstract class BiCompression[@specialized("T") T:Alphabet](klThreshold: Double,
+abstract class BiCompression[T:Alphabet](klThreshold: Double,
                                                       maxStates: Int,
                                                       val beginningUnigram: T)
                                                       extends Compressor[Option[T],T] with ArcCreator[Option[T],T] {

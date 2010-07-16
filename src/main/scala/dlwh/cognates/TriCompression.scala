@@ -9,7 +9,7 @@ import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
 
 
-abstract class TriCompression[@specialized("Char") T:Alphabet](klThreshold: Double,
+abstract class TriCompression[T:Alphabet](klThreshold: Double,
                                                       maxStates: Int,
                                                       intBigrams: Set[(T,T)],
                                                       val beginningUnigram: T)

@@ -9,7 +9,7 @@ import Automaton._;
 import scalala.Scalala._;
 
 
-abstract class UniCompression[@specialized("Char") T:Alphabet](val beginningUnigram: T) extends Compressor[Unit,T] with ArcCreator[Unit,T] {
+abstract class UniCompression[T:Alphabet](val beginningUnigram: T) extends Compressor[Unit,T] with ArcCreator[Unit,T] {
   def alphabet = implicitly[Alphabet[T]];
   type Statistics = LogDoubleCounter[T];
   def gatherStatistics(chars: Set[T], auto: Automaton[Double,_,T]) = {
