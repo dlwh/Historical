@@ -128,12 +128,12 @@
     <dependency>
       <groupId>org.scalanlp</groupId>
       <artifactId>scalanlp-learn_${scala.version}</artifactId>
-      <version>0.3.1-SNAPSHOT</version>
+      <version>0.3.2-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.scalanlp</groupId>
       <artifactId>scalanlp-data_${scala.version}</artifactId>
-      <version>0.3.1-SNAPSHOT</version>
+      <version>0.3.2-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.scalanlp</groupId>
@@ -171,7 +171,7 @@
   </reporting>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <scala.version>2.8.0.RC6</scala.version>
+    <scala.version>2.8.0</scala.version>
   </properties>
     <name>Historical</name>
 </project>
