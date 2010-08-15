@@ -2,7 +2,7 @@ package dlwh.cognates;
 import scala.io._;
 import java.io._;
 
-case class Cognate(word: String, language: String);
+case class Cognate(word: String, language: String, gloss: Symbol = 'None);
 
 object Cognates {
   def romance(): Seq[Seq[Cognate]]= {
@@ -13,16 +13,42 @@ object Cognates {
     readCognates("basic_ipa",Seq("Aish","Bish"));
   }
 
-  def readCognates(file: String, languages: Seq[String])={
+  def readCognates(file: String, languages: Seq[String]=Seq.empty, hasGloss:Boolean = false) ={
+    val ls = if(languages.length == 0) {
+      inferLangs(file, hasGloss)
+    } else {
+      languages
+    };
     val stream = this.getClass.getClassLoader().getResourceAsStream(file);
     val src = Source.fromInputStream(stream)(Codec.UTF8).getLines().filter(!_.startsWith("#"));
-    val cognates = (for(line <- src) yield {
-      for( ((w,c),l) <- line.split(' ').zipWithIndex.toSeq zip languages if w != "?")
+    val cognates =  if(hasGloss) {
+      for(line <- src) yield {
+        val Array(glossIndex:String, words @ _*) = line.split("\\s");
+        val gloss = glossIndex.takeWhile(_ != '('); // drop any unique identifier
+        println(gloss);
+        for( (w,l) <- line.split(' ').toSeq zip ls if w != "?")
+        yield Cognate(w,l,Symbol(gloss));
+      }
+    } else {
+      for(line <- src) yield {
+        for( (w,l) <- line.split(' ').toSeq zip ls if w != "?")
         yield Cognate(w,l);
-    }).toSeq;
+      }
+    }
+    val ret = cognates.toIndexedSeq;
 
     stream.close();
-    cognates.toSeq;
+    ret
+  }
+
+  private def inferLangs(file: String, hasGloss: Boolean):IndexedSeq[String] = {
+    val stream = this.getClass.getClassLoader().getResourceAsStream(file);
+    val line = Source.fromInputStream(stream)(Codec.UTF8).getLines().next;
+
+    
+    val ret = line.split(" ").drop(1);
+    stream.close();
+    ret;
   }
 }
 
@@ -32,7 +58,7 @@ object PruneCognates {
     val src = Source.fromFile(new File(args(0)))(Codec.UTF8).getLines().filter(!_.startsWith("#"));
     for(line <- src) {
       val words = for( w <- line.split(' ') ) yield {
-        if(Math.random < percentage) "?"
+        if(math.random < percentage) "?"
         else w;
       }
       println(words.mkString(" "));
