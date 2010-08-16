@@ -50,11 +50,17 @@ object Bipartite {
   }
 
 
-  case class State[F](groups: Seq[Map[Language,Cognate]],
+  case class State[F<:Factors](groups: IndexedSeq[Map[Language,Cognate]],
                       factors: F,
-                      deathScores:Map[(Language,Language),Double],
-                      likelihood:Double = Double.NegativeInfinity,
-                      knownLanguages: Set[Language] = Set.empty);
+                      deathScores:Map[(Language,Language),Double]=Map.empty,
+                      likelihood:Double = Double.NegativeInfinity) {
+    def makeIO(tree: Tree, words: Map[Language,Cognate]) = {
+      val io = new InsideOutside(tree, factors, words);
+      io
+    }
+
+    def knownLanguages = groups.iterator.flatMap(_.keysIterator).toSet
+  }
 }
 
 
@@ -68,12 +74,6 @@ class Bipartite[F<:Factors](val tree: Tree,
                          allowSplitting: Boolean,
                          factorBroker: FactorBroker[F]) {
 
-  def makeIO(s:State[F], words: Map[Language,Cognate]) = {
-    println("Looking at " + words);
-    val io = new InsideOutside(tree, s.factors, Map.empty ++ words.mapValues(_.word));
-    io;
-  }
-
   def treeScore(s: State[F], io: InsideOutside[F]):Double = (
     io.treePrior(s.deathScores)
   )
@@ -86,20 +86,24 @@ class Bipartite[F<:Factors](val tree: Tree,
       val cogs = for( (cog,i) <- group) yield (cog.language,cog);
       Map.empty ++ cogs;
     };
-    State(groups.toSeq, factors, Map.empty.withDefaultValue(initDeathProb), knownLanguages = words.iterator.map(_.language).toSeq.toSet);
+    State(groups.toIndexedSeq, factors, Map.empty.withDefaultValue(initDeathProb));
   }
 
   final def calculateAffinities(s: State[F], group: Map[Language,Cognate], language: Language, words: Seq[Cognate]) = {
-    val io = makeIO(s,group)
+    val io = s.makeIO(tree, group)
     val marg = io.marginalFor(language).get;
     //println(group,marg);
-    val prior = treeScore(s,io.include(language,"<dummy>"));
+    val prior = treeScore(s,io.include(Cognate(language,"<dummy>")));
     assert(!prior.isNaN)
 
     val aff = new Array[Double](words.length);
     for ( i <- 0 until words.length ) {
-      aff(i) = (marg(words(i).word) + prior);
-      //println(aff(i),words(i),group,prior);
+      if(group.first._2.gloss != words(i).gloss) {
+        aff(i) = Double.NegativeInfinity;
+      } else {
+        aff(i) = (marg(words(i).word) + prior);
+        //println(aff(i),words(i),group,prior);
+      }
       assert(!aff(i).isNaN);
     }
     aff
@@ -185,10 +189,9 @@ class Bipartite[F<:Factors](val tree: Tree,
 
     val newS = s.copy(groups = newGroups,
                       likelihood = score,
-                      deathScores = deathProbs,
-                      knownLanguages = newKnownLanguages
+                      deathScores = deathProbs
                       );
-    val nextIOs = newS.groups.iterator.map(makeIO(newS,_));
+    val nextIOs = newS.groups.iterator.map(newS.makeIO(tree,_));
     val newFactors = factorBroker.nextFactors(nextIOs, newS);
     newS.copy(factors = newFactors);
   }
@@ -198,7 +201,7 @@ class Bipartite[F<:Factors](val tree: Tree,
     val availableCounts = scalala.tensor.counters.Counters.IntCounter[(Language,Language)];
     for {
       group <- groups;
-      io = makeIO(s,group);
+      io = s.makeIO(tree,group);
       (lPair,lastOnPath) <- io.pathsToFringe
     } {
       availableCounts(lPair) += 1;
@@ -234,38 +237,27 @@ class Bipartite[F<:Factors](val tree: Tree,
 
 abstract class BaselineX(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], threshold: Double) {
   type MFactors <: Factors
-  case class State(groups: Seq[Map[Language,Cognate]],
-                   factors: MFactors,
-                   likelihood:Double = Double.NegativeInfinity,
-                   knownLanguages: Set[Language] = Set.empty);
-
-  def makeIO(s:State, words: Map[Language,Cognate]) = {
-    println("Looking at " + words);
-    val io = new InsideOutside(tree, s.factors, Map.empty ++ words.mapValues(_.word));
-    io;
-  }
 
   def initialFactors: MFactors
 
-  def initialState(words :Seq[Cognate], factors: MFactors): State = {
+  def initialState(words :Seq[Cognate], factors: MFactors): State[MFactors] = {
     // the n'th word in each language is assigned to the n'th cognate group
     val groupMap = words.groupBy(_.language).valuesIterator.flatMap(_.zipWithIndex.iterator).toSeq.groupBy(_._2);
     val groups = for(group  <- groupMap.valuesIterator) yield {
       val cogs = for( (cog,i) <- group) yield (cog.language,cog);
       Map.empty ++ cogs;
     };
-    State(groups.toSeq, factors,knownLanguages = words.iterator.map(_.language).toSeq.toSet);
+    State(groups.toIndexedSeq, factors);
   }
 
-  final def calculateAffinities(s: State, group: Map[Language,Cognate], language: Language, words: Seq[Cognate]) = {
-    val io = makeIO(s,group)
+  final def calculateAffinities(s: State[MFactors], group: Map[Language,Cognate], language: Language, words: Seq[Cognate])
+  = {
+    val io = s.makeIO(tree,group)
     val marg = io.marginalFor(language).get;
-    //println(group,marg);
 
     val aff = new Array[Double](words.length);
     for ( i <- 0 until words.length ) {
       aff(i) = (marg(words(i).word));
-      //println(aff(i),words(i),group,prior);
       assert(!aff(i).isNaN);
     }
     aff
@@ -282,7 +274,7 @@ abstract class BaselineX(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
     changes.take(affinities.length);
   }
 
-  final def step(s: State, language: Language):State = {
+  final def step(s: State[MFactors], language: Language):State[MFactors] = {
     val current = cognates.filter(_.language == language);
     val otherLanguages = s.groups.map(group => group - language).filter(!_.isEmpty);
 
@@ -326,11 +318,8 @@ abstract class BaselineX(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
     val newGroups = augmentedGroups ++ loners.map(c => Map.empty + (language -> c));
 
-    val newKnownLanguages = s.knownLanguages + language;
-
     val newS = s.copy(groups = newGroups,
-                      likelihood = score,
-                      knownLanguages = newKnownLanguages);
+                      likelihood = score);
     newS;
   }
 

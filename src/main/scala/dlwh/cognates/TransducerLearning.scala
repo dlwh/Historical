@@ -47,7 +47,6 @@ trait TransducerLearning {
     val trigramStats = (TaskExecutor.doTasks {for{
       io <- ios.toSeq
     } yield { () =>
-      println(io.assignments);
       val edges = (for { pair@ (fromL,toL) <- edgesToLearn.iterator;
         trans <- io.edgeMarginal(fromL, toL).iterator
       } yield {
