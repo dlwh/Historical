@@ -30,7 +30,18 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
 
   // Remove the word associated with this language
   def remove(language: Language) = {
-    new InsideOutside(tree,factors,bottomWords - language);
+    new InsideOutside(tree, factors, bottomWords - language);
+  }
+
+
+  // Tries to merge the languages of two IOs together. If they have overlapping elements, it gives up.
+  def merge(io2: InsideOutside[F]) = {
+    if(words.keys.exists(io2.words.keySet) ) // is there any overlap in the languages?
+      None
+    else {
+      val newWords = words ++ io2.words;
+      Some(new InsideOutside(tree, factors, newWords));
+    }
   }
 
   def wordForLanguage(language:Language):Option[Cognate] = bottomWords.get(language);
