@@ -83,9 +83,9 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
     val childScores = root.children.map { edge =>
       if(edge.hasUpwardMessage) {
         val prob = 1.0 - deathScores(root.language -> edge.child.language);
-        Math.log(prob) + recursiveTreeScore(deathScores,edge.child);
+        math.log(prob) + recursiveTreeScore(deathScores,edge.child);
       } else {
-        val death = Math.log(deathScores(root.language -> edge.child.language));
+        val death = math.log(deathScores(root.language -> edge.child.language));
         death
       }
     }
