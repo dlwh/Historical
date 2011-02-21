@@ -49,7 +49,7 @@ trait NormalizedByFirstChar[S,T] extends ArcCreator[S,(T,T)] { this: Compressor[
         insertWeights += w;
     }
 
-    val extraNormalizer = Math.log(1-Math.exp(logSum(insertWeights)-ctr.logTotal));
+    val extraNormalizer = math.log(1-math.exp(logSum(insertWeights)-ctr.logTotal));
     for {
       (ch1,inner) <- paired.rows
       trueTotal = if(ch1 == eps) paired.logTotal else inner.logTotal - extraNormalizer;
@@ -63,6 +63,6 @@ trait NormalizedByFirstChar[S,T] extends ArcCreator[S,(T,T)] { this: Compressor[
     val insertWeights = for ( ((a,b),w) <- ctr if a == eps) yield w;
     val score = logSum(insertWeights.toSeq);
 
-    Math.log(1 - Math.exp(score-ctr.logTotal));
+    math.log(1 - math.exp(score-ctr.logTotal));
   }
 }

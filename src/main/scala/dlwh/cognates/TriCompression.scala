@@ -60,7 +60,7 @@ abstract class TriCompression[T:Alphabet](klThreshold: Double,
 
     for {
       (history,ctr) <- bigrams.rows;
-      kl = klDivergence(ctr,marginal) * Math.exp( ctr.logTotal - marginal.logTotal);
+      kl = klDivergence(ctr,marginal) * math.exp( ctr.logTotal - marginal.logTotal);
       () = println(history + " " + kl);
       if kl > klThreshold
     } {
@@ -83,7 +83,7 @@ abstract class TriCompression[T:Alphabet](klThreshold: Double,
           bgTrans = trigrams(bg);
           if bgTrans.size != 0
           // todo: state split
-          kl = klDivergence(bgTrans,oldState.transitions) * Math.exp( bgTrans.logTotal - marginal.logTotal);
+          kl = klDivergence(bgTrans,oldState.transitions) * math.exp( bgTrans.logTotal - marginal.logTotal);
           () = println(bg + " " + kl + " " + bgTrans.logTotal);
           if kl > klThreshold
         } {

@@ -135,6 +135,7 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
 
     lazy val upwardMessage:Marginal = {
       assert(hasUpwardMessage);
+      System.out.println("Up from node " + language);
       val incoming = children.iterator.withFilter(_.hasUpwardMessage).map(_.upwardMessage).toSeq;
       if(children.isEmpty) marginalForWord(word.get)
       else if(word.isEmpty) product(true,incoming);
@@ -154,6 +155,7 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
     lazy val likelihood: Double = marginal.partition;
 
     def downwardMessage(to: Edge):Marginal = {
+      System.out.println("From Node " + language + " to edge " + to.child.language)
       val parent = parentMessage.iterator.map(_.apply());
       val outgoingChildren = children.iterator.filter(c => to != c && c.hasUpwardMessage).map(_.upwardMessage);
       val nonWordMessages = parent ++ outgoingChildren;
@@ -186,5 +188,4 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
   }
 
 }
-
 

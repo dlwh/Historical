@@ -8,6 +8,9 @@ import scalala.tensor.counters.LogCounters._;
 
 import Types._;
 
+/**
+ * Factors where all transducers are projected to bigrams
+ */
 class BigramFactors extends Factors {
   type Marginal = BigramMarginal
   type EdgeFactor = BigramEdge

@@ -7,7 +7,14 @@ import scalanlp.math.Numerics._;
 
 import Types._;
 
+/**
+ * Factors handles what to do with the marginals and messages as we're passing them.
+ */
 trait Factors {
+
+  /**
+   * Required interface for EdgeFactors
+   */
   trait EdgeFactorBase {
     def childMarginalize(c: Marginal):Marginal;
     def parentMarginalize(p: Marginal):Marginal;
@@ -15,12 +22,15 @@ trait Factors {
   }
   type EdgeFactor <: EdgeFactorBase;
 
+  /**
+   * Required interface for Marginals
+   */
   trait MarginalBase {
     def partition: Double
     def apply(word: String):Double
   }
-
   type Marginal <: MarginalBase
+
   def product(upward: Boolean, ms: Seq[Marginal]):Marginal;
   def edgeFor(parent: Language, child:Language, alphabet: Set[Char]): EdgeFactor;
   def rootMarginal(alphabet: Set[Char]): Marginal;

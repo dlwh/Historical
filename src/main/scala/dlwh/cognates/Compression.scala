@@ -103,7 +103,7 @@ abstract class BiCompression[T:Alphabet](klThreshold: Double,
 
     for {
       (history,ctr) <- bigrams.rows
-      kl = klDivergence(marginal,ctr) * Math.exp( ctr.logTotal - marginal.logTotal)
+      kl = klDivergence(marginal,ctr) * math.exp( ctr.logTotal - marginal.logTotal)
     //  if kl > klThreshold
     } {
       pq += UniState(history,ctr,kl);
@@ -132,7 +132,7 @@ abstract class BiCompression[T:Alphabet](klThreshold: Double,
 
   def interpolate(a: Statistics, eta1:Double, b: Statistics, eta2: Double) = {
     val logEta = log(eta2);
-    val c = (a + Math.log(eta1)) value;
+    val c = (a + math.log(eta1)) value;
     for( (k,v) <- b) {
       c(k) = logSum(c(k),v + logEta);
     }

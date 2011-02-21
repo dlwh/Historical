@@ -80,6 +80,7 @@ class Agglomerative[F<:Factors](val tree: Tree,
     pq
   }
 
+  // Computes the loss or gain for merging two groups.
   private def mergeScore(gi: InsideOutside[F], gj: InsideOutside[F]) = {
     if(gi.words.head._2.gloss != gj.words.head._2.gloss) None
     else for(merged <- gi merge gj)

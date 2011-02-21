@@ -32,10 +32,10 @@ abstract class UniCompression[T:Alphabet](val beginningUnigram: T) extends Compr
   def interpolate(a: Statistics, eta1: Double, b: Statistics, eta2: Double) = {
     val c = LogDoubleCounter[T]();
     for( (k,v) <- a) {
-      c(k) = v + Math.log(eta1);
+      c(k) = v + math.log(eta1);
     }
     for( (k,v) <- b) {
-      c(k) = logSum(c(k),v + Math.log(eta2));
+      c(k) = logSum(c(k),v + math.log(eta2));
     }
     c
   }

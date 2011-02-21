@@ -7,6 +7,7 @@ import scalanlp.util.Log._;
 import Types._;
 import scalanlp.math.Semiring.LogSpace._;
 import scalala.tensor.counters.LogCounters._;
+import scalanlp.concurrent.ParallelOps._;
 
 trait TransducerLearning {
   val transducerCompressor: Compressor[_,(Char,Char)];
@@ -24,7 +25,7 @@ trait TransducerLearning {
   } yield (a,b);
 
 
-  def initialMatchCounts = -68;
+  def initialMatchCounts = -6;
   def initialSubCounts = initialMatchCounts-4;
   def initialDelCounts = initialMatchCounts-6;
 
@@ -43,31 +44,28 @@ trait TransducerLearning {
   }
 
   def gatherStatistics(ios: Iterator[InsideOutside[TransducerFactors]]): (Statistics) = {
-
-    val trigramStats = (TaskExecutor.doTasks {for{
-      io <- ios.toSeq
-    } yield { () =>
-      val edges = (for { pair@ (fromL,toL) <- edgesToLearn.iterator;
+    globalLog.log(INFO)("Gather Stats");
+    val stats = ios.toIndexedSeq.par.mapReduce( { io =>
+      val edges = for { pair@ (fromL,toL) <- edgesToLearn.iterator;
+       () = println(fromL,toL);
         trans <- io.edgeMarginal(fromL, toL).iterator
       } yield {
-
         val cost = transducerCompressor.gatherStatistics(allPairs,trans.fst);
-        assert(!cost._2.isInfinite);
+        assert(!cost._2.isInfinite,trans.fst);
 
         (fromL,toL) -> cost._1;
-      } ).toSeq;
-
-      edges;
-   } })
-
-    import collection.mutable.{Map=>MMap}
-    val stats = MMap[(Language,Language),transducerCompressor.Statistics]();
-    for ( (ts) <- trigramStats) {
-      for( (lpair,ctr) <- ts) {
+      }
+      edges toMap;
+    },
+    { (costs1:Map[(Language,Language),transducerCompressor.Statistics],costs2:Map[(Language,Language),transducerCompressor.Statistics]) =>
+      import collection.mutable.{Map=>MMap}
+      val stats = MMap[(Language,Language),transducerCompressor.Statistics]() ++ costs1;
+      for( (lpair,ctr) <- costs2) {
         if(stats.contains(lpair)) stats(lpair) = transducerCompressor.interpolate(stats(lpair),1,ctr,1);
         else stats(lpair) = ctr;
       }
-    }
+      stats.toMap
+    });
 
     val smoothingCounter = LogDoubleCounter[(Char,Char)]();
     for( p@(a,b) <- allPairs) {

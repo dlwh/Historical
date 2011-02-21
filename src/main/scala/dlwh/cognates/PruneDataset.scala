@@ -28,7 +28,7 @@ object PruneDataset {
   }
 
   def simulateDeath(deathProb: Double, tree: Tree):Set[String] = {
-    if(Math.random < deathProb) Set.empty
+    if(math.random < deathProb) Set.empty
     else tree match {
       case t: Child => t.leaves;
       case a: Ancestor => a.children.map(simulateDeath(deathProb, _)).reduceLeft(_ ++ _);

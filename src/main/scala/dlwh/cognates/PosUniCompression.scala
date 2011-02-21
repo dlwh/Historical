@@ -27,9 +27,9 @@ abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(imp
   }
 
   def interpolate(stats1: Statistics, eta1: Double, stats2: Statistics, eta2 :Double):Statistics = {
-    val logEta = Math.log(eta2);
+    val logEta = math.log(eta2);
     for ( (a,b) <- stats1 zip stats2) yield {
-      val c = (a + Math.log(eta1)) value;
+      val c = (a + math.log(eta1)) value;
       for( (k,v) <- b) {
         c(k) = logSum(c(k),v + logEta);
       }

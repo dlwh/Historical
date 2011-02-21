@@ -2,8 +2,6 @@ package dlwh.cognates
 
 import scalanlp.fst._
 import scalanlp.stats.sampling.Rand;
-import scala.actors.Future
-import scala.collection.mutable.ArrayBuffer
 import java.io.FileInputStream
 import java.io.File
 import java.util.Properties
@@ -12,9 +10,9 @@ import scalala.Scalala._;
 import scalala.tensor.counters.LogCounters._;
 import scalala.tensor.counters.Counters;
 import Types._;
-import scalanlp.util.Index
 import scalanlp.util.Log._;
 import fig.basic.BipartiteMatcher;
+import scalanlp.concurrent.ParallelOps._;
 
 object Bipartite {
 
@@ -61,7 +59,18 @@ object Bipartite {
 
     def knownLanguages = groups.iterator.flatMap(_.keysIterator).toSet
   }
+
+  def scanLeft[A,B](it: Iterator[A], b: B)(f: (B,A)=>B):Iterator[B] = new Iterator[B] {
+    def hasNext = it.hasNext;
+    var c = b;
+    def next = {
+      val a = it.next;
+      c = f(c,a);
+      c;
+    }
+  }
 }
+
 
 
 import Bipartite._;
@@ -98,7 +107,7 @@ class Bipartite[F<:Factors](val tree: Tree,
 
     val aff = new Array[Double](words.length);
     for ( i <- 0 until words.length ) {
-      if(group.first._2.gloss != words(i).gloss) {
+      if(!group.isEmpty && group.head._2.gloss != words(i).gloss) {
         aff(i) = Double.NegativeInfinity;
       } else {
         aff(i) = (marg(words(i).word) + prior);
@@ -137,16 +146,9 @@ class Bipartite[F<:Factors](val tree: Tree,
     System.gc();
     globalLog.log(INFO)("pre aff postgc " + memoryString);
 
-    val tasks = for ( j <- 0 until otherLanguages.length) yield { () =>
-      val aff = calculateAffinities(s,otherLanguages(j),language,current)
-      (j,aff)
-    }
-
-    val affinities = new Array[Array[Double]](otherLanguages.length);
-    TaskExecutor.doTasks(tasks) foreach { case (j,aff) =>
-      affinities(j) = aff;
-    }
-
+    val affinities = otherLanguages.par.map { group =>
+      calculateAffinities(s,group,language, current);
+    } toArray
 
     val changes = doMatching(affinities);
     assert(changes.toSet.size == changes.length);
@@ -223,15 +225,7 @@ class Bipartite[F<:Factors](val tree: Tree,
     scanLeft(lang,state)(step(_,_));
   }
 
-  def scanLeft[A,B](it: Iterator[A], b: B)(f: (B,A)=>B):Iterator[B] = new Iterator[B] {
-    def hasNext = it.hasNext;
-    var c = b;
-    def next = {
-      val a = it.next;
-      c = f(c,a);
-      c;
-    }
-  }
+
 
 }
 
@@ -278,16 +272,9 @@ abstract class BaselineX(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
     val current = cognates.filter(_.language == language);
     val otherLanguages = s.groups.map(group => group - language).filter(!_.isEmpty);
 
-    val tasks = for ( j <- 0 until otherLanguages.length) yield { () =>
-      val aff = calculateAffinities(s,otherLanguages(j),language,current)
-      (j,aff)
-    }
-
-    val affinities = new Array[Array[Double]](otherLanguages.length);
-    TaskExecutor.doTasks(tasks) foreach { case (j,aff) =>
-      affinities(j) = aff;
-    }
-
+    val affinities = otherLanguages.par.map { group =>
+      calculateAffinities(s,group,language, current);
+    } toArray
 
     val changes = doMatching(affinities);
     assert(changes.toSet.size == changes.length);
