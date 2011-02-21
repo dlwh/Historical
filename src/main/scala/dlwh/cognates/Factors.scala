@@ -59,20 +59,17 @@ class TransducerFactors(t: Tree,
   private val upwardCompressor = new SafeCompression(fullAlphabet,compression,8);
 
   def product(upward: Boolean, ms: Seq[Marginal]):Marginal = {
-    if(ms.length == 1) ms.head
-    else {
-      val inter = ms.map(_.fsa).reduceLeft(_ & _);
-      import Minimizer._;
-      import ApproximatePartitioner._;
-      val minned = minimize(inter.relabel).filterArcs(_.weight != Double.NegativeInfinity);
-      val length = ms.map(_.length).max;
-      val pruned = (
-          if(upward) upwardCompressor.compress(minned,fullAlphabet)
-          else compression.compress(minned,fullAlphabet)
+    val inter = ms.map(_.fsa).reduceLeft(_ & _);
+    import Minimizer._;
+    import ApproximatePartitioner._;
+    val minned = minimize(inter.relabel).filterArcs(_.weight != Double.NegativeInfinity);
+    val length = ms.map(_.length).max;
+    val pruned = (
+      if(upward) upwardCompressor.compress(minned,fullAlphabet)
+      else compression.compress(minned,fullAlphabet)
       );
-      //globalLog.log(INFO)("* out " + memoryString);
-      new Marginal( pruned,length);
-    }
+    //globalLog.log(INFO)("* out " + memoryString);
+    new Marginal( pruned,length);
   }
 
   def marginalForWord(w: String, score: Double=0.0) = new TransducerMarginal(w,score);
