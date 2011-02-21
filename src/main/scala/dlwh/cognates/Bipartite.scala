@@ -52,8 +52,8 @@ object Bipartite {
                       factors: F,
                       deathScores:Map[(Language,Language),Double]=Map.empty,
                       likelihood:Double = Double.NegativeInfinity) {
-    def makeIO(tree: Tree, words: Map[Language,Cognate]) = {
-      val io = new InsideOutside(tree, factors, words);
+    def makeIO(alphabet: Set[Char], tree: Tree, words: Map[Language,Cognate]) = {
+      val io = new InsideOutside(alphabet, tree, factors, words);
       io
     }
 
@@ -75,7 +75,9 @@ object Bipartite {
 
 import Bipartite._;
 
-class Bipartite[F<:Factors](val tree: Tree,
+class Bipartite[F<:Factors](
+                         alphabet: Set[Char],
+                         val tree: Tree,
                          cognates: Seq[Cognate],
                          languages: Seq[Language],
                          treePenalty: Double,
@@ -99,7 +101,7 @@ class Bipartite[F<:Factors](val tree: Tree,
   }
 
   final def calculateAffinities(s: State[F], group: Map[Language,Cognate], language: Language, words: Seq[Cognate]) = {
-    val io = s.makeIO(tree, group)
+    val io = s.makeIO(alphabet, tree, group)
     val marg = io.marginalFor(language).get;
     //println(group,marg);
     val prior = treeScore(s,io.include(Cognate(language,"<dummy>")));
@@ -193,7 +195,7 @@ class Bipartite[F<:Factors](val tree: Tree,
                       likelihood = score,
                       deathScores = deathProbs
                       );
-    val nextIOs = newS.groups.iterator.map(newS.makeIO(tree,_));
+    val nextIOs = newS.groups.iterator.map(newS.makeIO(alphabet,tree,_));
     val newFactors = factorBroker.nextFactors(nextIOs, newS);
     newS.copy(factors = newFactors);
   }
@@ -203,7 +205,7 @@ class Bipartite[F<:Factors](val tree: Tree,
     val availableCounts = scalala.tensor.counters.Counters.IntCounter[(Language,Language)];
     for {
       group <- groups;
-      io = s.makeIO(tree,group);
+      io = s.makeIO(alphabet, tree,group);
       (lPair,lastOnPath) <- io.pathsToFringe
     } {
       availableCounts(lPair) += 1;
@@ -229,7 +231,7 @@ class Bipartite[F<:Factors](val tree: Tree,
 
 }
 
-abstract class BaselineX(val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], threshold: Double) {
+abstract class BaselineX(alphabet: Set[Char], val tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], threshold: Double) {
   type MFactors <: Factors
 
   def initialFactors: MFactors
@@ -244,9 +246,8 @@ abstract class BaselineX(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
     State(groups.toIndexedSeq, factors);
   }
 
-  final def calculateAffinities(s: State[MFactors], group: Map[Language,Cognate], language: Language, words: Seq[Cognate])
-  = {
-    val io = s.makeIO(tree,group)
+  final def calculateAffinities(s: State[MFactors], group: Map[Language,Cognate], language: Language, words: Seq[Cognate]) = {
+    val io = s.makeIO(alphabet,tree,group)
     val marg = io.marginalFor(language).get;
 
     val aff = new Array[Double](words.length);
@@ -328,20 +329,21 @@ abstract class BaselineX(val tree: Tree, cognates: Seq[Cognate], languages: Seq[
 
 }
 
-class BaselineAdaptive(tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], threshold: Double)
-                        extends BaselineX(tree,cognates,languages,threshold) {
+class BaselineAdaptive(alphabet: Set[Char], tree: Tree, cognates: Seq[Cognate], languages: Seq[Language], threshold: Double)
+                        extends BaselineX(alphabet: Set[Char], tree,cognates,languages,threshold) {
   override type MFactors = BigramFactors;
   override def initialFactors: MFactors = new BigramFactors;
 }
 
 
-class BaselineBipartite(tree: Tree,
+class BaselineBipartite(alphabet: Set[Char],
+                        tree: Tree,
                         cognates: Seq[Cognate],
                         languages: Seq[Language],
                         treePenalty: Double,
                         initDeathProb: Double,
                         allowSplitting: Boolean)
-                        extends Bipartite(tree,cognates,languages,treePenalty,
+                        extends Bipartite(alphabet, tree,cognates,languages,treePenalty,
                                           initDeathProb,allowSplitting,new ConstantBroker(new BigramFactors)) {
 }
 
@@ -421,7 +423,7 @@ object BaselineRunner {
 
     val threshold = config.readIn[Double]("threshold");
 
-    val bipartite = new BaselineAdaptive(tree, randomized, languages, threshold);
+    val bipartite = new BaselineAdaptive(alphabet, tree, randomized, languages, threshold);
     val iter = bipartite.iterations;
     val numPositives = numberOfPositives(languages, gold);
 
@@ -494,7 +496,7 @@ object BipartiteRunner {
     );
 
 
-    val bipartite = new Bipartite[TransducerFactors](tree, randomized, languages, treePenalty, initDeathProb, allowDeath, broker);
+    val bipartite = new Bipartite[TransducerFactors](alphabet, tree, randomized, languages, treePenalty, initDeathProb, allowDeath, broker);
     val iter = bipartite.iterations;
     val numPositives = numberOfPositives(languages, gold);
 

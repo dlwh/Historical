@@ -5,12 +5,8 @@ import scalanlp.util.Log._;
 
 /** InsideOutside is the wrong name. This does message passing on phylogenetic trees with words
    optionally observed */
-class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Language,Cognate]=Map.empty) {
+class InsideOutside[F<:Factors](alphabet: Set[Char], tree: Tree, val factors: F, bottomWords: Map[Language,Cognate]=Map.empty) {
   import factors._;
-  val alphabet = Set.empty ++ (for( word <- bottomWords.valuesIterator;
-                      ch <- word.word.iterator
-                     ) yield ch)
-
   def edgeMarginal(from: Language, to: Language): Option[EdgeFactor] = {
     edges.get( (from,to)).filter(_.hasUpwardMessage).map(_.edgeMarginal);
   }
@@ -25,12 +21,12 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
 
   // Include this word as as base word for this language
   def include(c: Cognate) = {
-    new InsideOutside(tree,factors,bottomWords + (c.language->c));
+    new InsideOutside(alphabet, tree,factors,bottomWords + (c.language->c));
   }
 
   // Remove the word associated with this language
   def remove(language: Language) = {
-    new InsideOutside(tree, factors, bottomWords - language);
+    new InsideOutside(alphabet, tree, factors, bottomWords - language);
   }
 
 
@@ -40,7 +36,7 @@ class InsideOutside[F<:Factors](tree: Tree, val factors: F, bottomWords: Map[Lan
       None
     else {
       val newWords = words ++ io2.words;
-      Some(new InsideOutside(tree, factors, newWords));
+      Some(new InsideOutside(alphabet, tree, factors, newWords));
     }
   }
 

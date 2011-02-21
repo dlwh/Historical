@@ -12,7 +12,8 @@ import java.io.File
 
 import Types._;
 
-class Agglomerative[F<:Factors](val tree: Tree,
+class Agglomerative[F<:Factors](alphabet: Set[Char],
+                                val tree: Tree,
                                 languages: Seq[Language],
                                 treePenalty: Double,
                                 initDeathProb: Double,
@@ -60,7 +61,7 @@ class Agglomerative[F<:Factors](val tree: Tree,
 
   private def makeIOs(s: State[F]) = {
     val ios: IndexedSeq[InsideOutside[F]] = s.groups.par.map{g =>
-      val io = s.makeIO(tree,g);
+      val io = s.makeIO(alphabet, tree,g);
       println(g);
       io.likelihood; // precompute likelihood
       io
@@ -128,7 +129,7 @@ object AgglomerativeRunner {
     );
 
 
-    val bipartite = new Agglomerative[TransducerFactors](tree, languages, treePenalty, initDeathProb, broker);
+    val bipartite = new Agglomerative[TransducerFactors](alphabet, tree, languages, treePenalty, initDeathProb, broker);
     val iter = bipartite.iterations(randomized);
     val numPositives = numberOfPositives(languages, gold);
 
