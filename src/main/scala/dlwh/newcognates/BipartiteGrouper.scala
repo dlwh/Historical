@@ -15,7 +15,8 @@ class BipartiteGrouper(val languages: Stream[Language], val treePenalty: Double)
   // GroupA is the held out language, groupB is the current groups.
   def determineGroupsToMerge(aff: AffinityScorer, groupA: IndexedSeq[CognateGroup], groupB: IndexedSeq[CognateGroup]) = {
     val affinities = groupB.par.map { b =>
-      groupA.map{ a => -aff(a,b)};
+      val cal = affScorer.calibrate(b);
+      groupA.map{ a => -cal(a)};
     }
 
     val assignments = doMatching(affinities)

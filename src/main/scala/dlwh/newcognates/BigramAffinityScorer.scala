@@ -6,7 +6,7 @@ package dlwh.newcognates
  */
 
 class BigramAffinityScorer extends AffinityScorer {
-  def determineAffinities(a: CognateGroup, b: CognateGroup) = {
+  def calibrate(a: CognateGroup)= { (b: CognateGroup) =>
     val scores = for {
       aa <- a.cognates.valuesIterator;
       aBag = bigrams(aa.word);
