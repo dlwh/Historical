@@ -24,7 +24,7 @@
       <plugin>
         <groupId>org.scala-tools</groupId>
         <artifactId>maven-scala-plugin</artifactId>
-        <!-- <version>2.10.1</version> -->
+        <version>2.14</version>
         <executions>
           <execution>
             <goals>
@@ -34,6 +34,7 @@
           </execution>
         </executions>
         <configuration>
+          <recompileMode>modified-only</recompileMode>
           <scalaVersion>${scala.version}</scalaVersion>
           <displayCmd>true</displayCmd>
           <args>
@@ -167,9 +168,10 @@
       <plugin>
         <groupId>org.scala-tools</groupId>
         <artifactId>maven-scala-plugin</artifactId>
-        <version>2.10.1</version>
+        <version>2.14</version>
         <configuration>
           <scalaVersion>${scala.version}</scalaVersion>
+          <recompileMode>modified-only</recompileMode>
         </configuration>
       </plugin>
     </plugins>

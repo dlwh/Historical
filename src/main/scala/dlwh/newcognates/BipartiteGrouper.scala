@@ -2,13 +2,16 @@ package dlwh.newcognates
 
 import scalanlp.concurrent.ParallelOps._
 import scalanlp.optimize.KuhnMunkres
+import java.io.File
+import scalanlp.config.Configuration
+import scalanlp.stats.sampling.Rand
 ;
 
 /**
  * 
  * @author dlwh
  */
-class BipartiteGrouper(languages: Stream[Language], treePenalty: Double) extends Grouper {
+class BipartiteGrouper(val languages: Stream[Language], val treePenalty: Double) extends Grouper {
   // GroupA is the held out language, groupB is the current groups.
   def determineGroupsToMerge(aff: AffinityScorer, groupA: IndexedSeq[CognateGroup], groupB: IndexedSeq[CognateGroup]) = {
     val affinities = groupB.par.map { b =>
@@ -20,9 +23,11 @@ class BipartiteGrouper(languages: Stream[Language], treePenalty: Double) extends
     val groupsToMerge = for {
       (w,g) <- assignments.iterator.zipWithIndex
       if w != -1 && w < groupA.length
-      affScore = affinities(g)(w);
-      if affScore <= baselines(w)
-    } yield (groupA(w),groupB(w));
+    } yield {
+      val affScore = affinities(g)(w);
+      if (affScore >= baselines(w)) (groupA(w),groupB(g))
+      else (groupA(w),CognateGroup.empty);
+    };
 
     groupsToMerge.toIndexedSeq;
   }
@@ -42,9 +47,9 @@ class BipartiteGrouper(languages: Stream[Language], treePenalty: Double) extends
   }
   // score to keep a cognate separate
   def baselineScores(aff: AffinityScorer, words: Seq[CognateGroup]) = {
-    val arr = words.toArray.map(g => aff(CognateGroup.empty,g));
+    val arr = words.toArray.map(g => -aff(CognateGroup.empty,g));
     for( i <- 0 until arr.length) {
-      arr(i) += treePenalty;
+      arr(i) -= treePenalty;
     }
     arr
   }
@@ -54,5 +59,39 @@ class BipartiteGrouper(languages: Stream[Language], treePenalty: Double) extends
     val heldOutWords = for (grp <- groups if grp.cognates.contains(heldOutLang)) yield grp.cognates(heldOutLang);
     val removed = groups.view.map(_ - heldOutLang).filterNot(_.cognates.isEmpty).toIndexedSeq;
     (heldOutWords.map(CognateGroup(_)),removed,IndexedSeq.empty);
+  }
+}
+
+object BipartiteGrouper {
+  def factory(languages: Seq[Language], treePenalty: Double): Grouper.Factory[BipartiteGrouper] = new Grouper.Factory[BipartiteGrouper] {
+
+
+    def nextGrouper(curGrouper: BipartiteGrouper) =  { new BipartiteGrouper(curGrouper.languages.drop(1), curGrouper.treePenalty) }
+
+    def initialGrouper = new BipartiteGrouper(Stream.continually(languages).flatten, treePenalty);
+  }
+}
+
+object RunGrouper {
+  def main(args: Array[String]) {
+    val config = Configuration.fromPropertiesFiles(args.map(new File(_)));
+    val languages = config.readIn[String]("dataset.languages").split(",");
+    val withGloss = config.readIn[Boolean]("dataset.hasGloss",false);
+    println(withGloss);
+
+    val dataset_name = config.readIn[String]("dataset.name");
+    val dataset = new Dataset(dataset_name,languages, withGloss);
+    val tree = dataset.tree;
+    val leaves = tree.leaves;
+
+    val gold = dataset.cognates.map(_.filter(cog => leaves(cog.language)));
+
+    val data = gold.flatten;
+    val randomized = Rand.permutation(data.length).draw().map(data);
+    val alphabet = Set.empty ++ data.iterator.flatMap(_.word.iterator);
+
+    val bipartite = new CognateDetector(BipartiteGrouper.factory(languages,1), BigramAffinityScorer.factory)
+    val iter = bipartite.iterations(randomized);
+    for( s <- iter.take(100)) { println(s.groups) }
   }
 }
