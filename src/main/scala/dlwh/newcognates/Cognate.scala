@@ -24,8 +24,9 @@ object Cognates {
     val src = Source.fromInputStream(stream)(Codec.UTF8).getLines().filter(!_.startsWith("#"));
     val cognates =  if(hasGloss) {
       for(line <- src) yield {
-        val Array(glossIndex:String, words @ _*) = line.split("\\state");
+        val Array(glossIndex:String, words @ _*) = line.split("\\s");
         val gloss = glossIndex.takeWhile(_ != '('); // drop any unique identifier
+        println(glossIndex,gloss);
         for( (w,l) <- words zip ls if w != "?")
         yield Cognate(w,l,Symbol(gloss));
       }
@@ -75,6 +76,8 @@ class CognateGroup private(val cognates: Map[Language,Cognate]) {
     cognates.values.mkString("CognateGroup(",",",")");
   }
   def merge(b: CognateGroup) = new CognateGroup(cognates ++ b.cognates);
+
+  def glosses = cognates.valuesIterator.map(_.gloss).toSet;
 }
 
 object CognateGroup {

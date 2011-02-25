@@ -5,7 +5,7 @@ import scalanlp.util._;
 class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: CognateGroup) {
   import factors._;
   def parent(l: Language) = parentMap(l);
-  private val parentMap = buildParentMap(tree, "<ROOT>")
+  private val parentMap = buildParentMap(tree, ROOT)
 
   private def  buildParentMap(tree: Tree, parent: Language):Map[Language,Language] = tree match {
     case _ : Child => Map(tree.label -> parent);
@@ -21,7 +21,7 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
   trait BeliefState {
     private[TreeInference] val nodes : Map[Language,Node];
     def belief(language: Language):Belief = {
-      if(language == "<ROOT>") rootMessage
+      if(language == ROOT) rootMessage
       else nodes(language).belief;
     }
 

@@ -50,12 +50,16 @@ object RunTreeBigrams {
     val gold = dataset.cognates.map(_.filter(cog => leaves(cog.language)));
 
     val data = gold.flatten;
+    println(data.length);
     val randomized = Rand.permutation(data.length).draw().map(data);
     val alphabet = Set.empty ++ data.iterator.flatMap(_.word.iterator);
 
     val factors = new BigramFactors;
 
-    val bipartite = new CognateDetector(BipartiteGrouper.factory(languages,1), TreeScorer.factory(tree, factors));
+    val grouperFactory = BipartiteGrouper.factory(languages, 1)
+//    val scorerFactory = GlossRestrictedScorer.factory(TreeScorer.factory(tree, factors));
+    val scorerFactory = TreeScorer.factory(tree, factors);
+    val bipartite = new CognateDetector(grouperFactory, scorerFactory);
     val iter = bipartite.iterations(randomized);
     for( s <- iter.take(100)) { println(s.groups) }
   }
