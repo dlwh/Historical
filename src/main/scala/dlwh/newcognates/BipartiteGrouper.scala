@@ -73,7 +73,7 @@ object BipartiteGrouper {
   }
 }
 
-object RunGrouper {
+object RunBigrams {
   def main(args: Array[String]) {
     val config = Configuration.fromPropertiesFiles(args.map(new File(_)));
     val languages = config.readIn[String]("dataset.languages").split(",");

@@ -2,7 +2,7 @@ package dlwh.newcognates
 
 import scalanlp.util._;
 
-abstract class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: CognateGroup) {
+class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: CognateGroup) {
   import factors._;
   def parent(l: Language) = parentMap(l);
   private val parentMap = buildParentMap(tree, "<ROOT>")
@@ -12,17 +12,20 @@ abstract class TreeInference[F<:Factors](val factors: F, val tree: Tree, val gro
     case a: Ancestor => a.children.map(buildParentMap(_,a.label)).reduceLeft(_ ++ _) + (a.label -> parent);
   }
 
-
   val initialBeliefs: BeliefState = new BeliefState {
     override private[TreeInference] val nodes = buildBeliefs(tree)
   }
 
+  lazy val onePassBeliefs = initialBeliefs.update;
+
   trait BeliefState {
     private[TreeInference] val nodes : Map[Language,Node];
-    def belief(language: Language) = {
+    def belief(language: Language):Belief = {
       if(language == "<ROOT>") rootMessage
       else nodes(language).belief;
     }
+
+    def likelihood = belief(tree.label).partition;
 
     def update:BeliefState = {
       updateOrder.foldLeft(this) { (state,language) =>
@@ -82,9 +85,8 @@ abstract class TreeInference[F<:Factors](val factors: F, val tree: Tree, val gro
     }
     val forward = inferDepth(tree,0).toSeq.sortBy(-_._2).map(_._1);
     val backward = forward.reverse
-    forward ++ backward;
+    forward ++ backward.drop(1);
   }
-  println(updateOrder);
 
 
   private def buildBeliefs(tree: Tree):Map[Language,Node] = {
