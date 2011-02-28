@@ -26,7 +26,6 @@ object Cognates {
       for(line <- src) yield {
         val Array(glossIndex:String, words @ _*) = line.split("\\s");
         val gloss = glossIndex.takeWhile(_ != '('); // drop any unique identifier
-        println(glossIndex,gloss);
         for( (w,l) <- words zip ls if w != "?")
         yield Cognate(w,l,Symbol(gloss));
       }

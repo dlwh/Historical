@@ -5,6 +5,7 @@ import scalanlp.optimize.KuhnMunkres
 import java.io.File
 import scalanlp.config.Configuration
 import scalanlp.stats.sampling.Rand
+import scalanlp.util.HeapDump
 ;
 
 /**
@@ -14,7 +15,7 @@ import scalanlp.stats.sampling.Rand
 class BipartiteGrouper(val languages: Stream[Language], val treePenalty: Double) extends Grouper {
   // GroupA is the held out language, groupB is the current groups.
   def determineGroupsToMerge(aff: AffinityScorer, groupA: IndexedSeq[CognateGroup], groupB: IndexedSeq[CognateGroup]) = {
-    val affinities = groupB.par.map { b =>
+    val affinities = groupB.map { b =>
       val cal = aff.calibrate(b);
       groupA.map{ a => -cal(a)};
     }
@@ -26,7 +27,8 @@ class BipartiteGrouper(val languages: Stream[Language], val treePenalty: Double)
       if w != -1 && w < groupA.length
     } yield {
       val affScore = affinities(g)(w);
-      if (affScore >= baselines(w)) (groupA(w),groupB(g))
+      println(groupA(w) + " " + groupB(g) + " " + affScore + " " + baselines(w));
+      if (affScore <= baselines(w)) (groupA(w),groupB(g))
       else (groupA(w),CognateGroup.empty);
     };
 
