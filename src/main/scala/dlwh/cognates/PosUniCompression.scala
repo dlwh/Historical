@@ -10,15 +10,15 @@ import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
 
 
-abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(implicit alpha: Alphabet[T], man:
-                                      OptManifest[T]) extends Compressor[Int,T] with ArcCreator[Int,T] {
+abstract class PosUniCompression(maxLength: Int, val beginningUnigram: Char)(implicit alpha: Alphabet[Char], man:
+                                      OptManifest[Char]) extends Compressor[Int,Char] with ArcCreator[Int,Char] {
   require(maxLength >= 1);
 
-  def alphabet = implicitly[Alphabet[T]];
+  def alphabet = implicitly[Alphabet[Char]];
 
-  type Statistics = Seq[LogDoubleCounter[T]];
+  type Statistics = Seq[LogDoubleCounter[Char]];
 
-  def gatherStatistics(validChars: Set[T], auto: Automaton[Double,_,T]):(Statistics,Double) = {
+  def gatherStatistics(validChars: Set[Char], auto: Automaton[Double,_,Char]):(Statistics,Double) = {
     val tgs = new PositionalUnigramSemiring(maxLength, validChars, beginningUnigram, cheatOnEquals=true);
     import tgs._;
     import ring._;
@@ -37,8 +37,8 @@ abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(imp
     }
   }
 
-  def transformCounts(stats: Statistics)(f: (T,Double)=>Double):Statistics = {
-    val r = Seq.fill(stats.length)(LogDoubleCounter[T]);
+  def transformCounts(stats: Statistics)(f: (Char,Double)=>Double):Statistics = {
+    val r = Seq.fill(stats.length)(LogDoubleCounter[Char]);
     for((ctr,i) <- stats zipWithIndex;
         (k,v) <- ctr) {
       r(i)(k) = f(k,v);
@@ -47,7 +47,7 @@ abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(imp
   }
 
   
-  def smooth(stats: Statistics, counts: LogDoubleCounter[T]): Statistics = {
+  def smooth(stats: Statistics, counts: LogDoubleCounter[Char]): Statistics = {
     val res = stats.map(_.copy);
     for( ctr <- res; (k,v) <- counts) {
       ctr(k) = logSum(ctr(k),v);
@@ -55,14 +55,14 @@ abstract class PosUniCompression[T](maxLength: Int, val beginningUnigram: T)(imp
     res;
   }
 
-  def compress(chars: Set[T], auto: Automaton[Double,_,T]):Automaton[Double,Int, T] = {
+  def compress(chars: Set[Char], auto: Automaton[Double,_,Char]):Automaton[Double,Int, Char] = {
     val (stats,cost) = gatherStatistics(chars,auto);
     compress(cost,stats);
   }
 
-  def destinationFor(i: Int, t: T) = i + 1;
+  def destinationFor(i: Int, t: Char) = i + 1;
 
-  def compress(prob: Double, counts: Seq[LogDoubleCounter[T]]): Automaton[Double,Int,T] = {
+  def compress(prob: Double, counts: Seq[LogDoubleCounter[Char]]): Automaton[Double,Int,Char] = {
 
     // 1 is always just #
     val arcs = for {

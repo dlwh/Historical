@@ -20,12 +20,13 @@ trait Factors {
   type Edge <: EdgeBase
 
   trait EdgeBase {
+    def edgeMarginal(parent: Belief, child: Belief):Edge
+    // compute the "product" (parent * e * child), and compute the resulting posteriors for the child
+    def childProjection:Belief
+    // compute the "product" (parent * e * child), and compute the resulting posteriors for the child
+    def parentProjection:Belief
   }
 
-  // compute the "product" (parent * e * child), and compute the resulting posteriors for the child
-  def projectToChild(parentBelief: Belief, childBelief: Belief, e: Edge): Belief
-  // compute the "product" (parent * e * child), and compute the resulting posteriors for the parent
-  def projectToParent(parentBelief: Belief, childBelief: Belief, e: Edge): Belief
   def edgeFor(parent: Language, child: Language):Edge
 
   def rootMessage: Belief;
@@ -50,19 +51,17 @@ class BigramFactors extends Factors {
       2.0 * (wB & this.bigrams size) / (wB.size + bigrams.size);
     }
 
-    def partition = bigrams.size toDouble;
+    def partition = 1.0;
 
     def /(b: Belief) = this;
     def *(b: Belief) = Belief(this.bigrams ++ b.bigrams);
   }
 
-  class Edge extends EdgeBase
-
-  def projectToChild(parentBelief: Belief, childBelief: Belief, e: Edge) = {
-    val union = Belief(parentBelief.bigrams ++ childBelief.bigrams);
-    union
+  class Edge(beliefs: Belief*) extends EdgeBase {
+    def edgeMarginal(parent: Belief, child: Belief) = new Edge(parent,child);
+    def childProjection:Belief = Belief(beliefs.view.map(_.bigrams).reduceLeft(_++_));
+    def parentProjection:Belief = childProjection;
   }
-  def projectToParent(parentBelief: Belief, childBelief: Belief, e: Edge) = projectToChild(parentBelief,childBelief, e);
 
   def extractBigrams(word: Word) = {
     Set.empty ++ (word.take(word.length-1) zip word.drop(1))
@@ -75,42 +74,41 @@ class TransducerFactors(fullAlphabet: Set[Char],
                         editDistance: (Language,Language)=>Transducer[Double,_,Char,Char],
                         initMessage: (Language,Language)=>Psi) extends Factors {
 
-  case class Belief(fsa: Psi, length: Int) extends BeliefBase {
-    def partition = fsa.cost;
+  case class Belief(fsa: Psi) extends BeliefBase {
+    lazy val partition = fsa.cost;
     def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost - partition;
 
     def /(b: Belief):Belief = {
       val newFsa = fsa & b.fsa.reweight(- _.weight, - _).relabel;
-      new Belief(newFsa, length max b.length);
+      new Belief(newFsa);
     }
 
     def *(b: Belief):Belief = {
-      new Belief(fsa & b.fsa relabel, length max b.length);
+      new Belief(fsa & b.fsa relabel);
     }
 
     override def toString() = ("Belief: " + fsa.toString);
   }
 
   class Edge(val trans: Transducer[Double,_,Char,Char]) extends EdgeBase {
+    def edgeMarginal(parent: Belief, child: Belief):Edge = {
+      new Edge(parent.fsa.asTransducer >> trans >> child.fsa.asTransducer)
+    }
+
+    def parentProjection:Belief = {
+      val parent = compression.compress(trans.inputProjection, fullAlphabet)
+      new Belief(parent)
+    }
+
+    def childProjection:Belief = {
+      val child = compression.compress(trans.outputProjection, fullAlphabet)
+      new Belief(child)
+    }
   }
 
-  def projectToParent(parentBelief: Belief, childBelief: Belief, e: Edge) = {
-    val edgeMarginal = parentBelief.fsa.asTransducer >> e.trans >> childBelief.fsa.asTransducer;
-    lazy val parent = compression.compress(edgeMarginal.inputProjection, fullAlphabet)
-    val length = parentBelief.length max childBelief.length;
-    new Belief(parent,length)
-  }
-
-  def projectToChild(parentBelief: Belief, childBelief: Belief, e: Edge) = {
-    val edgeMarginal = parentBelief.fsa.asTransducer >> e.trans >> childBelief.fsa.asTransducer;
-    val child = compression.compress(edgeMarginal.outputProjection, fullAlphabet)
-    val length = parentBelief.length max childBelief.length;
-    new Belief(child, length)
-  }
-
-  val rootMessage: Belief = new Belief(rootBelief,0);
+  val rootMessage: Belief = new Belief(rootBelief);
   def edgeFor(a: Language, b: Language) = new Edge(editDistance(a,b));
-  def beliefForWord(w: Word): Belief = new Belief(Automaton.constant(w,0.0),w.size);
-  def initialMessage(from: Language, to: Language):Belief = new Belief(initMessage(from,to),0);
+  def beliefForWord(w: Word): Belief = new Belief(Automaton.constant(w,0.0));
+  def initialMessage(from: Language, to: Language):Belief = new Belief(initMessage(from,to));
 }
 

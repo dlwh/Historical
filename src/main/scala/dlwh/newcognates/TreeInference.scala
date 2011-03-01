@@ -44,9 +44,10 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
     new BeliefState(beliefs toMap,messages);
   }
 
-  lazy val onePassBeliefs = initialBeliefs.update;
+  lazy val onePassBeliefs = initialBeliefs.upward.downward;
 
-  def beliefsAt(l: Language) = onePassBeliefs.updateToward(l).belief(l);
+  // TODO: make upward better.
+  def beliefsAt(l: Language) = initialBeliefs.upward.updateToward(l).belief(l);
 
   class BeliefState(private[TreeInference] val beliefs: Map[Language,Belief],
                     private[TreeInference] val messages: Map[(Language,Language),Belief]) {
@@ -59,8 +60,21 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
       else beliefs(language);
     }
 
-    def update:BeliefState = {
+    def edgeMarginal(parent: Language, child: Language):Option[factors.Edge] = {
+      if(hasMessage(parent)) Some(new Edge(parent,child).edgeMarginal(this))
+      else None;
+    };
+
+    def upward:BeliefState = {
       updateOrder.foldLeft(this:BeliefState) { (state,languagePair) =>
+        val (parent,child) = languagePair;
+        val edge = new Edge(parent,child);
+        edge.updateParent(state);
+      }
+    }
+
+    def downward: BeliefState = {
+      updateOrder.foldRight(this:BeliefState) { (languagePair, state) =>
         val (parent,child) = languagePair;
         val edge = new Edge(parent,child);
         edge.updateParent(state);
@@ -81,22 +95,9 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
 
   private class Edge(val parent: Language, val child: Language) {
     def updateParent(state: BeliefState) = {
-//      println(child + " upto " + parent);
-      val mu_p = state.belief(parent);
-//      println("mu_p" + " " + mu_p);
-      val mu_c = state.belief(child);
-//      println("mu_c" + " " + mu_c);
-      val msg2p = state.message(child, parent);
-//      println("msg2p" + " " + msg2p);
-      val msg2c = state.message(parent, child)
-//      println("msg2c" + " " + msg2c);
-      val mu_p_div_c = mu_p / msg2p
-//      println("p / c" + " " + mu_p_div_c);
-      val mu_c_div_p = mu_c / msg2c
-//      println("c / p" + " " + mu_c_div_p);
-      val newMu_p = projectToParent(mu_p_div_c, mu_c_div_p, edgeFor(parent,child));
+      val (mu_p,mu_c,edgeMarginal) = marginals(state);
+      val newMu_p = edgeMarginal.parentProjection;
       val newMsg2p = newMu_p / mu_p;
-
       val beliefs = state.beliefs.updated(parent,newMu_p);
       val messages = state.messages.updated(child -> parent, newMsg2p);
       new BeliefState(beliefs,messages);
@@ -107,46 +108,60 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
     def updateChild(state: BeliefState) = if(isChildObserved) {
       state
     } else {
-//      println(parent + " downto " + child);
-      val mu_p = state.belief(parent);
-//      println("mu_p" + " " + mu_p);
-      val mu_c = state.belief(child);
-//      println("mu_c" + " " + mu_c);
-      val msg2p = state.message(child, parent);
-//      println("msg2p" + " " + msg2p);
-      val msg2c = state.message(parent, child)
-//      println("msg2c" + " " + msg2c);
-      val mu_p_div_c = mu_p / msg2p
-//      println("p / c" + " " + mu_p_div_c);
-      val mu_c_div_p = mu_c / msg2c
-//      println("c / p" + " " + mu_c_div_p);
-      val newMu_c = projectToChild(mu_p_div_c, mu_c_div_p, edgeFor(parent,child));
+      val (_,mu_c,edgeMarginal) = marginals(state);
+      val newMu_c = edgeMarginal.childProjection;
       val newMsg2c = newMu_c / mu_c;
 
       val beliefs = state.beliefs.updated(parent,newMu_c);
       val messages = state.messages.updated(parent -> child, newMsg2c);
       new BeliefState(beliefs,messages);
     }
+
+    def edgeMarginal(state:BeliefState) = {
+      marginals(state)._3;
+    }
+
+    private def marginals(state:BeliefState) = {
+      val mu_p = state.belief(parent);
+      val mu_c = state.belief(child);
+      val msg2p = state.message(child, parent);
+      val msg2c = state.message(parent, child)
+      val mu_p_div_c = mu_p / msg2p
+      val mu_c_div_p = mu_c / msg2c
+      (mu_p,mu_c,edgeFor(parent,child).edgeMarginal(mu_p_div_c, mu_c_div_p));
+    }
   }
+
+  private def computeMessageHavers(t: Tree):Set[Language] = {
+    if(group.cognates.contains(t.label)) {
+      Set(t.label)
+    } else t match {
+      case t: Child => Set.empty;
+      case a: Ancestor =>
+        val children = a.children.map(computeMessageHavers _).reduceLeft(_ ++ _);
+        if(children.isEmpty) children;
+        else children + t.label;
+    }
+  }
+
+  private val hasMessage = computeMessageHavers(tree);
 
 
   private val updateOrder:Seq[(Language,Language)] = {
     // boolean is if there is some language with an observed word below.
-    def inferDepth(t: Tree, depth: Int):(Boolean,Map[(Language,Language),Int]) = {
-      t match {
-        case t: Child => (group.cognates.contains(t.label),Map.empty[(Language,Language),Int]);
+    def inferDepth(t: Tree, depth: Int):Seq[((Language,Language),Int)] = {
+      if(!hasMessage(t.label)) Seq.empty
+      else t match {
+        case t: Child => Seq.empty;
         case a: Ancestor =>
-          val childrenDepths = a.children.map(inferDepth(_,depth+1))
-          if(childrenDepths.exists(_._1)) {
-            val myEdges = for {
-              (child,(hasSomeObservedChild,_)) <- a.children zip childrenDepths if hasSomeObservedChild
-            } yield (t.label -> child.label) -> depth;
-            (true,childrenDepths.view.filter(_._1).map(_._2).reduceLeft(_ ++ _) ++ myEdges);
-          }
-          else (false,Map.empty[(Language,Language),Int])
+          val childrenDepths = a.children.filter(c => hasMessage(c.label)).map(inferDepth(_,depth+1))
+          val myEdges = for {
+            c <- a.children if hasMessage(c.label)
+          } yield (a.label -> c.label) -> depth;
+          childrenDepths.reduceLeft(_ ++ _) ++ myEdges;
       }
     }
-    val forward = inferDepth(tree,0)._2.toSeq.sortBy(-_._2).map(_._1);
+    val forward = inferDepth(tree,0).toSeq.sortBy(-_._2).map(_._1);
     forward
   }
   println(group, updateOrder);
