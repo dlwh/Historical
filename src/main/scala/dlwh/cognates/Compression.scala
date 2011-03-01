@@ -42,11 +42,8 @@ trait Compressor[State,T] {
 
   /** Takes an automaton, and a set of valid characters, and returns a new Automaton */
   final def compress(auto: Automaton[Double,_,T], validChars: Set[T]):Automaton[Double,State,T] = {
-    dlwh.newcognates.gc("gather");
     val stats = gatherStatistics(validChars,auto);
-    dlwh.newcognates.gc("post gather")
     val r = compress(stats._2,stats._1);
-    dlwh.newcognates.gc("post compress");
     r
   }
 

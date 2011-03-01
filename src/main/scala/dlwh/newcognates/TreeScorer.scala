@@ -63,11 +63,12 @@ object RunTreeBigrams {
     val randomized = Rand.permutation(data.length).draw().map(data);
     val alphabet = Set.empty ++ data.iterator.flatMap(_.word.iterator);
 
-    val factors = new BigramFactors;
-//    val compressor = readAutomataCompressor(config, "transducers.message");
-//    def editDistance(l: Language, l2: Language) = new EditDistance(-0.3,-0.4,alphabet);
-//    def initBelief(l: Language) = new DecayAutomaton(5, alphabet);
-//    val factors = new TransducerFactors(alphabet, compressor, initBelief(""), editDistance _, initBelief _ );
+//    val factors = new BigramFactors;
+    val compressor = readAutomataCompressor(config, "transducers.message");
+    def editDistance(l: Language, l2: Language) = new EditDistance(-0.3,-0.4,alphabet);
+    def initBelief(l: Language) = new DecayAutomaton(5, alphabet);
+    def initMessage(a: Language, b: Language) = new DecayAutomaton(40, alphabet);
+    val factors = new TransducerFactors(alphabet, compressor, initBelief(""), editDistance _,  initMessage _);
 
     val grouperFactory = BipartiteGrouper.factory(languages, -3)
     val scorerFactory = GlossRestrictedScorer.factory(TreeScorer.factory(tree, factors));

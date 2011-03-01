@@ -12,40 +12,58 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
     case a: Ancestor => a.children.map(buildParentMap(_,a.label)).reduceLeft(_ ++ _) + (a.label -> parent);
   }
 
+  val neighbors = {
+    def buildChildren(tree: Tree, parent: Language):Map[Language,Set[Language]] = tree match {
+      case _ : Child => Map(tree.label -> Set(parent));
+      case a: Ancestor =>
+        val myContribution = (a.label -> (a.children.map(_.label).toSet + parent));
+        a.children.map(buildChildren(_,a.label)).reduceLeft(_ ++ _) + myContribution;
+    }
+    buildChildren(tree,"ROOT");
+  }
+//  println(neighbors);
+
   val initialBeliefs: BeliefState = {
-    val beliefs = {
-      val m = Map[Language,Lazy[Belief]]().withDefault( l => Lazy(initialBelief(l)))
-      m ++ group.cognates.mapValues{c => val b = beliefForWord(c.word); Lazy(b)};
+    val messages = Map.empty ++ (for {
+      (l,ns) <- neighbors iterator;
+      n <- ns iterator
+    } yield {
+      val msg = if (n == "ROOT") rootMessage else initialMessage(n, l)
+      (n->l) -> msg
+    });
+    val beliefs = for( l <- parentMap.keys) yield {
+      val belief = group.cognates.get(l).map(c => (beliefForWord(c.word)))
+
+      val r = belief getOrElse {
+        val ms = for( n <- neighbors(l) iterator) yield messages(n -> l);
+        ms.reduceLeft(_ * _ )
+      }
+
+      (l -> r)
     };
-    val messages = Map[(Language,Language),Lazy[Belief]]().withDefault { case (from,to) =>
-      Lazy(initialMessage(from,to))
-    };
-    new BeliefState(beliefs,messages);
+    new BeliefState(beliefs toMap,messages);
   }
 
   lazy val onePassBeliefs = initialBeliefs.update;
 
   def beliefsAt(l: Language) = onePassBeliefs.updateToward(l).belief(l);
 
-  class BeliefState(private[TreeInference] val beliefs: Map[Language,Lazy[Belief]],
-                    private[TreeInference] val messages: Map[(Language,Language),Lazy[Belief]]) {
+  class BeliefState(private[TreeInference] val beliefs: Map[Language,Belief],
+                    private[TreeInference] val messages: Map[(Language,Language),Belief]) {
     def likelihood = belief(tree.label).partition;
-    def belief(language: Language):Belief = {
-      lazyBelief(language).result
-    }
 
-    private[TreeInference] def lazyMessage(from: Language, to: Language): Lazy[Belief] = messages(from -> to);
+    private[TreeInference] def message(from: Language, to: Language): Belief = messages(from -> to);
 
-    private[TreeInference] def lazyBelief(language: Language): Lazy[Belief] = {
-      if(language == ROOT) Lazy(rootMessage)
+    def belief(language: Language): Belief = {
+      if(language == ROOT) rootMessage
       else beliefs(language);
     }
 
     def update:BeliefState = {
       updateOrder.foldLeft(this:BeliefState) { (state,languagePair) =>
         val (parent,child) = languagePair;
-        val edge = if(group.cognates.contains(child)) new ObservedEdge(parent,child) else new UnobservedEdge(parent,child);
-        edge.update(state);
+        val edge = new Edge(parent,child);
+        edge.updateParent(state);
       }
     }
 
@@ -54,70 +72,59 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
         if(langPair.length != 2) state
         else {
           val Seq(child,parent) = langPair;
-          val edge = if(group.cognates.contains(child)) new ObservedEdge(parent,child) else new UnobservedEdge(parent,child);
-          edge.update(state);
+          val edge = new Edge(parent,child);
+          edge.updateChild(state);
         }
       }
     }
   }
 
-  private sealed trait Edge {
-    def parent: Language
-    def child :Language
-    def update(state: BeliefState):BeliefState;
-  }
+  private class Edge(val parent: Language, val child: Language) {
+    def updateParent(state: BeliefState) = {
+//      println(child + " upto " + parent);
+      val mu_p = state.belief(parent);
+//      println("mu_p" + " " + mu_p);
+      val mu_c = state.belief(child);
+//      println("mu_c" + " " + mu_c);
+      val msg2p = state.message(child, parent);
+//      println("msg2p" + " " + msg2p);
+      val msg2c = state.message(parent, child)
+//      println("msg2c" + " " + msg2c);
+      val mu_p_div_c = mu_p / msg2p
+//      println("p / c" + " " + mu_p_div_c);
+      val mu_c_div_p = mu_c / msg2c
+//      println("c / p" + " " + mu_c_div_p);
+      val newMu_p = projectToParent(mu_p_div_c, mu_c_div_p, edgeFor(parent,child));
+      val newMsg2p = newMu_p / mu_p;
 
-  private class UnobservedEdge(val parent: Language, val child: Language) extends Edge {
-    def update(state: BeliefState) = {
-      case class UpdateBundle(newParentBelief: Lazy[Belief],
-                                      newChildBelief: Lazy[Belief],
-                                      newP2CMessage: Lazy[Belief],
-                                      newC2PMessage: Lazy[Belief]);
-
-      val lazyBundle = for {
-        mu_p <- state.lazyBelief(parent);
-        mu_c <- state.lazyBelief(child);
-        msg2p <- state.lazyMessage(child, parent);
-        msg2c <- state.lazyMessage(parent, child)
-      } yield {
-        val mu_p_div_c = mu_p / msg2p
-        val mu_c_div_p = mu_c / msg2c
-        val (lazyNewMu_p, lazyNewMu_c) = projectMessages(mu_p_div_c, mu_c_div_p, edgeFor(parent,child));
-        val newMsg2p = for (newMu_p <- lazyNewMu_p) yield newMu_p / mu_p;
-        val newMsg2c = for (newMu_c <- lazyNewMu_c) yield newMu_c / mu_c;
-        UpdateBundle(lazyNewMu_p, lazyNewMu_c, newMsg2c, newMsg2p);
-      }
-
-      val beliefs = (state.beliefs
-        .updated(parent, lazyBundle.flatMap(_.newParentBelief))
-        .updated(child, lazyBundle.flatMap(_.newChildBelief)));
-      val messages = (state.messages
-        .updated(parent -> child, lazyBundle.flatMap(_.newP2CMessage))
-        .updated(child -> parent, lazyBundle.flatMap(_.newC2PMessage)));
-
+      val beliefs = state.beliefs.updated(parent,newMu_p);
+      val messages = state.messages.updated(child -> parent, newMsg2p);
       new BeliefState(beliefs,messages);
     }
-  }
 
-  private class ObservedEdge(val parent: Language, val child: Language) extends Edge {
-    def update(state: BeliefState) = {
-      case class UpdateBundle(newParentBelief: Lazy[Belief],
-                              newC2PMessage: Lazy[Belief]);
+    def isChildObserved = group.cognates.contains(child);
 
-      val lazyBundle = for {
-        mu_p <- state.lazyBelief(parent);
-        mu_c <- state.lazyBelief(child);
-        msg2p <- state.lazyMessage(child, parent)
-      } yield {
-        val mu_p_div_c = mu_p / msg2p
-        val lazyNewMu_p = projectMessages(mu_p_div_c, mu_c, edgeFor(parent,child))._1;
-        val newMsg2p = for (newMu_p <- lazyNewMu_p) yield newMu_p / mu_p;
-        UpdateBundle(lazyNewMu_p, newMsg2p);
-      }
+    def updateChild(state: BeliefState) = if(isChildObserved) {
+      state
+    } else {
+//      println(parent + " downto " + child);
+      val mu_p = state.belief(parent);
+//      println("mu_p" + " " + mu_p);
+      val mu_c = state.belief(child);
+//      println("mu_c" + " " + mu_c);
+      val msg2p = state.message(child, parent);
+//      println("msg2p" + " " + msg2p);
+      val msg2c = state.message(parent, child)
+//      println("msg2c" + " " + msg2c);
+      val mu_p_div_c = mu_p / msg2p
+//      println("p / c" + " " + mu_p_div_c);
+      val mu_c_div_p = mu_c / msg2c
+//      println("c / p" + " " + mu_c_div_p);
+      val newMu_c = projectToChild(mu_p_div_c, mu_c_div_p, edgeFor(parent,child));
+      val newMsg2c = newMu_c / mu_c;
 
-      val beliefs = state.beliefs.updated(parent, lazyBundle.flatMap(_.newParentBelief));
-      val messages = (state.messages.updated(child -> parent, lazyBundle.flatMap(_.newC2PMessage)));
-
+      val beliefs = state.beliefs.updated(parent,newMu_c);
+      val messages = state.messages.updated(parent -> child, newMsg2c);
       new BeliefState(beliefs,messages);
     }
   }
@@ -131,7 +138,9 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
         case a: Ancestor =>
           val childrenDepths = a.children.map(inferDepth(_,depth+1))
           if(childrenDepths.exists(_._1)) {
-            val myEdges = a.children.map(t.label -> _.label).map(_ -> depth);
+            val myEdges = for {
+              (child,(hasSomeObservedChild,_)) <- a.children zip childrenDepths if hasSomeObservedChild
+            } yield (t.label -> child.label) -> depth;
             (true,childrenDepths.view.filter(_._1).map(_._2).reduceLeft(_ ++ _) ++ myEdges);
           }
           else (false,Map.empty[(Language,Language),Int])
