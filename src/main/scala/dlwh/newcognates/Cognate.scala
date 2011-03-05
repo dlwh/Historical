@@ -67,7 +67,7 @@ object PruneCognates {
   }
 }
 
-class CognateGroup private(val cognates: Map[Language,Cognate]) {
+case class CognateGroup private(cognates: Map[Language,Cognate]) {
   def +(c: Cognate) = new CognateGroup(cognates + (c.language -> c))
   def -(c: Language) = new CognateGroup(cognates - c);
 
@@ -77,6 +77,8 @@ class CognateGroup private(val cognates: Map[Language,Cognate]) {
   def merge(b: CognateGroup) = new CognateGroup(cognates ++ b.cognates);
 
   def glosses = cognates.valuesIterator.map(_.gloss).toSet;
+
+  def canMerge(b: CognateGroup) = !cognates.keys.exists(b.cognates.keySet);
 }
 
 object CognateGroup {

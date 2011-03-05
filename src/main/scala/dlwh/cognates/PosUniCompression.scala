@@ -60,7 +60,7 @@ abstract class PosUniCompression(maxLength: Int, val beginningUnigram: Char)(imp
     compress(cost,stats);
   }
 
-  def destinationFor(i: Int, t: Char) = i + 1;
+  def destinationFor(i: Int, t: Char) = (i + 1) min (maxLength-2);
 
   def compress(prob: Double, counts: Seq[LogDoubleCounter[Char]]): Automaton[Double,Int,Char] = {
 

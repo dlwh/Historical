@@ -12,48 +12,48 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
     case a: Ancestor => a.children.map(buildParentMap(_,a.label)).reduceLeft(_ ++ _) + (a.label -> parent);
   }
 
-  val neighbors = {
+  private val hasMessage = computeMessageHavers(tree);
+
+  val children = {
     def buildChildren(tree: Tree, parent: Language):Map[Language,Set[Language]] = tree match {
-      case _ : Child => Map(tree.label -> Set(parent));
+      case _ : Child => Map(tree.label -> Set.empty[Language]);
       case a: Ancestor =>
-        val myContribution = (a.label -> (a.children.map(_.label).toSet + parent));
+        val myContribution = (a.label -> (a.children.map(_.label).toSet));
         a.children.map(buildChildren(_,a.label)).reduceLeft(_ ++ _) + myContribution;
     }
     buildChildren(tree,"ROOT");
   }
-//  println(neighbors);
 
   val initialBeliefs: BeliefState = {
     val messages = Map.empty ++ (for {
-      (l,ns) <- neighbors iterator;
-      n <- ns iterator
+      (l,ns) <- children iterator;
+      n <- (ns + parent(l)) iterator
     } yield {
       val msg = if (n == "ROOT") rootMessage else initialMessage(n, l)
       (n->l) -> msg
     });
-    val beliefs = for( l <- parentMap.keys) yield {
-      val belief = group.cognates.get(l).map(c => (beliefForWord(c.word)))
+    val beliefs = group.cognates.mapValues(c => beliefForWord(c.word));
 
-      val r = belief getOrElse {
-        val ms = for( n <- neighbors(l) iterator) yield messages(n -> l);
-        ms.reduceLeft(_ * _ )
-      }
-
-      (l -> r)
-    };
-    new BeliefState(beliefs toMap,messages);
+    val defaultedBeliefs = beliefs.toMap.withDefault{ l =>
+      val ms = for( n <- children(l).iterator if hasMessage(n)) yield messages(n -> l);
+      (ms.foldLeft(messages(parent(l) -> l))(_ * _ ) * factors.initialBelief(l) ).normalized :Belief
+    }
+    new BeliefState(defaultedBeliefs,messages);
   }
 
-  lazy val onePassBeliefs = initialBeliefs.upward.downward;
+  lazy val onePassBeliefs = initialBeliefs.upward;
 
   // TODO: make upward better.
-  def beliefsAt(l: Language) = initialBeliefs.upward.updateToward(l).belief(l);
+  def beliefsAt(l: Language) = onePassBeliefs.updateToward(l).belief(l);
 
-  class BeliefState(private[TreeInference] val beliefs: Map[Language,Belief],
-                    private[TreeInference] val messages: Map[(Language,Language),Belief]) {
-    def likelihood = belief(tree.label).partition;
+  class BeliefState( val beliefs: Map[Language,Belief],
+                     val messages: Map[(Language,Language),Belief]) {
+    lazy val likelihood = {
+      println(beliefs.mapValues(_.partition));
+      beliefs.valuesIterator.map(_.partition).sum;
+    }
 
-    private[TreeInference] def message(from: Language, to: Language): Belief = messages(from -> to);
+    def message(from: Language, to: Language): Belief = messages(from -> to);
 
     def belief(language: Language): Belief = {
       if(language == ROOT) rootMessage
@@ -77,7 +77,7 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
       updateOrder.foldRight(this:BeliefState) { (languagePair, state) =>
         val (parent,child) = languagePair;
         val edge = new Edge(parent,child);
-        edge.updateParent(state);
+        edge.updateChild(state);
       }
     }
 
@@ -95,9 +95,10 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
 
   private class Edge(val parent: Language, val child: Language) {
     def updateParent(state: BeliefState) = {
-      val (mu_p,mu_c,edgeMarginal) = marginals(state);
+      println(child + " up " + parent);
+      val (mu_p_div_c,mu_c_div_p,edgeMarginal) = marginals(state);
       val newMu_p = edgeMarginal.parentProjection;
-      val newMsg2p = newMu_p / mu_p;
+      val newMsg2p = (newMu_p / mu_p_div_c)
       val beliefs = state.beliefs.updated(parent,newMu_p);
       val messages = state.messages.updated(child -> parent, newMsg2p);
       new BeliefState(beliefs,messages);
@@ -108,11 +109,12 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
     def updateChild(state: BeliefState) = if(isChildObserved) {
       state
     } else {
-      val (_,mu_c,edgeMarginal) = marginals(state);
+      println(parent + " down " + child);
+      val (_,mu_c_div_p,edgeMarginal) = marginals(state);
       val newMu_c = edgeMarginal.childProjection;
-      val newMsg2c = newMu_c / mu_c;
+      val newMsg2c = (newMu_c / mu_c_div_p)
 
-      val beliefs = state.beliefs.updated(parent,newMu_c);
+      val beliefs = state.beliefs.updated(child,newMu_c);
       val messages = state.messages.updated(parent -> child, newMsg2c);
       new BeliefState(beliefs,messages);
     }
@@ -126,9 +128,16 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
       val mu_c = state.belief(child);
       val msg2p = state.message(child, parent);
       val msg2c = state.message(parent, child)
-      val mu_p_div_c = mu_p / msg2p
-      val mu_c_div_p = mu_c / msg2c
-      (mu_p,mu_c,edgeFor(parent,child).edgeMarginal(mu_p_div_c, mu_c_div_p));
+      val mu_p_div_c = mu_p / msg2p normalized;
+      val mu_c_div_p = try { mu_c / msg2c normalized } catch {
+        case e =>
+          println(parent,child);
+          println(mu_c,mu_c.partition);
+          println(msg2c);
+          println(mu_c / msg2c);
+        throw new RuntimeException("ffff",e);
+      };
+      (mu_p_div_c,mu_c_div_p,edgeFor(parent,child).edgeMarginal(mu_p_div_c, mu_c_div_p));
     }
   }
 
@@ -143,9 +152,6 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
         else children + t.label;
     }
   }
-
-  private val hasMessage = computeMessageHavers(tree);
-
 
   private val updateOrder:Seq[(Language,Language)] = {
     // boolean is if there is some language with an observed word below.
@@ -164,7 +170,6 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
     val forward = inferDepth(tree,0).toSeq.sortBy(-_._2).map(_._1);
     forward
   }
-  println(group, updateOrder);
 
 
 }

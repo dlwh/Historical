@@ -14,6 +14,9 @@ trait Factors {
     def partition: Double
     def /(b: Belief):Belief;
     def *(b: Belief):Belief;
+
+    def normalized: Belief
+    def scaleBy(score: Double):Belief
   }
 
   type Belief <: BeliefBase
@@ -32,6 +35,8 @@ trait Factors {
   def rootMessage: Belief;
   def beliefForWord(w: Word): Belief
   def initialMessage(from: Language, to: Language): Belief
+  // base measures
+  def initialBelief(lang: Language):Belief
 }
 
 
@@ -51,10 +56,12 @@ class BigramFactors extends Factors {
       2.0 * (wB & this.bigrams size) / (wB.size + bigrams.size);
     }
 
-    def partition = 1.0;
+    def partition = 0.0;
 
     def /(b: Belief) = this;
     def *(b: Belief) = Belief(this.bigrams ++ b.bigrams);
+    def normalized = this;
+    def scaleBy(score: Double):Belief = this
   }
 
   class Edge(beliefs: Belief*) extends EdgeBase {
@@ -79,7 +86,7 @@ class TransducerFactors(fullAlphabet: Set[Char],
     def apply(word: String)= (fsa & Automaton.constant(word,0.0)).relabel.cost - partition;
 
     def /(b: Belief):Belief = {
-      val newFsa = fsa & b.fsa.reweight(- _.weight, - _).relabel;
+      val newFsa = (fsa & b.fsa.reweight(- _.weight, - _)).relabel;
       new Belief(newFsa);
     }
 
@@ -88,6 +95,17 @@ class TransducerFactors(fullAlphabet: Set[Char],
     }
 
     override def toString() = ("Belief: " + fsa.toString);
+
+    def normalized = {
+      val scaled = fsa.scaleInitialWeights(-partition).relabel;
+      new Belief(scaled);
+    }
+
+    def scaleBy(score: Double) = {
+      val scaled = fsa.scaleInitialWeights(score).relabel;
+      new Belief(scaled);
+    }
+
   }
 
   class Edge(val trans: Transducer[Double,_,Char,Char]) extends EdgeBase {
@@ -96,16 +114,17 @@ class TransducerFactors(fullAlphabet: Set[Char],
     }
 
     def parentProjection:Belief = {
-      val parent = compression.compress(trans.inputProjection, fullAlphabet)
+      val parent = compression.compress(trans.inputProjection.relabel, fullAlphabet)
       new Belief(parent)
     }
 
     def childProjection:Belief = {
-      val child = compression.compress(trans.outputProjection, fullAlphabet)
+      val child = compression.compress(trans.outputProjection.relabel, fullAlphabet)
       new Belief(child)
     }
   }
 
+  def initialBelief(l: Language) = new Belief(rootBelief);
   val rootMessage: Belief = new Belief(rootBelief);
   def edgeFor(a: Language, b: Language) = new Edge(editDistance(a,b));
   def beliefForWord(w: Word): Belief = new Belief(Automaton.constant(w,0.0));

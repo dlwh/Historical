@@ -5,8 +5,6 @@ import scalanlp.optimize.KuhnMunkres
 import java.io.File
 import scalanlp.config.Configuration
 import scalanlp.stats.sampling.Rand
-import scalanlp.util.HeapDump
-;
 
 /**
  * 

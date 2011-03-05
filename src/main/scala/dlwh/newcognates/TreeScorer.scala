@@ -15,23 +15,11 @@ class TreeScorer[F<:Factors](tree: Tree, factors: F) extends AffinityScorer {
   def calibrate(groupA: CognateGroup) = {
     val infer = new TreeInference(factors,tree,groupA);
     {(groupB: CognateGroup) =>
-      if(groupB.cognates.size == 1) {
-        val (language,cog) = groupB.cognates.iterator.next;
-        val result = infer.beliefsAt(language)(cog.word);
-        println(groupA + " " + groupB + " " + result);
-        result
-      } else if(groupB.cognates.isEmpty) {
-        lazy val beliefs = infer.onePassBeliefs;
-        val result = beliefs.likelihood;
-        println(groupA + " " + groupB + " " + result);
-        result
-      } else {
-        val bigGroup = groupA merge groupB;
-        val infer = new TreeInference(factors,tree,bigGroup);
-        val result = infer.onePassBeliefs.likelihood;
-        println(groupA + " " + groupB + " " + result);
-        result
-      }
+      val bigGroup = groupA merge groupB;
+      val infer = new TreeInference(factors,tree,bigGroup);
+      val result = infer.onePassBeliefs.downward.upward.likelihood;
+      println(groupA + "X" + groupB + " " + infer.onePassBeliefs.likelihood + " :::" + result);
+      result
     }
   }
 }
