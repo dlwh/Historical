@@ -16,6 +16,28 @@ sealed trait Tree {
   def predecessorsOfLanguage(l: String): Set[String];
   def edges: Set[(String,String)];
   def leaves: Set[(String)];
+
+
+  def prettyString(f: String=>Option[String], sb: StringBuilder = new StringBuilder, depth: Int = 0):StringBuilder = this match {
+    case Ancestor(label,children) =>
+      for(out <- f(label)) {
+        sb ++= "\t"*depth + "(";
+        sb ++= out.replaceAll("\n","\t"*depth + "\n")
+        sb ++= "\n";
+        for(c <- children) {
+          c.prettyString(f,sb,depth+ 1);
+        }
+        sb ++= "\t"*depth + ")\n";
+      }
+      sb
+    case Child(label) =>
+      for(out <- f(label)) {
+        sb ++= "\t"*depth + "(";
+        sb ++= out.replaceAll("\n","\n" + "\t"*depth)
+        sb ++= ")\n";
+      }
+      sb
+  }
 };
 
 case class Ancestor(label: String, children: Seq[Tree]) extends Tree {

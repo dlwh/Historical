@@ -79,6 +79,26 @@ case class CognateGroup private(cognates: Map[Language,Cognate]) {
   def glosses = cognates.valuesIterator.map(_.gloss).toSet;
 
   def canMerge(b: CognateGroup) = !cognates.keys.exists(b.cognates.keySet);
+
+  def prettyString(t: Tree) = {
+    val nodes = nodesWithObservedDescendants(t);
+    t.prettyString { label =>
+      cognates.get(label).map(label + ": " + _) orElse Some(label).filter(nodes);
+    }
+
+  }
+
+  def nodesWithObservedDescendants(t: Tree):Set[Language] = {
+    if(cognates.contains(t.label)) {
+      Set(t.label)
+    } else t match {
+      case t: Child => Set.empty;
+      case a: Ancestor =>
+        val children = a.children.map(nodesWithObservedDescendants _).reduceLeft(_ ++ _);
+        if(children.isEmpty) children;
+        else children + t.label;
+    }
+  }
 }
 
 object CognateGroup {

@@ -17,9 +17,10 @@ class TreeScorer[F<:Factors](tree: Tree, factors: F) extends AffinityScorer {
     {(groupB: CognateGroup) =>
       val bigGroup = groupA merge groupB;
       val infer = new TreeInference(factors,tree,bigGroup);
-      val result = infer.onePassBeliefs.downward.upward.likelihood;
-      println(groupA + "X" + groupB + " " + infer.onePassBeliefs.likelihood + " :::" + result);
-      result
+      val ll = infer.onePassBeliefs.downward.likelihood;
+//      val ll = infer.onePassBeliefs.likelihood;
+      println(groupA + "X" + groupB + " " + ll);
+      ll
     }
   }
 }
