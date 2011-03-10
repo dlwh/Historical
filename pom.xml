@@ -13,6 +13,7 @@
              org.apache.maven.plugins ...which is assumed by default.
          -->
         <artifactId>maven-assembly-plugin</artifactId>
+        <version>2.2.1</version>
         <configuration>
           <descriptorRefs>
             <descriptorRef>jar-with-dependencies</descriptorRef>
@@ -78,6 +79,7 @@
       <name>Scala-Tools Maven2 Repository</name>
       <url>http://scala-tools.org/repo-releases</url>
     </repository>
+    <!--
     <repository>
       <name>Berkeley NLP Third-Party</name>
       <url>http://nlp.millennium.berkeley.edu:8082/archiva/repository/third-party/</url>
@@ -88,6 +90,7 @@
       <url>http://nlp.millennium.berkeley.edu:8082/archiva/repository/snapshots/</url>
       <id>berkeley-nlp-snapshots</id>
     </repository>
+    -->
     <repository>
       <id>info-bliki-repository</id>
       <url>http://gwtwiki.googlecode.com/svn/maven-snapshot-repository/</url>
