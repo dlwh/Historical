@@ -68,6 +68,9 @@ object PruneCognates {
 }
 
 case class CognateGroup private(cognates: Map[Language,Cognate]) {
+
+  def gloss = cognates.values.head.gloss;
+
   def +(c: Cognate) = new CognateGroup(cognates + (c.language -> c))
   def -(c: Language) = new CognateGroup(cognates - c);
 
