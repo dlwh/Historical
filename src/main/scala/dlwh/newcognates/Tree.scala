@@ -17,6 +17,16 @@ sealed trait Tree {
   def edges: Set[(String,String)];
   def leaves: Set[(String)];
 
+  def findSubtree(f: Tree=>Boolean):Option[Tree] = if(f(this)) Some(this) else this match {
+    case t:Child => None
+    case Ancestor(_,children) =>
+      val child = children.iterator.map(_.findSubtree(f)).filter(None !=)
+      if(child.hasNext) child.next;
+      else None
+  }
+
+  def subtreeAt(l: String) = findSubtree(_.label == l).get;
+
 
   def prettyString(f: String=>Option[String], sb: StringBuilder = new StringBuilder, depth: Int = 0):StringBuilder = this match {
     case Ancestor(label,children) =>

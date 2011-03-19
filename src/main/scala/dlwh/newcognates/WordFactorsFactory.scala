@@ -2,11 +2,11 @@ package dlwh.newcognates
 
 import scalanlp.fst.fast.AutomatonFactory
 import scalala.Scalala.{iFigure => _, _scalala_figure => _, _}
-import scalala.tensor.counters.LogCounters.{LogDoubleCounter,LogPairedDoubleCounter}
-import scalala.tensor.counters.LogCounters.{aggregate,logNormalize,logNormalizeRows}
 import scalanlp.math.Numerics
 import scalala.tensor.dense.{DenseVector, DenseMatrix}
-import scalanlp.util.{Encoder, Index}
+import scalala.tensor.Vector;
+import scalala.tensor.sparse.SparseVector
+import scalanlp.util.{Lazy, Encoder, Index}
 
 /**
  * 
@@ -39,6 +39,7 @@ class WordFactorsFactory(val factory:AutomatonFactory[Char]) {
     val allOnes = new DenseVector(wordIndex.size);
 
     val rootMessage = {
+      val allOnes = new DenseVector(wordIndex.size);
       new Belief(logNormalizeInPlace(allOnes));
     }
 
@@ -49,10 +50,12 @@ class WordFactorsFactory(val factory:AutomatonFactory[Char]) {
 
     import collection.{mutable=>m}
     private val precomputedCosts = new m.HashMap[(Language,Language),DenseMatrix] with m.SynchronizedMap[(Language,Language),DenseMatrix];
+    private val precomputedECounts = new m.HashMap[(Language,Language),(Int,Int)=>Lazy[Vector]] with m.SynchronizedMap[(Language,Language),(Int,Int)=>Lazy[Vector]];
 
     def edgeFor(parent: Language, child: Language) = {
       val matrix = precomputedCosts.getOrElseUpdate(parent->child,computeCosts(costMatrix(parent,child)));
-      new Edge(matrix,None,None);
+      def expCosts(wordA: Int, wordB: Int)  = precomputedECounts.getOrElseUpdate(parent->child,computeECounts(costMatrix(parent,child)))(wordA,wordB);
+      new Edge(matrix,expCosts _, None,None);
     }
 
     private def computeCosts(matrix: (Char,Char)=>Double) = {
@@ -68,6 +71,13 @@ class WordFactorsFactory(val factory:AutomatonFactory[Char]) {
         }
       }
       result;
+    }
+
+    private def computeECounts(matrix: (Char,Char)=>Double): (Int, Int) => Lazy[Vector] = {
+      val expectedCountsForWords = Array.tabulate(wordIndex.size,wordIndex.size) { (p,c) =>
+        Lazy.delay(EditDistance.expectedCounts(index,wordIndex.get(p),wordIndex.get(c), matrix) : Vector)
+      };
+      {(a:Int,b:Int) => expectedCountsForWords(a)(b)}
     }
 
     case class Belief(beliefs: DenseVector) extends BeliefBase {
@@ -95,10 +105,57 @@ class WordFactorsFactory(val factory:AutomatonFactory[Char]) {
 
     }
 
-    class Edge(costs: DenseMatrix, val parent: Option[Belief]=None, val child: Option[Belief]=None) extends EdgeBase {
+    class Edge(costs: DenseMatrix, baseCounts: (Int,Int)=>Lazy[Vector],
+               val parent: Option[Belief]=None,
+               val child: Option[Belief]=None) extends EdgeBase {
       def edgeMarginal(parent: Belief, child: Belief):Edge = {
-        new Edge(costs,Some(parent),Some(child));
+        new Edge(costs,baseCounts,Some(parent),Some(child));
       }
+
+      def expectedCounts = {
+        val parent = this.parent.get.beliefs;
+        val child = this.child.get.beliefs;
+        var p = 0;
+
+        val result = new SparseVector(index.size * index.size);
+        while(p < parent.size) {
+          var c = 0;
+          while(c < child.size) {
+            val score = math.exp(parent(p) + child(c) + costs(p,c) - partition);
+            if(score > 1E-5)
+              result += (baseCounts(p,c).result * score);
+
+            c += 1;
+          }
+
+          p += 1
+        }
+
+        result;
+
+      }
+
+      lazy val partition = {
+        val parent = this.parent.get.beliefs;
+        val child = this.child.get.beliefs;
+        val scores = Array.fill(parent.size * child.size) { Double.NegativeInfinity};
+        var p = 0;
+        var i = 0;
+        while(p < parent.size) {
+          var c = 0;
+          while(c < child.size) {
+            val score = parent(p) + child(c) + costs(p,c)
+            scores(i) = score;
+            i += 1;
+            c += 1;
+          }
+
+          p += 1
+        }
+        Numerics.logSum(scores);
+      }
+
+
 
       def parentProjection:Belief = { // just a matrix multiply in log space.
         val newParent = new DenseVector(wordIndex.size);
