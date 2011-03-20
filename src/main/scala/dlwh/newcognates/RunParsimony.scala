@@ -16,23 +16,15 @@ import scalala.tensor.dense.DenseVector
 
 object RunParsimony {
   def main(args: Array[String]) {
-    val config = Configuration.fromPropertiesFiles(args.drop(1).map(new File(_)));
     val legalGloss = args(0).split(':').map(Symbol(_)).toSet;
     println(legalGloss);
-    val languages = config.readIn[String]("dataset.languages").split(",");
-    val withGloss = config.readIn[Boolean]("dataset.hasGloss",false);
-    val deathScore = math.log(config.readIn[Double]("initDeathProb"));
+    val config = Configuration.fromPropertiesFiles(args.drop(1).map(new File(_)));
+    val dataset = Dataset.fromConfiguration(config);
 
-    val dataset_name = config.readIn[String]("dataset.name");
-    val dataset = new Dataset(dataset_name,languages, withGloss);
-    val basetree: Tree = dataset.tree;
-    val tree = basetree.subtreeAt(config.readIn[String]("subtree",basetree.label));
-    val leaves = tree.leaves;
+    val tree = dataset.tree
+    val gold = dataset.cognates.filter(group => legalGloss(group.head.gloss));
+    val alphabet = dataset.alphabet;
 
-    val cogs = dataset.cognates.filter(group => legalGloss(group.head.gloss));
-    val alphabet = Index(cogs.iterator.flatMap(_.iterator).flatMap(_.word.iterator) ++ Iterator.single(implicitly[Alphabet[Char]].epsilon));
-
-    val gold: IndexedSeq[Seq[Cognate]] = cogs.map(_.filter(cog => leaves(cog.language))).filterNot(_.isEmpty);
     println(gold.length);
     val goldTags = Accuracy.assignGoldTags(gold);
     val numGold = Accuracy.numGold(gold);

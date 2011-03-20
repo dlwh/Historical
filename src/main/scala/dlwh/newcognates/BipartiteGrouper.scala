@@ -81,7 +81,7 @@ object RunBigrams {
     println(withGloss);
 
     val dataset_name = config.readIn[String]("dataset.name");
-    val dataset = new Dataset(dataset_name,languages, withGloss);
+    val dataset = new ResourceDataset(dataset_name,languages, withGloss);
     val tree = dataset.tree;
     val leaves = tree.leaves;
 

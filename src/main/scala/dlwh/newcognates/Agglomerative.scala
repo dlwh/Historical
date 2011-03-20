@@ -146,7 +146,7 @@ object RunWordAgglomerative {
     val deathScore = math.log(config.readIn[Double]("initDeathProb"));
 
     val dataset_name = config.readIn[String]("dataset.name");
-    val dataset = new Dataset(dataset_name,languages, withGloss);
+    val dataset = new ResourceDataset(dataset_name,languages, withGloss);
     val basetree: Tree = dataset.tree;
     val tree = basetree.subtreeAt(config.readIn[String]("subtree",basetree.label));
     val leaves = tree.leaves;
