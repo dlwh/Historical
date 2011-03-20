@@ -3,7 +3,7 @@ package dlwh.newcognates
 import scalanlp.config.Configuration
 import java.io.File
 import scalanlp.stats.sampling.Rand
-import scalanlp.fst.{DecayAutomaton, EditDistance}
+import scalanlp.fst.{DecayAutomaton}
 import dlwh.cognates.{PosUniCompression, UniCompression, NormalizedTransitions, BiCompression}
 ;
 
@@ -76,7 +76,7 @@ object RunTreeBigrams {
 
 //    val factors = new BigramFactors;
     val compressor = readAutomataCompressor(config, "transducers.message");
-    def editDistance(l: Language, l2: Language) = new EditDistance(-0.3,-0.4,alphabet);
+    def editDistance(l: Language, l2: Language) = new scalanlp.fst.EditDistance(-0.3,-0.4,alphabet);
     def initBelief(l: Language) = new DecayAutomaton(5, alphabet);
     def initMessage(a: Language, b: Language) = new DecayAutomaton(40, alphabet);
     val factors = new TransducerFactors(alphabet, compressor, initBelief(""), editDistance _,  initMessage _);

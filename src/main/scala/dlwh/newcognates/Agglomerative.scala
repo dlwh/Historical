@@ -165,14 +165,14 @@ object RunWordAgglomerative {
     val legalWords = randomized.toSet;
 
     import scalanlp.math.Semiring.LogSpace._;
-    val autoFactory = new AutomatonFactory(alphabet);
-    val factorFactory = new WordFactorsFactory(autoFactory)
-    import factorFactory.factory._;
+    val ed = new ThreeStateEditDistance(alphabet);
+    val factorFactory = new WordFactorsFactory(ed)
+    import factorFactory.editDistance
     val legalByGloss: Map[Symbol, Set[String]] = legalWords.groupBy(_.gloss).mapValues( cognates => cognates.map(_.word));
 
 
     val learningEpochs = config.readIn[Int]("learningEpochs",0);
-    val epochs = Iterator.iterate( (ComputeOracleWeights.costMatrix(index,config),0)) { costsEpoch =>
+    val epochs = Iterator.iterate( (Map.empty[Language,editDistance.Parameters].withDefaultValue(editDistance.initialParameters),0)) { costsEpoch =>
       val (costs,epoch) = costsEpoch;
       println("Starting epoch " + epoch)
 
@@ -204,19 +204,9 @@ object RunWordAgglomerative {
         val groupedByGloss = lastS.groups.groupBy(_.gloss);
 
         val allEdges = tree.edges;
-        import ComputeOracleWeights._;
-        val start: ECounts = (for( edge <- allEdges) yield {
-          val startingScores = new SparseVector(index.size*index.size);
-          /*
-          for( i <- 0 until index.size; j <- 0 until index.size) {
-            startingScores(EditDistance.encode(index,i,j)) = if (i == index('\0') && j == index('\0')) 0.0
-            else if (i == j) .20
-            else if(i == index('\0') || j == index('\0')) 0.003
-            else 0.003;
-          }
-          */
-          edge -> (startingScores:Vector)
-        })toMap
+        val start: Map[String, editDistance.SufficientStatistics] = (for( edge <- allEdges) yield {
+          edge._2 -> editDistance.emptySufficientStatistics
+        }) toMap
 
 
         val bigScores = groupedByGloss.foldLeft(start) {  (acc,pair) =>
@@ -224,13 +214,20 @@ object RunWordAgglomerative {
           val legalWords = groups.flatMap(c => c.cognates.values.map(_.word)).toSet;
           val factors = new factorFactory.WordFactors(legalWords, costs);
 
+          import editDistance.SufficientStatistics;
 
-          val counts = groups.par(2).mapReduce[ECounts,ECounts]({ (group) =>
-            groupToExpectedCounts(group, index, factors, tree, allEdges)
-          }, sumCounts(_:ECounts,_:ECounts))
-          sumCounts(acc,counts);
+          val counts = groups.par(2).mapReduce({ (group) =>
+            val inf = new TreeElimination(factors, tree, group);
+            println(group.prettyString(tree) + " has score " + inf.likelihood);
+            val edgeCounts = (for (pair@(parent, child) <- allEdges.iterator;
+                                   marginal <- inf.edgeMarginal(parent, child).iterator)
+            yield {child -> marginal.expectedCounts});
+            val result = edgeCounts.toMap;
+            result:Map[Language,SufficientStatistics]
+          }, editDistance.sumCounts(_:Map[Language,SufficientStatistics],_:Map[Language,SufficientStatistics]))
+          editDistance.sumCounts(acc,counts);
         }
-        expectedCountsToMatrix(bigScores,index);
+        editDistance.makeParameters(bigScores);
       }
 
       val nextEpoch = epoch + 1
@@ -242,93 +239,7 @@ object RunWordAgglomerative {
 
 }
 
-object GetOracleScore {
-  def main(args: Array[String]) {
-    val config = Configuration.fromPropertiesFiles(args.drop(1).map(new File(_)));
-    val legalGloss = args(0).split(':').map(Symbol(_)).toSet;
-    println(legalGloss);
-    val languages = config.readIn[String]("dataset.languages").split(",");
-    val withGloss = config.readIn[Boolean]("dataset.hasGloss",false);
-    val deathScore = math.log(config.readIn[Double]("initDeathProb"));
-    val initSub = config.readIn[Double]("initSub");
-    val initDel = config.readIn[Double]("initDel");
-
-    val dataset_name = config.readIn[String]("dataset.name");
-    val dataset = new Dataset(dataset_name,languages, withGloss);
-    val tree = dataset.tree;
-    val leaves = tree.leaves;
-
-    val cogs = dataset.cognates.filter(group => legalGloss(group.head.gloss))
-    println(cogs.length);
-
-    val gold: IndexedSeq[Seq[Cognate]] = cogs.map(_.filter(cog => leaves(cog.language))).filterNot(_.isEmpty);
-    val goldTags = Accuracy.assignGoldTags(gold);
-    val numGold = Accuracy.numGold(gold);
-
-    val alphabet = Set.empty ++ gold.iterator.flatMap(_.iterator).flatMap(_.word.iterator);
-    println(alphabet);
-
-    import scalanlp.math.Semiring.LogSpace._;
-    val autoFactory = new AutomatonFactory(Index(alphabet + implicitly[Alphabet[Char]].epsilon));
-    val factorFactory = new WordFactorsFactory(autoFactory)
-    import factorFactory.factory._;
-
-
-    def deathProbs(a: Language, b: Language) = deathScore;
-
-    val groupedByGloss: Map[Symbol, IndexedSeq[scala.Seq[Cognate]]] = gold.groupBy(_.head.gloss);
-
-    val ll = groupedByGloss.foldLeft(0.0) {  (acc,pair) =>
-      val (gloss,groups) = pair
-      val legalWords = groups.flatMap(_.map(_.word)).toSet;
-      val factors = new factorFactory.WordFactors(legalWords, initSub, initDel);
-      val scorerFactory = SumScorer.factory(new DeathTreeScorer.Factory(tree,deathProbs),
-        TreeEliminationScorer.factory(tree, factors));
-      val scorer = scorerFactory.initialScorer;
-      val scores = for(group <- groups.par) yield {
-        val cg = CognateGroup(group:_*);
-        val score = scorer(cg,CognateGroup.empty);
-        println(cg.prettyString(tree) + " has score " + score);
-        score
-      }
-      acc + scores.reduceLeft(_+_);
-    }
-    println("Total score: " + ll);
-
-  }
-
-}
-
 object GoldStatus {
-  def main(args: Array[String]) {
-    val config = Configuration.fromPropertiesFiles(args.drop(1).map(new File(_)));
-    val legalGloss = args(0).split(':').map(Symbol(_)).toSet;
-    println(legalGloss);
-    val languages = config.readIn[String]("dataset.languages").split(",");
-    val withGloss = config.readIn[Boolean]("dataset.hasGloss",false);
-
-    val dataset_name = config.readIn[String]("dataset.name");
-    val dataset = new Dataset(dataset_name,languages, withGloss);
-    val basetree: Tree = dataset.tree;
-    val tree = basetree.subtreeAt(config.readIn[String]("subtree",basetree.label));
-    val leaves = tree.leaves;
-
-    val cogs = dataset.cognates.filter(group => legalGloss(group.head.gloss));
-
-    val gold: IndexedSeq[Seq[Cognate]] = cogs.map(_.filter(cog => leaves(cog.language))).filterNot(_.isEmpty);
-    println(gold.length);
-    val goldTags: Map[Cognate, Int] = Accuracy.assignGoldTags(gold);
-    val groupedByGloss: Map[Symbol, IndexedSeq[scala.Seq[Cognate]]] = gold.groupBy(_.head.gloss);
-
-    for( (gloss,groups) <- groupedByGloss) {
-      val flattened: Map[String, IndexedSeq[Cognate]] = groups.flatten.groupBy(_.language);
-      val (assignedTree,homoplasy,_) = buildTree(tree,flattened,goldTags).get;
-      println(gloss);
-      println(assignedTree.prettyString(x => Some(x)));
-    }
-    println(groupedByGloss.mapValues(_.flatten.groupBy(_.language)).values.flatMap(_.values.filter(_.size > 1).map(_.size)).sum);
-  }
-
   def buildTree(t: Tree, groups: Map[Language,IndexedSeq[Cognate]], assign: Map[Cognate,Int]):Option[(Tree,Set[Int],Set[Int])] = t match {
     case t:Child => for( cognates <- groups.get(t.label)) yield {
       val gold = cognates.map(assign).toSet;

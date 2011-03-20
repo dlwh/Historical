@@ -12,19 +12,15 @@ import scalanlp.util.{Lazy, Encoder, Index}
  * 
  * @author dlwh
  */
-
-class WordFactorsFactory(val factory:AutomatonFactory[Char]) {
-  import factory.{EditDistance => _, _};
-  import EditDistance._;
-
+class WordFactorsFactory(val editDistance:EditDistance) {
+  import editDistance._;
 
   /**
    *
    * @author dlwh
    */
   class WordFactors(legalWords: Set[Word],
-                    costMatrix: (Language,Language)=>((Char,Char)=>Double))extends Factors {
-    def this(legalWords: Set[Word], subCost: Double, delCost: Double)= this(legalWords,((_,_)=>simpleCostMatrix(index.size-1,subCost, delCost)))
+                    costMatrix: (Language)=>Parameters) extends Factors {
 
     val wordIndex = Index(legalWords);
     def initialBelief(lang: Language) = new Belief(allOnes);
@@ -50,20 +46,20 @@ class WordFactorsFactory(val factory:AutomatonFactory[Char]) {
 
     import collection.{mutable=>m}
     private val precomputedCosts = new m.HashMap[(Language,Language),DenseMatrix] with m.SynchronizedMap[(Language,Language),DenseMatrix];
-    private val precomputedECounts = new m.HashMap[(Language,Language),(Int,Int)=>Lazy[Vector]] with m.SynchronizedMap[(Language,Language),(Int,Int)=>Lazy[Vector]];
+    private val precomputedECounts = new m.HashMap[(Language,Language),(Int,Int)=>Lazy[SufficientStatistics]] with m.SynchronizedMap[(Language,Language),(Int,Int)=>Lazy[SufficientStatistics]];
 
     def edgeFor(parent: Language, child: Language) = {
-      val matrix = precomputedCosts.getOrElseUpdate(parent->child,computeCosts(costMatrix(parent,child)));
-      def expCosts(wordA: Int, wordB: Int)  = precomputedECounts.getOrElseUpdate(parent->child,computeECounts(costMatrix(parent,child)))(wordA,wordB);
+      val matrix = precomputedCosts.getOrElseUpdate(parent->child,computeCosts(costMatrix(child)));
+      def expCosts(wordA: Int, wordB: Int)  = precomputedECounts.getOrElseUpdate(parent->child,computeECounts(costMatrix(child)))(wordA,wordB);
       new Edge(matrix,expCosts _, None,None);
     }
 
-    private def computeCosts(matrix: (Char,Char)=>Double) = {
+    private def computeCosts(matrix: Parameters) = {
       val result = new DenseMatrix(wordIndex.size, wordIndex.size);
       val dv = new DenseVector(wordIndex.size);
       for( i <- 0 until legalWords.size) {
         for(j <- 0 until legalWords.size) {
-          dv(j) = editDistance(wordIndex.get(i),wordIndex.get(j),matrix);
+          dv(j) = editDistance.distance(matrix,wordIndex.get(i),wordIndex.get(j));
         }
         logNormalizeInPlace(dv);
         for(j <- 0 until legalWords.size) {
@@ -73,9 +69,9 @@ class WordFactorsFactory(val factory:AutomatonFactory[Char]) {
       result;
     }
 
-    private def computeECounts(matrix: (Char,Char)=>Double): (Int, Int) => Lazy[Vector] = {
+    private def computeECounts(matrix: editDistance.Parameters): (Int, Int) => Lazy[SufficientStatistics] = {
       val expectedCountsForWords = Array.tabulate(wordIndex.size,wordIndex.size) { (p,c) =>
-        Lazy.delay(EditDistance.expectedCounts(index,wordIndex.get(p),wordIndex.get(c), matrix) : Vector)
+        Lazy.delay(sufficientStatistics(matrix, wordIndex.get(p),wordIndex.get(c)))
       };
       {(a:Int,b:Int) => expectedCountsForWords(a)(b)}
     }
@@ -105,7 +101,7 @@ class WordFactorsFactory(val factory:AutomatonFactory[Char]) {
 
     }
 
-    class Edge(costs: DenseMatrix, baseCounts: (Int,Int)=>Lazy[Vector],
+    class Edge(costs: DenseMatrix, baseCounts: (Int,Int)=>Lazy[SufficientStatistics],
                val parent: Option[Belief]=None,
                val child: Option[Belief]=None) extends EdgeBase {
       def edgeMarginal(parent: Belief, child: Belief):Edge = {
@@ -117,7 +113,7 @@ class WordFactorsFactory(val factory:AutomatonFactory[Char]) {
         val child = this.child.get.beliefs;
         var p = 0;
 
-        val result = new SparseVector(index.size * index.size);
+        var result = editDistance.emptySufficientStatistics;
         while(p < parent.size) {
           var c = 0;
           while(c < child.size) {

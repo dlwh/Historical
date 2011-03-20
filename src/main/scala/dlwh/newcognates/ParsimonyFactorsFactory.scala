@@ -13,11 +13,10 @@ import scalanlp.util.{Lazy, Encoder, Index}
  * @author dlwh
  */
 
-class ParsimonyFactorsFactory(val factory:AutomatonFactory[Char]) {
-  import factory.{EditDistance => _, _};
-  import EditDistance._;
+class ParsimonyFactorsFactory(val editDistance:EditDistance) {
+  import editDistance._;
 
-  case class EdgeExpectedCounts(alignmentCounts: Vector, probInnovation: Double, n: Int) {
+  case class EdgeExpectedCounts(alignmentCounts: editDistance.SufficientStatistics, probInnovation: Double, n: Int) {
     def +(that: EdgeExpectedCounts) = {
       EdgeExpectedCounts(alignmentCounts + that.alignmentCounts, probInnovation + that.probInnovation, n + that.n);
     }
@@ -27,13 +26,9 @@ class ParsimonyFactorsFactory(val factory:AutomatonFactory[Char]) {
    * @author dlwh
    */
   class WordFactors(legalWords: Set[Word],
-                    costMatrix: (Language,Language)=>((Char,Char)=>Double),
+                    costMatrix: (Language)=>Parameters,
                     innovationProbability: (Language,Language)=>Double,
                     viterbi: Boolean = false)extends Factors {
-    def this(legalWords: Set[Word], subCost: Double,
-             delCost: Double,
-             innovationProbability: Double)= this(legalWords,((_,_)=>simpleCostMatrix(index.size-1,subCost, delCost)),(_,_)=>innovationProbability);
-
     val wordIndex = Index(legalWords);
     def initialBelief(lang: Language) = new Belief(allOnes);
 
@@ -58,29 +53,29 @@ class ParsimonyFactorsFactory(val factory:AutomatonFactory[Char]) {
 
     import collection.{mutable=>m}
     private val precomputedCosts = new m.HashMap[(Language,Language),EdgeParams] with m.SynchronizedMap[(Language,Language),EdgeParams];
-    private val precomputedECounts = new m.HashMap[(Language,Language),(Int,Int)=>Lazy[Vector]] with m.SynchronizedMap[(Language,Language),(Int,Int)=>Lazy[Vector]];
+    private val precomputedECounts = new m.HashMap[(Language,Language),(Int,Int)=>Lazy[SufficientStatistics]] with m.SynchronizedMap[(Language,Language),(Int,Int)=>Lazy[SufficientStatistics]];
 
     def edgeFor(parent: Language, child: Language) = {
-      val matrix = precomputedCosts.getOrElseUpdate(parent->child,computeCosts(costMatrix(parent,child),innovationProbability(parent,child)));
-      def expCosts(wordA: Int, wordB: Int)  = precomputedECounts.getOrElseUpdate(parent->child,computeECounts(costMatrix(parent,child)))(wordA,wordB);
+      val matrix = precomputedCosts.getOrElseUpdate(parent->child,computeCosts(costMatrix(child),innovationProbability(parent,child)));
+      def expCosts(wordA: Int, wordB: Int)  = precomputedECounts.getOrElseUpdate(parent->child,computeECounts(costMatrix(child)))(wordA,wordB);
       new Edge(matrix,expCosts _, None,None);
     }
 
     case class EdgeParams(summed: DenseMatrix, withoutInnovation: DenseMatrix, withInnovation: DenseVector, logInnov: Double, logNonInnov: Double);
 
-    private def computeCosts(matrix: (Char,Char)=>Double, innovationProb: Double) = {
+    private def computeCosts(matrix: Parameters, innovationProb: Double) = {
       val summed = new DenseMatrix(wordIndex.size, wordIndex.size);
       val withoutInnovation: DenseMatrix = new DenseMatrix(wordIndex.size, wordIndex.size);
       val withInnovation = new DenseVector(wordIndex.size);
       for(i <- 0 until legalWords.size)
-        withInnovation(i) =  wordIndex.get(i).length * -math.log(index.size)
+        withInnovation(i) =  -7.3 //wordIndex.get(i).length * -math.log(index.size)
       val logProbInnovation = math.log(innovationProb);
       val nonInnovation = math.log(1-innovationProb);
 
       val dv = new DenseVector(wordIndex.size);
       for( i <- 0 until legalWords.size) {
         for(j <- 0 until legalWords.size) {
-          dv(j) = editDistance(wordIndex.get(i),wordIndex.get(j),matrix);
+          dv(j) = editDistance.distance(matrix,wordIndex.get(i),wordIndex.get(j));
         }
         //logNormalizeInPlace(dv);
         for(j <- 0 until legalWords.size) {
@@ -91,9 +86,9 @@ class ParsimonyFactorsFactory(val factory:AutomatonFactory[Char]) {
       EdgeParams(summed,withoutInnovation,withInnovation, logProbInnovation, nonInnovation);
     }
 
-    private def computeECounts(matrix: (Char,Char)=>Double): (Int, Int) => Lazy[Vector] = {
+    private def computeECounts(matrix: Parameters): ((Int, Int) => Lazy[SufficientStatistics]) = {
       val expectedCountsForWords = Array.tabulate(wordIndex.size,wordIndex.size) { (p,c) =>
-        Lazy.delay(EditDistance.expectedCounts(index,wordIndex.get(p),wordIndex.get(c), matrix) : Vector)
+        Lazy.delay(editDistance.sufficientStatistics(matrix,wordIndex.get(p),wordIndex.get(c)))
       };
       {(a:Int,b:Int) => expectedCountsForWords(a)(b)}
     }
@@ -128,7 +123,7 @@ class ParsimonyFactorsFactory(val factory:AutomatonFactory[Char]) {
 
 
 
-    class Edge(edgeParams: EdgeParams, baseCounts: (Int,Int)=>Lazy[Vector],
+    class Edge(edgeParams: EdgeParams, baseCounts: (Int,Int)=>Lazy[SufficientStatistics],
                val parent: Option[Belief]=None,
                val child: Option[Belief]=None) extends EdgeBase {
       def edgeMarginal(parent: Belief, child: Belief):Edge = {
@@ -140,7 +135,7 @@ class ParsimonyFactorsFactory(val factory:AutomatonFactory[Char]) {
         val child = this.child.get.beliefs;
         var p = 0;
 
-        val wordChangeCounts = new SparseVector(index.size * index.size);
+        var wordChangeCounts = editDistance.emptySufficientStatistics;
         var pInnov = 0.0;
         while(p < parent.size) {
           var c = 0;

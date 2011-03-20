@@ -9,7 +9,23 @@ import scalanlp.config.Configuration
 import java.io.File
 import scalala.Scalala._
 import scalanlp.optimize.{CachedDiffFunction, FirstOrderMinimizer, DiffFunction}
-;
+
+trait FeaturizedOptimization { this: ThreeStateEditDistance =>
+  override def makeParameters(stats: Map[Language, SufficientStatistics]):Map[Language,Parameters] = {
+    val nicer = stats.mapValues(_.counts);
+    val obj = new EditDistanceObjectiveFunction(pe,nicer, EditDistanceObjectiveFunction.featuresFor _, EditDistanceObjectiveFunction.insertionFeaturesFor _ );
+
+    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 50, regularization = 2).minimizer(obj);
+    val params = opt.minimize(new CachedDiffFunction(obj), obj.initialWeightVector);
+    val theMap = stats.map { case (child,_) =>
+      val matrix = obj.costMatrixFor(child,params);
+      def cost(c1: Char, c2: Char) = matrix(charIndex(c1))(charIndex(c2));
+      (child)-> (cost _);
+    }
+    theMap
+  }
+}
+
 
 /**
  * 

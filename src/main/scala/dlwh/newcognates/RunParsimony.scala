@@ -42,21 +42,20 @@ object RunParsimony {
     val randomized = data;
     val legalWords = randomized.toSet;
 
-    import scalanlp.math.Semiring.LogSpace._;
-    val autoFactory = new AutomatonFactory(alphabet);
-    val factorFactory = new ParsimonyFactorsFactory(autoFactory)
+    val editDistance = new ThreeStateEditDistance(alphabet) with FeaturizedOptimization;
+    val factorFactory = new ParsimonyFactorsFactory(editDistance);
+    import factorFactory.editDistance._;
     import factorFactory.EdgeExpectedCounts;
-    import factorFactory.factory._;
     val cognatesByGloss = legalWords.groupBy(_.gloss);
     val legalByGloss: Map[Symbol, Set[String]] = legalWords.groupBy(_.gloss).mapValues( cognates => cognates.map(_.word));
 
     val learningEpochs = config.readIn[Int]("learningEpochs",0);
 
 
-    type ECounts = Map[(Language,Language),EdgeExpectedCounts];
+    type ECounts = Map[Language,EdgeExpectedCounts];
 
     def sumCounts(s1: ECounts, s2: ECounts) = {
-      val r = collection.mutable.Map[(Language,Language),EdgeExpectedCounts]();
+      val r = collection.mutable.Map[Language,EdgeExpectedCounts]();
       r ++= s1;
       for( (k,v) <- s2) {
         if(r.contains(k)) r(k) += v
@@ -67,8 +66,8 @@ object RunParsimony {
     }
 
     val allEdges = tree.edges;
-    var costs = ComputeOracleWeights.costMatrix(index,config);
-    var starterProbs = Map.empty[(Language,Language),Double].withDefaultValue(0.9);
+    var costs = Map.empty[Language,Parameters].withDefaultValue(initialParameters);
+    val starterProbs = Map.empty[(Language,Language),Double].withDefaultValue(1E-5);
     for(iter <- 0 to learningEpochs) {
       def innovationProb(a: Language, b: Language) = starterProbs(a -> b);
 
@@ -129,7 +128,7 @@ object RunParsimony {
         val edgeCounts = (for (pair@(parent, child) <- allEdges.iterator;
                                marginal <- inference.edgeMarginal(parent, child).iterator;
                                edge <- marginal.iterator)
-        yield {pair -> edge.expectedCounts}).toMap;
+        yield {pair._2 -> edge.expectedCounts}).toMap;
 
         (flattenedGroups,edgeCounts);
       }).toIndexedSeq;
@@ -137,16 +136,7 @@ object RunParsimony {
 
       val guessGroups = groupsAndCounts.iterator.map(_._1).reduceLeft(_ ++_);
       val counts = groupsAndCounts.iterator.map(_._2).reduceLeft(sumCounts);
-
-      val newStarterProbs: Map[(Language, Language), Double] = for( (edge,ecounts) <- counts) yield {
-        val r = edge -> ((ecounts.probInnovation + 0.5 * 20) /(ecounts.n + 20));
-        println("XXX",r);
-        r
-      }
-
-      costs = EditDistanceObjectiveFunction.optimize(index,counts.mapValues(_.alignmentCounts));
-//      if(iter > 2)
-//        starterProbs = newStarterProbs
+      costs = factorFactory.editDistance.makeParameters(counts.mapValues(_.alignmentCounts));
 
       val (precision,recall) = Accuracy.precisionAndRecall(goldTags, numGold, guessGroups)
       val f1 = 2 * (precision * recall) / (precision + recall)
