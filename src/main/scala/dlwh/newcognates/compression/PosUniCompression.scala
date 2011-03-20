@@ -1,13 +1,12 @@
-package dlwh.cognates;
+package dlwh.newcognates.compression
 
-import scalanlp.fst._;
-import scalanlp.util.Index;
+
 import scalala.tensor.counters.LogCounters.{logSum => _, _};
 import scalala.Scalala._;
-import scala.collection.mutable.PriorityQueue;
 import scala.reflect.OptManifest;
 import scalanlp.math.Semiring.LogSpace._;
-import Automaton._;
+import scalanlp.fst._
+import Automaton._
 
 
 abstract class PosUniCompression(maxLength: Int, val beginningUnigram: Char)(implicit alpha: Alphabet[Char], man:

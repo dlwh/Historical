@@ -1,6 +1,7 @@
 package dlwh.newcognates
 
-import dlwh.cognates.{NormalizedTransitions, PosUniCompression}
+import compression.PosUniCompression
+import dlwh.newcognates.compression.{PosUniCompression, NormalizedTransitions}
 import scalanlp.fst.{DecayAutomaton}
 
 /**

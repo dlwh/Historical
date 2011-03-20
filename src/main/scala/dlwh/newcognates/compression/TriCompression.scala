@@ -1,4 +1,4 @@
-package dlwh.cognates;
+package dlwh.newcognates.compression
 
 import scalanlp.fst._;
 import scalanlp.util.Index;

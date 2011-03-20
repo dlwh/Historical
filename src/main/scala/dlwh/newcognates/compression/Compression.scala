@@ -1,4 +1,5 @@
-package dlwh.cognates;
+package dlwh.newcognates
+package compression;
 
 import scalanlp.fst._;
 import scalanlp.util.Index;
@@ -7,8 +8,6 @@ import scala.collection.mutable.PriorityQueue
 import scalala.tensor.counters.LogCounters.{logSum=>_,log=> _ ,_};
 import scalanlp.math.Semiring.LogSpace._;
 import scalala.Scalala._;
-
-import Types._;
 
 /**
  * A Compressor provides a mechanism for taking an automaton,

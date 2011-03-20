@@ -1,10 +1,7 @@
-package dlwh.cognates;
+package dlwh.newcognates.compression
 
 import scalanlp.fst._;
-import scalanlp.util.Index;
 import scalala.tensor.counters.LogCounters.{logSum=> _, _};
-import scala.collection.mutable.PriorityQueue;
-import scalanlp.math.Semiring.LogSpace._;
 import Automaton._;
 import scalala.Scalala._;
 

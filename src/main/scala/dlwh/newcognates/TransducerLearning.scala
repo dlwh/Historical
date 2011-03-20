@@ -7,7 +7,7 @@ import scalanlp.util.Log._;
 import scalanlp.math.Semiring.LogSpace._;
 import scalala.tensor.counters.LogCounters._;
 import scalanlp.concurrent.ParallelOps._
-import dlwh.cognates.Compressor
+import dlwh.newcognates.compression.Compressor
 
 trait TransducerLearning {
   val transducerCompressor: Compressor[_,(Char,Char)];

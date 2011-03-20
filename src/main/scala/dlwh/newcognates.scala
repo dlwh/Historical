@@ -1,7 +1,7 @@
 package dlwh
 
 
-import cognates.{NormalizedTransitions, Compressor}
+import dlwh.newcognates.compression.{NormalizedTransitions, Compressor}
 import scalanlp.fst._;
 
 /**

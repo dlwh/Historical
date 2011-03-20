@@ -1,9 +1,4 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
-package dlwh.cognates
+package dlwh.newcognates.compression
 
 import scala.collection.mutable.ArrayBuffer
 import scalala.tensor.counters.LogCounters.LogDoubleCounter
