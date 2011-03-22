@@ -9,6 +9,7 @@ import scalanlp.config.Configuration
 import java.io.File
 import scalala.Scalala._
 import scalanlp.optimize.{CachedDiffFunction, FirstOrderMinimizer, DiffFunction}
+import scalanlp.maxent.MaxEntObjectiveFunction
 
 trait FeaturizedOptimization { this: ThreeStateEditDistance =>
   override def makeParameters(stats: Map[Language, SufficientStatistics]):Map[Language,Parameters] = {
@@ -30,7 +31,7 @@ trait FeaturizedOptimization { this: ThreeStateEditDistance =>
 /**
  * 
  * @author dlwh
- */
+ **/
 class EditDistanceObjectiveFunction[F](pe: AlignmentPairEncoder, expectedCounts: Map[Language,Vector],
                                     featurizer: (Language,Char,Char)=>Array[F],
                                     insertionFeaturizer: (Language)=>Array[F]) extends DiffFunction[Int,DenseVector] {
@@ -53,8 +54,6 @@ class EditDistanceObjectiveFunction[F](pe: AlignmentPairEncoder, expectedCounts:
     val insFeats = expectedCounts.map { case (lang,_) => lang -> insertionFeaturizer(lang).map(featureIndex.index _)};
     (featureIndex:Index[F],feats,insFeats);
   }
-
-
 
   val featureEncoder = Encoder.fromIndex(featuresIndex);
   def initialWeightVector = featureEncoder.mkDenseVector(0.0);
@@ -151,7 +150,6 @@ class EditDistanceObjectiveFunction[F](pe: AlignmentPairEncoder, expectedCounts:
         }
         pair += 1;
       }
-      logProb += 7;
 
       // ll = insertionCounts * log p(insert) + nonInsertionCounts * log p(not Insert)
       // grad = insertionCounts * feats - insertionCounts * (
