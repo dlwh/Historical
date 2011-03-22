@@ -28,6 +28,8 @@ trait Factors {
     def childProjection:Belief
     // compute the "product" (parent * e * child), and compute the resulting posteriors for the child
     def parentProjection:Belief
+
+    def score(parent: Word, child: Word):Double
   }
 
   def edgeFor(parent: Language, child: Language):Edge
@@ -68,6 +70,10 @@ class BigramFactors extends Factors {
     def edgeMarginal(parent: Belief, child: Belief) = new Edge(parent,child);
     def childProjection:Belief = Belief(beliefs.view.map(_.bigrams).reduceLeft(_++_));
     def parentProjection:Belief = childProjection;
+
+    def score(parent: Word, child: Word) = {
+      beliefForWord(parent) apply child
+    }
   }
 
   def extractBigrams(word: Word) = {
@@ -121,6 +127,10 @@ class TransducerFactors(fullAlphabet: Set[Char],
     def childProjection:Belief = {
       val child = compression.compress(trans.outputProjection.relabel, fullAlphabet)
       new Belief(child)
+    }
+
+    def score(a: Word, b: Word) = {
+      edgeMarginal(beliefForWord(a),beliefForWord(b)).trans.cost;
     }
   }
 

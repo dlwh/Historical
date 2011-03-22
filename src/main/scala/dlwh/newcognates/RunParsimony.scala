@@ -2,8 +2,6 @@ package dlwh.newcognates
 
 import scalanlp.config.Configuration
 import java.io.File
-import scalanlp.util.Index
-import scalanlp.fst.Alphabet
 import scalanlp.fst.fast.{AutomatonFactory}
 import collection.mutable.ArrayBuffer
 
@@ -17,19 +15,19 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
   val legalWords = data.toSet;
 
   val editDistance = new ThreeStateEditDistance(alphabet) with FeaturizedOptimization;
-  val factorFactory = new ParsimonyFactorsFactory(editDistance);
-  import factorFactory.editDistance._;
-  import factorFactory.EdgeExpectedCounts;
+  val wordFactory: WordFactorsFactory = new WordFactorsFactory(editDistance);
+  val factorFactory: ParsimonyFactorsFactory[WordFactorsFactory] = new ParsimonyFactorsFactory(wordFactory, 1E-1, 1E-4);
+  import factorFactory._;
   val cognatesByGloss = legalWords.groupBy(_.gloss);
   val legalByGloss: Map[Symbol, Set[String]] = legalWords.groupBy(_.gloss).mapValues( cognates => cognates.map(_.word));
   val goldTags = Accuracy.assignGoldTags(gold);
   val allEdges = tree.edges;
 
 
-  type ECounts = Map[Language,EdgeExpectedCounts];
+  type ECounts = Map[Language,SufficientStatistics];
 
   def sumCounts(s1: ECounts, s2: ECounts) = {
-    val r = collection.mutable.Map[Language,EdgeExpectedCounts]();
+    val r = collection.mutable.Map[Language,SufficientStatistics]();
     r ++= s1;
     for( (k,v) <- s2) {
       if(r.contains(k)) r(k) += v
@@ -38,17 +36,16 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
     r.toMap
   }
 
-  case class State(cognates: IndexedSeq[CognateGroup], parameters: Map[Language,Parameters])
+  case class State(cognates: IndexedSeq[CognateGroup], parameters: Map[Language,EdgeParameters])
 
   private def initialState = State(IndexedSeq.empty,
-    Map.empty[Language,Parameters].withDefaultValue(initialParameters))
+    Map.empty[Language,EdgeParameters].withDefaultValue(initialParameters))
 
 
   def iterator:Iterator[State] = { Iterator.iterate(initialState) { case State(cogs,costs) =>
-    def innovationProb(a: Language, b: Language) = if(cogs.isEmpty) 1E-1 else 1e-4;
     val groupsAndCounts = (for( (gloss,cognates) <- cognatesByGloss) yield {
-      val factors = new factorFactory.WordFactors(cognates.map(_.word).toSet, costs, innovationProb _, viterbi = true);
-      val inference: ParsimonyInference[factorFactory.WordFactors] = new ParsimonyInference(factors,tree,cognatesByGloss(gloss).toSeq);
+      val factors = factorFactory.mkFactors(cognates.map(_.word).toSet, costs);
+      val inference: ParsimonyInference[factorFactory.Factors] = new ParsimonyInference(factors,tree,cognatesByGloss(gloss).toSeq);
       printMarginals(gloss, inference)
       printGold(gloss)
 
@@ -63,7 +60,7 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
       val edgeCounts = (for (pair@(parent, child) <- allEdges.iterator;
                              marginal <- inference.edgeMarginal(parent, child).iterator;
                              edge <- marginal.iterator)
-      yield {pair._2 -> edge.expectedCounts}).toMap;
+      yield {pair._2 -> edge.sufficientStatistics}).toMap;
 
       (flattenedGroups,edgeCounts);
     }).toIndexedSeq;
@@ -71,12 +68,12 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
 
     val guessGroups: IndexedSeq[CognateGroup] = groupsAndCounts.iterator.map(_._1).reduceLeft(_ ++_);
     val counts = groupsAndCounts.iterator.map(_._2).reduceLeft(sumCounts);
-    val newCosts = factorFactory.editDistance.makeParameters(counts.mapValues(_.alignmentCounts));
+    val newCosts = factorFactory.optimize(counts);
     State(guessGroups,newCosts);
   }}.drop(1)
 
 
-  def printMarginals(gloss: Symbol, inference: ParsimonyInference[factorFactory.WordFactors]): Unit = {
+  def printMarginals(gloss: Symbol, inference: ParsimonyInference[factorFactory.Factors]): Unit = {
     println(gloss + " " + inference.likelihood);
     val string = tree.prettyString {
       lang =>
@@ -94,11 +91,11 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
     println(goldTree.prettyString(Some(_)));
   }
 
-  def iterativeDecode(cognates: Seq[Cognate], params: Map[Language,factorFactory.editDistance.Parameters], tree: Tree, innovProb:Double) = {
+  def iterativeDecode(cognates: Seq[Cognate], params: Map[Language,EdgeParameters], tree: Tree, innovProb:Double) = {
     val groups = new ArrayBuffer[IndexedSeq[Cognate]];
 
     def innovationProb(a: String, b:String) =  innovProb;
-    val factors = new factorFactory.WordFactors(cognates.map(_.word).toSet, params, innovationProb _, viterbi = true);
+    val factors = factorFactory.mkFactors(cognates.map(_.word).toSet, params);
     val inference = new ParsimonyInference(factors,tree,cognates)
     val group = decodeCognates(inference,tree).filterNot(_.isEmpty).head;
     println("initial: " + group);
@@ -113,7 +110,7 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
       val pathToRoot = CognateGroup(theWord).nodesWithObservedDescendants(tree);
       def innovationProb(a: String, b:String) = if(pathToRoot(b)) 0.0 else 1E-4;
 
-      val factors = new factorFactory.WordFactors(cognates.map(_.word).toSet, params, innovationProb _, viterbi = true);
+      val factors = factorFactory.mkFactors(cognates.map(_.word).toSet, params);
       val inference = new ParsimonyInference(factors,tree,wordsToConsider)
       printMarginals(theWord.gloss, inference)
 
@@ -126,7 +123,7 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
     groups;
   }
 
-  def decodeCognates(inference: ParsimonyInference[factorFactory.WordFactors],
+  def decodeCognates(inference: ParsimonyInference[factorFactory.Factors],
                      tree: Tree,
                      cur: ArrayBuffer[Cognate]= new ArrayBuffer[Cognate]):IndexedSeq[IndexedSeq[Cognate]] = tree match {
     case t: Child => error("no")
@@ -189,7 +186,7 @@ object RunParsimony {
 }
 
   /*
-def decodeCognates(inference: ParsimonyInference[factorFactory.WordFactors], tree: Tree):IndexedSeq[Cognate] = tree match {
+def decodeCognates(inference: ParsimonyInference[factorFactory.Factors], tree: Tree):IndexedSeq[Cognate] = tree match {
 case t: Child => inference.groupedByLanguage(t.label).toIndexedSeq;
 case Ancestor(label, children) =>
 val childGroups = for(c <- children if inference.hasUpwardMessage(c.label)) yield {

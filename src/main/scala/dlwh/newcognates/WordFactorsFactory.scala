@@ -12,15 +12,36 @@ import scalanlp.util.{Lazy, Encoder, Index}
  * 
  * @author dlwh
  */
-class WordFactorsFactory(val editDistance:EditDistance) {
+class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactorsFactory {
   import editDistance._;
 
-  /**
-   *
-   * @author dlwh
-   */
+  type EdgeParameters = editDistance.Parameters;
+  case class SufficientStatistics(inner: editDistance.SufficientStatistics) extends BaseSufficientStatistics {
+    def +(stats: SufficientStatistics) = SufficientStatistics(inner + stats.inner);
+    def *(weight: Double):SufficientStatistics = {
+      SufficientStatistics(inner * weight);
+    }
+  }
+
+
+  def initialParameters: EdgeParameters = editDistance.initialParameters;
+  def emptySufficientStatistics = new SufficientStatistics(editDistance.emptySufficientStatistics);
+
+  private type edSS = editDistance.SufficientStatistics;
+
+  type Factors = WordFactors
+  def mkFactors(legalWords: Set[Word], edgeParameters: (Language) => EdgeParameters) = {
+    new WordFactors(legalWords,edgeParameters);
+  }
+
+
+  def optimize(suffStats: Map[Language, SufficientStatistics]) = {
+    editDistance.makeParameters(suffStats.mapValues(_.inner));
+  }
+
+
   class WordFactors(legalWords: Set[Word],
-                    costMatrix: (Language)=>Parameters) extends Factors {
+                    costMatrix: (Language)=>Parameters) extends FactorsWithSuffStats {
 
     val wordIndex = Index(legalWords);
     def initialBelief(lang: Language) = new Belief(allOnes);
@@ -46,7 +67,7 @@ class WordFactorsFactory(val editDistance:EditDistance) {
 
     import collection.{mutable=>m}
     private val precomputedCosts = new m.HashMap[(Language,Language),DenseMatrix] with m.SynchronizedMap[(Language,Language),DenseMatrix];
-    private val precomputedECounts = new m.HashMap[(Language,Language),(Int,Int)=>Lazy[SufficientStatistics]] with m.SynchronizedMap[(Language,Language),(Int,Int)=>Lazy[SufficientStatistics]];
+    private val precomputedECounts = new m.HashMap[(Language,Language),(Int,Int)=>Lazy[edSS]] with m.SynchronizedMap[(Language,Language),(Int,Int)=>Lazy[edSS]];
 
     def edgeFor(parent: Language, child: Language) = {
       val matrix = precomputedCosts.getOrElseUpdate(parent->child,computeCosts(costMatrix(child)));
@@ -61,7 +82,6 @@ class WordFactorsFactory(val editDistance:EditDistance) {
         for(j <- 0 until legalWords.size) {
           dv(j) = editDistance.distance(matrix,wordIndex.get(i),wordIndex.get(j));
         }
-        logNormalizeInPlace(dv);
         for(j <- 0 until legalWords.size) {
           result(i,j) = dv(j);
         }
@@ -69,11 +89,11 @@ class WordFactorsFactory(val editDistance:EditDistance) {
       result;
     }
 
-    private def computeECounts(matrix: editDistance.Parameters): (Int, Int) => Lazy[SufficientStatistics] = {
+    private def computeECounts(matrix: editDistance.Parameters): (Int, Int) => Lazy[edSS] = {
       val expectedCountsForWords = Array.tabulate(wordIndex.size,wordIndex.size) { (p,c) =>
-        Lazy.delay(sufficientStatistics(matrix, wordIndex.get(p),wordIndex.get(c)))
+        Lazy.delay(editDistance.sufficientStatistics(matrix, wordIndex.get(p),wordIndex.get(c)))
       };
-      {(a:Int,b:Int) => expectedCountsForWords(a)(b)}
+      {(a:Int,b:Int) => (expectedCountsForWords(a)(b))}
     }
 
     case class Belief(beliefs: DenseVector) extends BeliefBase {
@@ -101,14 +121,18 @@ class WordFactorsFactory(val editDistance:EditDistance) {
 
     }
 
-    class Edge(costs: DenseMatrix, baseCounts: (Int,Int)=>Lazy[SufficientStatistics],
+    class Edge(costs: DenseMatrix, baseCounts: (Int,Int)=>Lazy[edSS],
                val parent: Option[Belief]=None,
-               val child: Option[Belief]=None) extends EdgeBase {
+               val child: Option[Belief]=None) extends EdgeBase with HasSufficientStatistics {
       def edgeMarginal(parent: Belief, child: Belief):Edge = {
         new Edge(costs,baseCounts,Some(parent),Some(child));
       }
 
-      def expectedCounts = {
+      def score(a: Word, b: Word) = {
+        costs(wordIndex(a),wordIndex(b));
+      }
+
+      def sufficientStatistics = {
         val parent = this.parent.get.beliefs;
         val child = this.child.get.beliefs;
         var p = 0;
@@ -127,7 +151,7 @@ class WordFactorsFactory(val editDistance:EditDistance) {
           p += 1
         }
 
-        result;
+        SufficientStatistics(result);
 
       }
 

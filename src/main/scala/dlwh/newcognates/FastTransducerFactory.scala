@@ -66,6 +66,10 @@ abstract class FastTransducerFactory extends CompressorFactory {
         val child = compress(trans.outputProjection)
         new Belief(child)
       }
+
+      def score(a: Word, b: Word) = {
+        edgeMarginal(beliefForWord(a),beliefForWord(b)).trans.outputProjection.cost;
+      }
     }
   }
 }
