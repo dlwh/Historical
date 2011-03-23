@@ -136,6 +136,7 @@ object Accuracy {
   }
 }
 
+/*
 object RunWordAgglomerative {
   def main(args: Array[String]) {
     val config = Configuration.fromPropertiesFiles(args.drop(1).map(new File(_)));
@@ -238,6 +239,7 @@ object RunWordAgglomerative {
   }
 
 }
+*/
 
 object GoldStatus {
   def buildTree(t: Tree, groups: Map[Language,IndexedSeq[Cognate]], assign: Map[Cognate,Int]):Option[(Tree,Set[Int],Set[Int])] = t match {

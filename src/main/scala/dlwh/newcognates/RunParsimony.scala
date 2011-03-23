@@ -2,7 +2,7 @@ package dlwh.newcognates
 
 import scalanlp.config.Configuration
 import java.io.File
-import scalanlp.fst.fast.{AutomatonFactory}
+import scalanlp.concurrent.ParallelOps._;
 import collection.mutable.ArrayBuffer
 
 class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
@@ -16,7 +16,7 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
 
   val editDistance = new ThreeStateEditDistance(alphabet) with FeaturizedOptimization;
   val wordFactory: WordFactorsFactory = new WordFactorsFactory(editDistance);
-  val factorFactory: ParsimonyFactorsFactory[WordFactorsFactory] = new ParsimonyFactorsFactory(wordFactory, 1E-1, 1E-4);
+  val factorFactory: ParsimonyFactorsFactory[WordFactorsFactory] = new ParsimonyFactorsFactory(wordFactory, .3, .2);
   import factorFactory._;
   val cognatesByGloss = legalWords.groupBy(_.gloss);
   val legalByGloss: Map[Symbol, Set[String]] = legalWords.groupBy(_.gloss).mapValues( cognates => cognates.map(_.word));
@@ -43,7 +43,7 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
 
 
   def iterator:Iterator[State] = { Iterator.iterate(initialState) { case State(cogs,costs) =>
-    val groupsAndCounts = (for( (gloss,cognates) <- cognatesByGloss) yield {
+    val groupsAndCounts = cognatesByGloss.toIndexedSeq.par.map { case (gloss,cognates) =>
       val factors = factorFactory.mkFactors(cognates.map(_.word).toSet, costs);
       val inference: ParsimonyInference[factorFactory.Factors] = new ParsimonyInference(factors,tree,cognatesByGloss(gloss).toSeq);
       printMarginals(gloss, inference)
@@ -63,7 +63,7 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
       yield {pair._2 -> edge.sufficientStatistics}).toMap;
 
       (flattenedGroups,edgeCounts);
-    }).toIndexedSeq;
+    }
 
 
     val guessGroups: IndexedSeq[CognateGroup] = groupsAndCounts.iterator.map(_._1).reduceLeft(_ ++_);

@@ -31,7 +31,7 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
 
   type Factors = WordFactors
   def mkFactors(legalWords: Set[Word], edgeParameters: (Language) => EdgeParameters) = {
-    new WordFactors(legalWords,edgeParameters);
+    new WordFactors(legalWords,edgeParameters, false);
   }
 
 
@@ -40,8 +40,7 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
   }
 
 
-  class WordFactors(legalWords: Set[Word],
-                    costMatrix: (Language)=>Parameters) extends FactorsWithSuffStats {
+  class WordFactors(legalWords: Set[Word], costMatrix: (Language)=>Parameters, viterbi:Boolean) extends FactorsWithSuffStats {
 
     val wordIndex = Index(legalWords);
     def initialBelief(lang: Language) = new Belief(allOnes);
@@ -66,7 +65,7 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
     }
 
     import collection.{mutable=>m}
-    private val precomputedCosts = new m.HashMap[(Language,Language),DenseMatrix] with m.SynchronizedMap[(Language,Language),DenseMatrix];
+    private val precomputedCosts = new m.HashMap[(Language,Language),ArrayCache] with m.SynchronizedMap[(Language,Language),ArrayCache];
     private val precomputedECounts = new m.HashMap[(Language,Language),(Int,Int)=>Lazy[edSS]] with m.SynchronizedMap[(Language,Language),(Int,Int)=>Lazy[edSS]];
 
     def edgeFor(parent: Language, child: Language) = {
@@ -75,17 +74,10 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
       new Edge(matrix,expCosts _, None,None);
     }
 
-    private def computeCosts(matrix: Parameters) = {
-      val result = new DenseMatrix(wordIndex.size, wordIndex.size);
-      val dv = new DenseVector(wordIndex.size);
-      for( i <- 0 until legalWords.size) {
-        for(j <- 0 until legalWords.size) {
-          dv(j) = editDistance.distance(matrix,wordIndex.get(i),wordIndex.get(j));
-        }
-        for(j <- 0 until legalWords.size) {
-          result(i,j) = dv(j);
-        }
-      }
+    private def computeCosts(matrix: Parameters): ArrayCache = {
+      val result = new ArrayCache(wordIndex.size, wordIndex.size)({ (i:Int,j:Int) =>
+        editDistance.distance(matrix,wordIndex.get(i),wordIndex.get(j))
+      })
       result;
     }
 
@@ -97,7 +89,7 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
     }
 
     case class Belief(beliefs: DenseVector) extends BeliefBase {
-      lazy val partition = Numerics.logSum(beliefs);
+      lazy val partition = { val r = Numerics.logSum(beliefs); assert(!r.isNaN & !r.isInfinite); r}
       def apply(word: String)= beliefs(wordIndex(word));
 
       def /(b: Belief):Belief = {
@@ -121,7 +113,7 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
 
     }
 
-    class Edge(costs: DenseMatrix, baseCounts: (Int,Int)=>Lazy[edSS],
+    class Edge(costs: ArrayCache, baseCounts: (Int,Int)=>Lazy[edSS],
                val parent: Option[Belief]=None,
                val child: Option[Belief]=None) extends EdgeBase with HasSufficientStatistics {
       def edgeMarginal(parent: Belief, child: Belief):Edge = {
@@ -164,9 +156,11 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
         while(p < parent.size) {
           var c = 0;
           while(c < child.size) {
-            val score = parent(p) + child(c) + costs(p,c)
-            scores(i) = score;
-            i += 1;
+            if(child(c) != Double.NegativeInfinity) {
+              val score = parent(p) + child(c) + costs(p,c)
+              scores(i) = score;
+              i += 1;
+            }
             c += 1;
           }
 
@@ -181,13 +175,15 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
         val newParent = new DenseVector(wordIndex.size);
         val childBeliefs = this.child.get.beliefs
         val scores = Array.fill(childBeliefs.size)(Double.NegativeInfinity);
-        for( parent <- 0 until costs.rows) {
+        for( parent <- 0 until wordIndex.size) {
           var child = 0;
           while(child < wordIndex.size) {
-            scores(child) = childBeliefs(child) + costs(parent,child);
+            if(childBeliefs(child) != Double.NegativeInfinity)
+              scores(child) = childBeliefs(child) + costs(parent,child);
             child += 1;
           }
-          newParent(parent) = Numerics.logSum(scores);
+          newParent(parent) = if(viterbi) Numerics.max(scores) else Numerics.logSum(scores);
+          assert(!newParent(parent).isNaN && !newParent(parent).isInfinite)
         }
         val result = parent.foldLeft(new Belief(newParent))(_ * _);
         result;
@@ -200,10 +196,12 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
         for( child <- 0 until wordIndex.size) {
           var parent = 0;
           while(parent < wordIndex.size) {
-            scores(parent) = parentBeliefs(parent) + costs(parent,child);
+            if(parentBeliefs(parent) != Double.NegativeInfinity)
+              scores(parent) = parentBeliefs(parent) + costs(parent,child);
             parent += 1;
           }
-          newChild(child) = Numerics.logSum(scores);
+          newChild(child) = if(viterbi) Numerics.max(scores) else Numerics.logSum(scores);
+          assert(!newChild(child).isNaN && !newChild(child).isInfinite)
         }
         val result = child.foldLeft(new Belief(newChild))(_ * _);
         result;

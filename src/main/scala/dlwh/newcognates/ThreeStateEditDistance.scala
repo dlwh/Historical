@@ -87,7 +87,7 @@ class ThreeStateEditDistance(val charIndex: Index[Char], subRatio: Double = -2, 
     }
   }
 
-  def logsum(a: Double, b: Double, c: Double) = {
+  final def logsum(a: Double, b: Double, c: Double) = {
     val max = a max b max c;
     if(max.isInfinite) max
     else {

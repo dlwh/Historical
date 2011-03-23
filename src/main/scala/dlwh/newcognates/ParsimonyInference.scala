@@ -83,7 +83,9 @@ class ParsimonyInference[F<:Factors](val factors: F, val tree: Tree, val cognate
   lazy val likelihood  = {
     val up = upwardBeliefs(tree.label).head
     val down = rootMessage;
-    up * down partition;
+    val r =up * down partition;
+    assert(!r.isNaN);
+    r
   };
 
   def edgeMarginal(parent: Language, child: Language) = if(hasUpwardMessage(child) && parent != ROOT) Some(edgeMarginals(parent->child)) else None;

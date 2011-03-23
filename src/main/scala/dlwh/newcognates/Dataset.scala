@@ -15,7 +15,8 @@ trait Dataset  {
   def cognates: IndexedSeq[Seq[Cognate]];
 
   lazy val alphabet: Index[Char] = {
-     Index(cognates.iterator.flatMap(_.iterator).flatMap(_.word.iterator) ++ Iterator.single(implicitly[Alphabet[Char]].epsilon));
+    val allChars = cognates.iterator.flatMap(_.iterator).flatMap(_.word.iterator);
+    new scalanlp.fst.CharIndex('\0',allChars.toSet);
   }
 }
 

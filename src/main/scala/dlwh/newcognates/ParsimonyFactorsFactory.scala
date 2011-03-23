@@ -13,7 +13,11 @@ import scalanlp.util.{Lazy, Encoder, Index}
  * @author dlwh
  */
 
-class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory: Factory, initialInnovationProb: Double, baseInnovationProb: Double) extends SuffStatsFactorsFactory {
+class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory: Factory,
+                                                                initialInnovationProb: Double,
+                                                                baseInnovationProb: Double,
+                                                                beamThreshold:Double = -5,
+                                                                viterbi: Boolean = false) extends SuffStatsFactorsFactory {
 
 
 
@@ -49,26 +53,25 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
    * @author dlwh
    */
   class Factors(legalWords: Set[Word], baseFactors: baseFactory.Factors,
-                innovationProb: (Language)=>Double,
-                viterbi: Boolean = false) extends FactorsWithSuffStats {
+                innovationProb: (Language)=>Double) extends FactorsWithSuffStats {
     val wordIndex = Index(legalWords);
-    def initialBelief(lang: Language) = new Belief(allOnes);
+    def initialBelief(lang: Language) = new Belief(allOnes,0.0);
 
-    def initialMessage(from: Language, to: Language) = new Belief(allOnes);
+    def initialMessage(from: Language, to: Language) = new Belief(allOnes,0.0);
 
     def beliefForWord(w: Word) = new Belief({
       val r = Encoder.fromIndex(wordIndex).mkDenseVector(Double.NegativeInfinity);
       r(wordIndex(w)) = 0.0;
       r
-    })
+    },0.0)
     val allOnes = new DenseVector(wordIndex.size);
 
     val rootMessage = {
-      val allOnes = new DenseVector(wordIndex.size);
-      new Belief(logNormalizeInPlace(allOnes));
+      val allOnes =logNormalizeInPlace(new DenseVector(wordIndex.size));
+      new Belief(allOnes,allOnes(0));
     }
 
-    def logNormalizeInPlace(v: DenseVector) = {
+    private def logNormalizeInPlace(v: DenseVector) = {
       v -= Numerics.logSum(v);
       v
     }
@@ -86,28 +89,24 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
       new Edge(matrix,expCounts _, None,None);
     }
 
-    case class EdgeParams(summed: DenseMatrix, withoutInnovation: DenseMatrix, withInnovation: DenseVector, logInnov: Double, logNonInnov: Double);
+    case class EdgeParams(summed: ArrayCache, withoutInnovation: ArrayCache, withInnovation: DenseVector, logInnov: Double, logNonInnov: Double);
 
     private def computeCosts(edge: baseFactors.Edge, innovationProb: Double) = {
-      val summed = new DenseMatrix(wordIndex.size, wordIndex.size);
-      val withoutInnovation: DenseMatrix = new DenseMatrix(wordIndex.size, wordIndex.size);
-      val withInnovation = new DenseVector(wordIndex.size);
-      for(i <- 0 until legalWords.size)
-        withInnovation(i) =  -7.3 //wordIndex.get(i).length * -math.log(index.size)
+      val withoutInnovation = new ArrayCache(wordIndex.size,wordIndex.size)( {(p,c) =>
+        edge.score(wordIndex.get(p),wordIndex.get(c));
+      })
       val logProbInnovation = math.log(innovationProb);
       val nonInnovation = math.log(1-innovationProb);
 
-      val dv = new DenseVector(wordIndex.size);
-      for( i <- 0 until legalWords.size) {
-        for(j <- 0 until legalWords.size) {
-          dv(j) = edge.score(wordIndex.get(i),wordIndex.get(j));
-        }
-        //logNormalizeInPlace(dv);
-        for(j <- 0 until legalWords.size) {
-          summed(i,j) = Numerics.logSum(dv(j) + nonInnovation,withInnovation(j) + logProbInnovation);
-          withoutInnovation(i,j) = dv(j);
-        }
-      }
+      val withInnovation = new DenseVector(wordIndex.size);
+      for(i <- 0 until legalWords.size)
+        withInnovation(i) =  -7.3 //wordIndex.get(i).length * -math.log(index.size)
+
+      val summed = new ArrayCache(wordIndex.size,wordIndex.size) ({ (p,c) =>
+        if(viterbi) Numerics.logSum(withoutInnovation(p,c) + nonInnovation,withInnovation(c) + logProbInnovation);
+        else math.max(withoutInnovation(p,c) + nonInnovation,withInnovation(c) + logProbInnovation)
+      })
+
       EdgeParams(summed,withoutInnovation,withInnovation, logProbInnovation, nonInnovation);
     }
 
@@ -119,17 +118,20 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
       {(a:Int,b:Int) => expectedCountsForWords(a)(b)}
     }
 
-    case class Belief(beliefs: DenseVector) extends BeliefBase {
-      lazy val partition = Numerics.logSum(beliefs);
+    case class Belief(beliefs: DenseVector, max: Double) extends BeliefBase {
+      lazy val partition = { val r = Numerics.logSum(beliefs); assert(!r.isNaN && !r.isInfinite); r}
       def apply(word: String)= beliefs(wordIndex(word));
 
       def /(b: Belief):Belief = {
-        val diff = beliefs -b.beliefs value;
-        new Belief(diff);
+        val newBeliefs = beliefs - b.beliefs value
+        val newMax = Numerics.max(newBeliefs.data);
+        new Belief(newBeliefs, newMax);
       }
 
       def *(b: Belief):Belief = {
-        val r = new Belief(beliefs + b.beliefs value);
+        val newBeliefs = beliefs + b.beliefs value
+        val newMax = Numerics.max(newBeliefs.data);
+        val r = new Belief(newBeliefs, newMax);
         r
       }
 
@@ -142,7 +144,7 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
 
       def scaleBy(score: Double) = {
         val scaled = (beliefs + score value);
-        new Belief(scaled);
+        new Belief(scaled, max + score);
       }
 
     }
@@ -162,30 +164,35 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
 
       def sufficientStatistics = {
         val parent = this.parent.get.beliefs;
+        val parentMax = this.parent.get.max;
         val child = this.child.get.beliefs;
+        val childMax = this.child.get.max;
         var p = 0;
 
         var wordChangeCounts = baseFactory.emptySufficientStatistics;
         var pInnov = 0.0;
         while(p < parent.size) {
           var c = 0;
-          while(c < child.size) {
-            // p(wc,wp)
-            val score = math.exp(parent(p) + child(c) + edgeParams.summed(p,c) - partition);
-            // log p(new|wc,wp) (numerator)
-            val posteriorInnovation = edgeParams.withInnovation(c) + edgeParams.logInnov;
-            // log p(not new|wc,wp) (numerator)
-            val nonInnovation = edgeParams.withoutInnovation(p,c) + edgeParams.logNonInnov;
-            // p(new|wc,wp) (normalized)
-            val normalizedPosteriorInnovation = math.exp(posteriorInnovation - Numerics.logSum(posteriorInnovation,nonInnovation));
-            val normNonInnov = 1-normalizedPosteriorInnovation;
-            if(normNonInnov * score > 1E-5) // counts for p and c weighted by p(not new,wc,wp)
-              wordChangeCounts += (baseCounts(p,c).result * (normNonInnov * score));
+          if(parent(p) > parentMax + beamThreshold)
+            while(c < child.size) {
+              if(child(c) > childMax + beamThreshold) {
+                // p(wc,wp)
+                val score = math.exp(parent(p) + child(c) + edgeParams.summed(p,c) - partition);
+                // log p(new|wc,wp) (numerator)
+                val posteriorInnovation = edgeParams.withInnovation(c) + edgeParams.logInnov;
+                // log p(not new|wc,wp) (numerator)
+                val nonInnovation = edgeParams.withoutInnovation(p,c) + edgeParams.logNonInnov;
+                // p(new|wc,wp) (normalized)
+                val normalizedPosteriorInnovation = math.exp(posteriorInnovation - Numerics.logSum(posteriorInnovation,nonInnovation));
+                val normNonInnov = 1-normalizedPosteriorInnovation;
+                if(normNonInnov * score > 1E-8) // counts for p and c weighted by p(not new,wc,wp)
+                  wordChangeCounts += (baseCounts(p,c).result * (normNonInnov * score));
 
-            pInnov += normalizedPosteriorInnovation * score;
+                pInnov += normalizedPosteriorInnovation * score;
+              }
 
-            c += 1;
-          }
+              c += 1;
+            }
 
           p += 1
         }
@@ -246,32 +253,42 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
       def parentProjection:Belief = { // just a matrix multiply in log space.
         val newParent = new DenseVector(wordIndex.size);
         val childBeliefs = this.child.get.beliefs
-        val scores = Array.fill(childBeliefs.size)(Double.NegativeInfinity);
-        for( parent <- 0 until wordIndex.size) {
+        val maxChild = this.child.get.max;
+        var newMax = Double.NegativeInfinity
+        var parent = 0;
+        while(parent < newParent.size) {
+          val scores = Array.fill(childBeliefs.size)(Double.NegativeInfinity);
           var child = 0;
           while(child < wordIndex.size) {
-            scores(child) = childBeliefs(child) + edgeParams.summed(parent,child);
+            if(childBeliefs(child) >= maxChild + beamThreshold)
+              scores(child) = childBeliefs(child) + edgeParams.summed(parent,child);
             child += 1;
           }
           newParent(parent) = if(viterbi) Numerics.max(scores) else Numerics.logSum(scores);
+          newMax = newMax max newParent(parent);
+          parent += 1;
         }
-        val result = parent.foldLeft(new Belief(newParent))(_ * _);
+        val result = this.parent.foldLeft(new Belief(newParent, newMax))(_ * _);
         result;
       }
 
       def childProjection:Belief = {
         val newChild = new DenseVector(wordIndex.size);
         val parentBeliefs = this.parent.get.beliefs;
-        val scores = Array.fill(parentBeliefs.size)(Double.NegativeInfinity);
+        val maxParent = this.parent.get.max;
+        var newMax = Double.NegativeInfinity
         for( child <- 0 until wordIndex.size) {
+          val scores = Array.fill(parentBeliefs.size)(Double.NegativeInfinity);
           var parent = 0;
           while(parent < wordIndex.size) {
-            scores(parent) = parentBeliefs(parent) + edgeParams.summed(parent,child);
+            if(parentBeliefs(parent) >= maxParent + beamThreshold)
+              scores(parent) = parentBeliefs(parent) + edgeParams.summed(parent,child);
             parent += 1;
           }
           newChild(child) = if(viterbi) Numerics.max(scores) else Numerics.logSum(scores);
+          newMax = newMax max newChild(child);
         }
-        val result = child.foldLeft(new Belief(newChild))(_ * _);
+        val result = child.foldLeft(new Belief(newChild, newMax))(_ * _);
         result;
       }
     }

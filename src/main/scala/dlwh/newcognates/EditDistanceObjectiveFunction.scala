@@ -16,7 +16,7 @@ trait FeaturizedOptimization { this: ThreeStateEditDistance =>
     val nicer = stats.mapValues(_.counts);
     val obj = new EditDistanceObjectiveFunction(pe,nicer, EditDistanceObjectiveFunction.featuresFor _, EditDistanceObjectiveFunction.insertionFeaturesFor _ );
 
-    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 50, regularization = 2).minimizer(obj);
+    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 20, regularization = 2, tolerance = 1E-3).minimizer(obj);
     val params = opt.minimize(new CachedDiffFunction(obj), obj.initialWeightVector);
     val theMap = stats.map { case (child,_) =>
       val matrix = obj.costMatrixFor(child,params);
@@ -104,8 +104,10 @@ class EditDistanceObjectiveFunction[F](pe: AlignmentPairEncoder, expectedCounts:
 
 
   def weightedSum(deriv: DenseVector, features:Array[Int], weight: Double) ={
-    for( f <- features) {
-      deriv(f) += weight;
+    var fi = 0;
+    while(fi < features.length) {
+      deriv(features(fi)) += weight;
+      fi+=1;
     }
   }
 
