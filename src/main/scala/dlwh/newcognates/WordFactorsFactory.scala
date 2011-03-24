@@ -7,12 +7,13 @@ import scalala.tensor.dense.{DenseVector, DenseMatrix}
 import scalala.tensor.Vector;
 import scalala.tensor.sparse.SparseVector
 import scalanlp.util.{Lazy, Encoder, Index}
+import java.util.Arrays
 
 /**
  * 
  * @author dlwh
  */
-class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactorsFactory {
+class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = -10) extends SuffStatsFactorsFactory {
   import editDistance._;
 
   type EdgeParameters = editDistance.Parameters;
@@ -43,20 +44,20 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
   class WordFactors(legalWords: Set[Word], costMatrix: (Language)=>Parameters, viterbi:Boolean) extends FactorsWithSuffStats {
 
     val wordIndex = Index(legalWords);
-    def initialBelief(lang: Language) = new Belief(allOnes);
+    def initialBelief(lang: Language) = new Belief(allOnes,0.0);
 
-    def initialMessage(from: Language, to: Language) = new Belief(allOnes);
+    def initialMessage(from: Language, to: Language) = new Belief(allOnes, 0.0);
 
     def beliefForWord(w: Word) = new Belief({
       val r = Encoder.fromIndex(wordIndex).mkDenseVector(Double.NegativeInfinity);
       r(wordIndex(w)) = 0.0;
       r
-    })
+    }, 0.0)
     val allOnes = new DenseVector(wordIndex.size);
 
     val rootMessage = {
-      val allOnes = new DenseVector(wordIndex.size);
-      new Belief(logNormalizeInPlace(allOnes));
+      val allOnes = logNormalizeInPlace(new DenseVector(wordIndex.size));
+      new Belief(allOnes,allOnes(0));
     }
 
     def logNormalizeInPlace(v: DenseVector) = {
@@ -88,17 +89,20 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
       {(a:Int,b:Int) => (expectedCountsForWords(a)(b))}
     }
 
-    case class Belief(beliefs: DenseVector) extends BeliefBase {
+    case class Belief(beliefs: DenseVector, max: Double) extends BeliefBase {
       lazy val partition = { val r = Numerics.logSum(beliefs); assert(!r.isNaN & !r.isInfinite); r}
       def apply(word: String)= beliefs(wordIndex(word));
 
       def /(b: Belief):Belief = {
         val diff = beliefs -b.beliefs value;
-        new Belief(diff);
+        val newMax = Numerics.max(diff.data);
+        new Belief(diff,newMax);
       }
 
       def *(b: Belief):Belief = {
-        val r = new Belief(beliefs + b.beliefs value);
+        val newBeliefs = beliefs + b.beliefs value
+        val newMax = Numerics.max(newBeliefs.data);
+        val r = new Belief(newBeliefs, newMax);
         r
       }
 
@@ -108,7 +112,7 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
 
       def scaleBy(score: Double) = {
         val scaled = (beliefs + score value);
-        new Belief(scaled);
+        new Belief(scaled, max + score);
       }
 
     }
@@ -127,18 +131,21 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
       def sufficientStatistics = {
         val parent = this.parent.get.beliefs;
         val child = this.child.get.beliefs;
+        val parentMax = this.parent.get.max;
+        val childMax = this.child.get.max;
         var p = 0;
-
         var result = editDistance.emptySufficientStatistics;
         while(p < parent.size) {
           var c = 0;
-          while(c < child.size) {
-            val score = math.exp(parent(p) + child(c) + costs(p,c) - partition);
-            if(score > 1E-5)
-              result += (baseCounts(p,c).result * score);
-
-            c += 1;
-          }
+          if(parent(p) >= parentMax + beamThreshold)
+            while(c < child.size) {
+              if(child(c) >= childMax + beamThreshold) {
+                val score = math.exp(parent(p) + child(c) + costs(p,c) - partition);
+                if(score > 1E-5)
+                  result += (baseCounts(p,c).result * score);
+              }
+              c += 1;
+            }
 
           p += 1
         }
@@ -150,19 +157,22 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
       lazy val partition = {
         val parent = this.parent.get.beliefs;
         val child = this.child.get.beliefs;
-        val scores = Array.fill(parent.size * child.size) { Double.NegativeInfinity};
+        val scores = negativeInfinityArray(parent.size * child.size);
+        val parentMax = this.parent.get.max;
+        val childMax = this.child.get.max;
         var p = 0;
         var i = 0;
         while(p < parent.size) {
           var c = 0;
-          while(c < child.size) {
-            if(child(c) != Double.NegativeInfinity) {
-              val score = parent(p) + child(c) + costs(p,c)
-              scores(i) = score;
-              i += 1;
+          if(parent(p) >= parentMax + beamThreshold)
+            while(c < child.size) {
+              if(child(c) >= childMax + beamThreshold) {
+                val score = parent(p) + child(c) + costs(p,c)
+                scores(i) = score;
+                i += 1;
+              }
+              c += 1;
             }
-            c += 1;
-          }
 
           p += 1
         }
@@ -174,7 +184,7 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
       def parentProjection:Belief = { // just a matrix multiply in log space.
         val newParent = new DenseVector(wordIndex.size);
         val childBeliefs = this.child.get.beliefs
-        val scores = Array.fill(childBeliefs.size)(Double.NegativeInfinity);
+        val scores: Array[Double] = negativeInfinityArray(childBeliefs.size);
         for( parent <- 0 until wordIndex.size) {
           var child = 0;
           while(child < wordIndex.size) {
@@ -185,14 +195,14 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
           newParent(parent) = if(viterbi) Numerics.max(scores) else Numerics.logSum(scores);
           assert(!newParent(parent).isNaN && !newParent(parent).isInfinite)
         }
-        val result = parent.foldLeft(new Belief(newParent))(_ * _);
+        val result = parent.foldLeft(new Belief(newParent, Numerics.max(newParent.data)))(_ * _);
         result;
       }
 
       def childProjection:Belief = {
         val newChild = new DenseVector(wordIndex.size);
         val parentBeliefs = this.parent.get.beliefs;
-        val scores = Array.fill(parentBeliefs.size)(Double.NegativeInfinity);
+        val scores = negativeInfinityArray(parentBeliefs.size);
         for( child <- 0 until wordIndex.size) {
           var parent = 0;
           while(parent < wordIndex.size) {
@@ -203,9 +213,15 @@ class WordFactorsFactory(val editDistance:EditDistance) extends SuffStatsFactors
           newChild(child) = if(viterbi) Numerics.max(scores) else Numerics.logSum(scores);
           assert(!newChild(child).isNaN && !newChild(child).isInfinite)
         }
-        val result = child.foldLeft(new Belief(newChild))(_ * _);
+        val result = child.foldLeft(new Belief(newChild, Numerics.max(newChild.data)))(_ * _);
         result;
       }
     }
+  }
+
+  def negativeInfinityArray(size: Int): Array[Double] = {
+    val r = new Array[Double](size);
+    Arrays.fill(r,Double.NegativeInfinity);
+    r;
   }
 }

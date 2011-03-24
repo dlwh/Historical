@@ -67,32 +67,33 @@ object PruneCognates {
   }
 }
 
-case class CognateGroup private(cognates: Map[Language,Cognate]) {
+case class CognateGroup private(cognates: Set[Cognate]) {
+  lazy val cognatesByLanguage = cognates.iterator.map(c => c.language -> c).toMap
 
-  def gloss = cognates.values.head.gloss;
+  def gloss = cognates.head.gloss;
 
-  def +(c: Cognate) = new CognateGroup(cognates + (c.language -> c))
-  def -(c: Language) = new CognateGroup(cognates - c);
+  def +(c: Cognate) = new CognateGroup(cognates + c)
+  def -(c: Language) = new CognateGroup(cognates.filterNot(_.language == c));
 
   override def toString() = {
-    cognates.values.mkString("CognateGroup(",",",")");
+    cognates.mkString("CognateGroup(",",",")");
   }
   def merge(b: CognateGroup) = new CognateGroup(cognates ++ b.cognates);
 
-  def glosses = cognates.valuesIterator.map(_.gloss).toSet;
+  def glosses = cognates.map(_.gloss).toSet;
 
-  def canMerge(b: CognateGroup) = !cognates.keys.exists(b.cognates.keySet);
+  def canMerge(b: CognateGroup) = !cognatesByLanguage.keys.exists(b.cognatesByLanguage.keySet);
 
   def prettyString(t: Tree) = {
     val nodes = nodesWithObservedDescendants(t);
     t.prettyString { label =>
-      cognates.get(label).map(label + ": " + _) orElse Some(label).filter(nodes);
+      cognatesByLanguage.get(label).map(label + ": " + _) orElse Some(label).filter(nodes);
     }
 
   }
 
   def nodesWithObservedDescendants(t: Tree):Set[Language] = {
-    if(cognates.contains(t.label)) {
+    if(cognatesByLanguage.contains(t.label)) {
       Set(t.label)
     } else t match {
       case t: Child => Set.empty;
@@ -105,7 +106,7 @@ case class CognateGroup private(cognates: Map[Language,Cognate]) {
 }
 
 object CognateGroup {
-  def apply(cogs: Cognate*):CognateGroup = new CognateGroup(Map.empty ++ cogs.map(c => c.language -> c));
+  def apply(cogs: Cognate*):CognateGroup = new CognateGroup(cogs.toSet);
 
   def empty = apply();
 }

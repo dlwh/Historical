@@ -68,7 +68,7 @@ class Agglomerative[MyAff<:AffinityScorer](affFactory: Map[Symbol,AffinityScorer
             emptyScores -= a
             emptyScores -= b;
             byGloss = byGloss.updated(a.glosses.head, byGloss(a.glosses.head) - a - b + merged);
-            pq ++= successors(state, emptyScores, merged, byGloss(a.cognates.values.head.gloss))
+            pq ++= successors(state, emptyScores, merged, byGloss(a.cognates.head.gloss))
           }
         }
 
@@ -113,7 +113,7 @@ object Accuracy {
     var numCorrect = 0;
     var numGuesses = 0;
     for(group <- cognates) {
-      val gs = group.cognates.values.toIndexedSeq;
+      val gs = group.cognates.toIndexedSeq;
       for(i <- 0 until gs.length; j <- (i+1) until gs.length) {
         if(gold(gs(i)) == gold(gs(j)))
           numCorrect += 1
@@ -128,7 +128,7 @@ object Accuracy {
 
   def purity(gold: Map[Cognate,Int], cognates: Seq[CognateGroup]) = {
     val numberAssignedCorrectly = cognates.iterator.map { group =>
-      val goldClusters: Iterator[Int] = group.cognates.valuesIterator.map(c => gold(c));
+      val goldClusters: Iterator[Int] = group.cognates.iterator.map(c => gold(c));
       scalala.tensor.counters.Counters.count(goldClusters).max;
     } reduceLeft(_+_);
     val numGroups = gold.size;

@@ -16,7 +16,7 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
 
   val editDistance = new ThreeStateEditDistance(alphabet) with FeaturizedOptimization;
   val wordFactory: WordFactorsFactory = new WordFactorsFactory(editDistance);
-  val factorFactory: ParsimonyFactorsFactory[WordFactorsFactory] = new ParsimonyFactorsFactory(wordFactory, .3, .2);
+  val factorFactory: ParsimonyFactorsFactory[WordFactorsFactory] = new ParsimonyFactorsFactory(wordFactory, 1E-2, 1E-4);
   import factorFactory._;
   val cognatesByGloss = legalWords.groupBy(_.gloss);
   val legalByGloss: Map[Symbol, Set[String]] = legalWords.groupBy(_.gloss).mapValues( cognates => cognates.map(_.word));
@@ -43,14 +43,14 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
 
 
   def iterator:Iterator[State] = { Iterator.iterate(initialState) { case State(cogs,costs) =>
-    val groupsAndCounts = cognatesByGloss.toIndexedSeq.par.map { case (gloss,cognates) =>
+    def mapStep(gloss: Symbol, cognates: Set[Cognate]) = {
       val factors = factorFactory.mkFactors(cognates.map(_.word).toSet, costs);
       val inference: ParsimonyInference[factorFactory.Factors] = new ParsimonyInference(factors,tree,cognatesByGloss(gloss).toSeq);
       printMarginals(gloss, inference)
       printGold(gloss)
 
       val myGroups = decodeCognates(inference,tree).filterNot(_.isEmpty);
-//      val myGroups = iterativeDecode(cognates.toIndexedSeq,costs,tree, if(cogs.isEmpty) 1E-1 else 1e-4);
+      //      val myGroups = iterativeDecode(cognates.toIndexedSeq,costs,tree, if(cogs.isEmpty) 1E-1 else 1e-4);
       println(myGroups);
       assert(myGroups.iterator.map(_.size).sum == cognatesByGloss(gloss).size);
 
@@ -65,9 +65,10 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
       (flattenedGroups,edgeCounts);
     }
 
+    def sumGroups(g1: IndexedSeq[CognateGroup], g2: IndexedSeq[CognateGroup]) = g1 ++ g2;
+    def reduceStep( g1: (IndexedSeq[CognateGroup], ECounts), g2: (IndexedSeq[CognateGroup],ECounts)) = (sumGroups(g1._1,g2._1),sumCounts(g1._2,g2._2));
 
-    val guessGroups: IndexedSeq[CognateGroup] = groupsAndCounts.iterator.map(_._1).reduceLeft(_ ++_);
-    val counts = groupsAndCounts.iterator.map(_._2).reduceLeft(sumCounts);
+    val (guessGroups,counts) = cognatesByGloss.toIndexedSeq.par.mapReduce(Function.tupled(mapStep), reduceStep _);
     val newCosts = factorFactory.optimize(counts);
     State(guessGroups,newCosts);
   }}.drop(1)

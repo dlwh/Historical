@@ -14,6 +14,7 @@ import scalala.tensor.dense.{DenseVector, DenseMatrix}
 import scalala.tensor.counters.Counters.PairedDoubleCounter
 import scalala.tensor.sparse.SparseVector
 import scalala.tensor.counters.Counters
+import java.util.Arrays
 ;
 
 /**
@@ -21,7 +22,7 @@ import scalala.tensor.counters.Counters
  * @author dlwh
  */
 
-class ThreeStateEditDistance(val charIndex: Index[Char], subRatio: Double = -2, insRatio: Double= -2) extends EditDistance {
+class ThreeStateEditDistance(val charIndex: Index[Char], subRatio: Double = -2, insRatio: Double= -1) extends EditDistance {
   import math._;
 
   protected val pe = new AlignmentPairEncoder(charIndex)
@@ -99,23 +100,27 @@ class ThreeStateEditDistance(val charIndex: Index[Char], subRatio: Double = -2, 
   val NOEPS = 0;
   val LEFTEPS = 1;
   val RIGHTEPS = 2;
-  def editMatrix(s1: String, s2: String, costs: (Char, Char) => Double): Array[Array[Array[Double]]] = {
-    val matrix = Array.fill(s1.length+1,s2.length+1,3)(Double.NegativeInfinity);
+  def editMatrix(s1: String, s2: String, costs: (Char, Char) => Double): Array[DenseMatrix] = {
+    val matrix = Array.fill(3)(new DenseMatrix(s1.length + 1,s2.length+ 1));
+    //Array.fill(s1.length+1,s2.length+1,3)(Double.NegativeInfinity);
+    Arrays.fill(matrix(0).data,Double.NegativeInfinity);
+    Arrays.fill(matrix(1).data,Double.NegativeInfinity);
+    Arrays.fill(matrix(2).data,Double.NegativeInfinity);
 
     var i = 0;
     while (i <= s1.length) {
       var j = 0;
       while (j <= s2.length) {
         if (i == 0 && j == 0) {
-          matrix(i)(j)(NOEPS) = 0
+          matrix(NOEPS)(i,j) = 0
         } else if (i == 0) {
-          matrix(i)(j)(LEFTEPS) = costs('\0', s2(j - 1)) + Numerics.logSum(matrix(i)(j - 1)(LEFTEPS),matrix(i)(j-1)(NOEPS));
+          matrix(LEFTEPS)(i,j) = costs('\0', s2(j - 1)) + Numerics.logSum(matrix(LEFTEPS)(i,j - 1),matrix(NOEPS)(i,j-1));
         } else if (j == 0) {
-          matrix(i)(j)(RIGHTEPS) = costs(s1(i - 1), '\0') + Numerics.logSum(matrix(i-1)(j)(RIGHTEPS),matrix(i-1)(j)(NOEPS));
+          matrix(RIGHTEPS)(i,j) = costs(s1(i - 1), '\0') + Numerics.logSum(matrix(RIGHTEPS)(i-1,j),matrix(NOEPS)(i-1,j));
         } else {
-          matrix(i)(j)(LEFTEPS) = Numerics.logSum(matrix(i)(j-1)(LEFTEPS), matrix(i)(j-1)(NOEPS)) + costs('\0',s2(j-1));
-          matrix(i)(j)(RIGHTEPS) = logsum(matrix(i-1)(j)(LEFTEPS), matrix(i-1)(j)(NOEPS), matrix(i-1)(j)(RIGHTEPS)) + costs(s1(i-1),'\0');
-          matrix(i)(j)(NOEPS) = logsum(matrix(i-1)(j-1)(RIGHTEPS), matrix(i-1)(j-1)(NOEPS), matrix(i-1)(j-1)(LEFTEPS)) + costs(s1(i-1),s2(j-1));
+          matrix(LEFTEPS)(i,j) = Numerics.logSum(matrix(LEFTEPS)(i,j-1), matrix(NOEPS)(i,j-1)) + costs('\0',s2(j-1));
+          matrix(RIGHTEPS)(i,j) = logsum(matrix(LEFTEPS)(i-1,j), matrix(NOEPS)(i-1,j), matrix(RIGHTEPS)(i-1,j)) + costs(s1(i-1),'\0');
+          matrix(NOEPS)(i,j) = logsum(matrix(RIGHTEPS)(i-1,j-1), matrix(NOEPS)(i-1,j-1), matrix(LEFTEPS)(i-1,j-1)) + costs(s1(i-1),s2(j-1));
         };
         j += 1;
       }
@@ -124,33 +129,37 @@ class ThreeStateEditDistance(val charIndex: Index[Char], subRatio: Double = -2, 
     matrix
   }
 
-  def backwardEditMatrix(s1: String, s2: String, costs: (Char, Char) => Double): Array[Array[Array[Double]]] = {
-    val matrix = Array.fill(s1.length+1,s2.length+1,3)(Double.NegativeInfinity);
+  def backwardEditMatrix(s1: String, s2: String, costs: (Char, Char) => Double) = {
+    val matrix = Array.fill(3)(new DenseMatrix(s1.length + 1,s2.length+ 1));
+    //Array.fill(s1.length+1,s2.length+1,3)(Double.NegativeInfinity);
+    Arrays.fill(matrix(0).data,Double.NegativeInfinity);
+    Arrays.fill(matrix(1).data,Double.NegativeInfinity);
+    Arrays.fill(matrix(2).data,Double.NegativeInfinity);
 
     var i = s1.length;
     while (i >= 0) {
       var j = s2.length;
       while (j >= 0) {
         if (i == s1.length && j == s2.length) {
-          matrix(i)(j)(NOEPS) = 0
-          matrix(i)(j)(LEFTEPS) = 0
-          matrix(i)(j)(RIGHTEPS) = 0
+          matrix(NOEPS)(i,j) = 0
+          matrix(LEFTEPS)(i,j) = 0
+          matrix(RIGHTEPS)(i,j) = 0
         } else if (i == s1.length) {
-          matrix(i)(j)(LEFTEPS) = costs('\0', s2(j)) + matrix(i)(j + 1)(LEFTEPS);
-          matrix(i)(j)(NOEPS) = costs('\0', s2(j)) + matrix(i)(j + 1)(LEFTEPS);
+          matrix(LEFTEPS)(i,j) = costs('\0', s2(j)) + matrix(LEFTEPS)(i,j + 1);
+          matrix(NOEPS)(i,j) = costs('\0', s2(j)) + matrix(LEFTEPS)(i,j + 1);
         } else if (j == s2.length) {
-          matrix(i)(j)(RIGHTEPS) = costs(s1(i), '\0') + matrix(i+1)(j)(RIGHTEPS);
-          matrix(i)(j)(LEFTEPS) = costs(s1(i), '\0') + matrix(i+1)(j)(RIGHTEPS);
-          matrix(i)(j)(NOEPS) = costs(s1(i), '\0') + matrix(i+1)(j)(RIGHTEPS);
+          matrix(RIGHTEPS)(i,j) = costs(s1(i), '\0') + matrix(RIGHTEPS)(i+1,j);
+          matrix(LEFTEPS)(i,j) = costs(s1(i), '\0') + matrix(RIGHTEPS)(i+1,j);
+          matrix(NOEPS)(i,j) = costs(s1(i), '\0') + matrix(RIGHTEPS)(i+1,j);
         } else {
-          matrix(i)(j)(LEFTEPS) = logsum(costs('\0',s2(j)) + matrix(i)(j+1)(LEFTEPS),
-                                         costs(s1(i),s2(j)) + matrix(i+1)(j+1)(NOEPS),
-                                         costs(s1(i),'\0') + matrix(i+1)(j)(RIGHTEPS));
-          matrix(i)(j)(RIGHTEPS) = Numerics.logSum(costs(s1(i),s2(j)) + matrix(i+1)(j+1)(NOEPS),
-                                                  matrix(i+1)(j)(RIGHTEPS) + costs(s1(i),'\0'));
-          matrix(i)(j)(NOEPS) = logsum(costs(s1(i),'\0') + matrix(i+1)(j)(RIGHTEPS),
-                                       costs(s1(i),s2(j)) + matrix(i+1)(j+1)(NOEPS),
-                                       costs('\0',s2(j)) + matrix(i)(j+1)(LEFTEPS));
+          matrix(LEFTEPS)(i,j) = logsum(costs('\0',s2(j)) + matrix(LEFTEPS)(i,j+1),
+                                         costs(s1(i),s2(j)) + matrix(NOEPS)(i+1,j+1),
+                                         costs(s1(i),'\0') + matrix(RIGHTEPS)(i+1,j));
+          matrix(RIGHTEPS)(i,j) = Numerics.logSum(costs(s1(i),s2(j)) + matrix(NOEPS)(i+1,j+1),
+                                                  matrix(RIGHTEPS)(i+1,j) + costs(s1(i),'\0'));
+          matrix(NOEPS)(i,j) = logsum(costs(s1(i),'\0') + matrix(RIGHTEPS)(i+1,j),
+                                       costs(s1(i),s2(j)) + matrix(NOEPS)(i+1,j+1),
+                                       costs('\0',s2(j)) + matrix(LEFTEPS)(i,j+1));
         };
         j -= 1;
       }
@@ -163,15 +172,15 @@ class ThreeStateEditDistance(val charIndex: Index[Char], subRatio: Double = -2, 
   def distance(costs: Parameters, s1: String, s2: String) = {
     val matrix = editMatrix(s1, s2, costs)
 
-    logsum(matrix(s1.length)(s2.length)(NOEPS),
-      matrix(s1.length)(s2.length)(LEFTEPS),
-      matrix(s1.length)(s2.length)(RIGHTEPS));
+    logsum(matrix(NOEPS)(s1.length,s2.length),
+      matrix(LEFTEPS)(s1.length,s2.length),
+      matrix(RIGHTEPS)(s1.length,s2.length));
   }
 
   def sufficientStatistics(costs:Parameters, s1: String, s2: String): SufficientStatistics = {
     val forwardMatrix = editMatrix(s1,s2,costs);
-    val reverseMatrix: Array[Array[Array[Double]]] = backwardEditMatrix(s1,s2,costs);
-    val partition: Double = logsum(forwardMatrix(s1.length)(s2.length)(NOEPS), forwardMatrix(s1.length)(s2.length)(LEFTEPS), forwardMatrix(s1.length)(s2.length)(RIGHTEPS));
+    val reverseMatrix = backwardEditMatrix(s1,s2,costs);
+    val partition: Double = logsum(forwardMatrix(NOEPS)(s1.length,s2.length), forwardMatrix(LEFTEPS)(s1.length,s2.length), forwardMatrix(RIGHTEPS)(s1.length,s2.length));
     val result = new AdaptiveVector(charIndex.size * charIndex.size);
     val epsIndex = charIndex('\0')
     val indexedS1 = s1.map(charIndex);
@@ -184,24 +193,24 @@ class ThreeStateEditDistance(val charIndex: Index[Char], subRatio: Double = -2, 
         import math.exp;
 
         if(i > 0 && j > 0) {
-          val matchF: Double = forwardMatrix(i)(j)(NOEPS)
-          val matchB: Double = reverseMatrix(i)(j)(NOEPS)
+          val matchF: Double = forwardMatrix(NOEPS)(i,j)
+          val matchB: Double = reverseMatrix(NOEPS)(i,j)
           val matchCount = exp(matchF+ matchB- partition)
           if(matchCount > 1E-7)
             result( pe.encode(indexedS1(i-1),indexedS2(j-1))) += matchCount;
         }
 
         if( j > 0) {
-          val insF: Double = forwardMatrix(i)(j)(LEFTEPS)
-          val insB: Double = reverseMatrix(i)(j)(LEFTEPS)
+          val insF: Double = forwardMatrix(LEFTEPS)(i,j)
+          val insB: Double = reverseMatrix(LEFTEPS)(i,j)
           val insCount = exp(insF+ insB- partition)
           if(insCount > 1E-7)
             result(pe.encode(epsIndex,indexedS2(j-1)))+= insCount;
         }
 
         if(i > 0) {
-          val delF: Double = forwardMatrix(i)(j)(RIGHTEPS)
-          val delB: Double = reverseMatrix(i)(j)(RIGHTEPS)
+          val delF: Double = forwardMatrix(RIGHTEPS)(i,j)
+          val delB: Double = reverseMatrix(RIGHTEPS)(i,j)
           val delCount = exp(delF+ delB- partition)
           result(pe.encode(indexedS1(i-1),epsIndex)) += delCount;
         }

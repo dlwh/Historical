@@ -16,7 +16,7 @@ trait FeaturizedOptimization { this: ThreeStateEditDistance =>
     val nicer = stats.mapValues(_.counts);
     val obj = new EditDistanceObjectiveFunction(pe,nicer, EditDistanceObjectiveFunction.featuresFor _, EditDistanceObjectiveFunction.insertionFeaturesFor _ );
 
-    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 20, regularization = 2, tolerance = 1E-3).minimizer(obj);
+    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 50, regularization = 2, tolerance = 1E-3).minimizer(obj);
     val params = opt.minimize(new CachedDiffFunction(obj), obj.initialWeightVector);
     val theMap = stats.map { case (child,_) =>
       val matrix = obj.costMatrixFor(child,params);

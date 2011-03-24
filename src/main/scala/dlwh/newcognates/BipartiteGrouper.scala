@@ -57,7 +57,7 @@ class BipartiteGrouper(val languages: Stream[Language], val treePenalty: Double)
 
   def determineSplit(groups: IndexedSeq[CognateGroup]) = {
     val heldOutLang = languages.head;
-    val heldOutWords = for (grp <- groups if grp.cognates.contains(heldOutLang)) yield grp.cognates(heldOutLang);
+    val heldOutWords = for (grp <- groups if grp.cognatesByLanguage.contains(heldOutLang)) yield grp.cognatesByLanguage(heldOutLang);
     val removed = groups.view.map(_ - heldOutLang).filterNot(_.cognates.isEmpty).toIndexedSeq;
     (heldOutWords.map(CognateGroup(_)),removed,IndexedSeq.empty);
   }

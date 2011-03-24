@@ -8,9 +8,9 @@ package dlwh.newcognates
 class BigramAffinityScorer extends AffinityScorer {
   def calibrate(a: CognateGroup)= { (b: CognateGroup) =>
     val scores = for {
-      aa <- a.cognates.valuesIterator;
+      aa <- a.cognates.iterator;
       aBag = bigrams(aa.word);
-      bb <- b.cognates.valuesIterator
+      bb <- b.cognates.iterator
       bBag = bigrams(bb.word)
     } yield {
       (aBag intersect bBag size) * 1.0 / (bBag ++ aBag size);

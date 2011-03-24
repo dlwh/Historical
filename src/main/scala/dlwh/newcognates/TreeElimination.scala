@@ -38,8 +38,8 @@ class TreeElimination[F<:Factors](val factors: F, val tree: Tree, val group: Cog
 
   val upwardBeliefs: collection.mutable.Map[Language,Belief] = new collection.mutable.HashMap[Language,Belief] {
     override def default(l: Language) = {
-      val belief =  if(group.cognates.contains(l)) {
-        beliefForWord(group.cognates(l).word)
+      val belief =  if(group.cognatesByLanguage.contains(l)) {
+        beliefForWord(group.cognatesByLanguage(l).word)
       } else  {
         val messages = for(c <- children(l) if hasUpwardMessage(c)) yield upwardMessages(c);
         messages.reduceLeft(_ * _);

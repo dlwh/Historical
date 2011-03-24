@@ -32,7 +32,7 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
       val msg = if (n == "ROOT") rootMessage else initialMessage(n, l)
       (n->l) -> msg
     });
-    val beliefs = group.cognates.mapValues(c => beliefForWord(c.word));
+    val beliefs = group.cognatesByLanguage.mapValues(c => beliefForWord(c.word));
 
     val defaultedBeliefs = beliefs.toMap.withDefault{ l =>
       val ms = for( n <- children(l).iterator if hasMessage(n)) yield messages(n -> l);
@@ -51,7 +51,7 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
                      val messages: Map[(Language,Language),Belief]) {
     lazy val likelihood = {
       val str2 = tree.prettyString( lang =>
-        if(hasMessage(lang))  beliefs.get(lang).map(belief => lang + " marginal: " + group.cognates.mapValues(c => c.word + " " +belief(c.word)))
+        if(hasMessage(lang))  beliefs.get(lang).map(belief => lang + " marginal: " + group.cognates.map(c => c + " " +belief(c.word)))
         else None
       )
       println(str2);
@@ -134,7 +134,7 @@ class TreeInference[F<:Factors](val factors: F, val tree: Tree, val group: Cogna
       messages = messages.updated(child -> parent, newMsg2p.scaleBy(-newMu_p.partition))
       new BeliefState(beliefs,messages);
     }
-    def isChildObserved = group.cognates.contains(child);
+    def isChildObserved = group.cognatesByLanguage.contains(child);
     /*
     def updateParent(state: BeliefState) = {
       println(child + " up " + parent);

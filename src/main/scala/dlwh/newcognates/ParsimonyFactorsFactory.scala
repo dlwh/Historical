@@ -7,6 +7,7 @@ import scalala.tensor.dense.{DenseVector, DenseMatrix}
 import scalala.tensor.Vector;
 import scalala.tensor.sparse.SparseVector
 import scalanlp.util.{Lazy, Encoder, Index}
+import java.util.Arrays
 
 /**
  * 
@@ -16,7 +17,7 @@ import scalanlp.util.{Lazy, Encoder, Index}
 class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory: Factory,
                                                                 initialInnovationProb: Double,
                                                                 baseInnovationProb: Double,
-                                                                beamThreshold:Double = -5,
+                                                                beamThreshold:Double = -10,
                                                                 viterbi: Boolean = false) extends SuffStatsFactorsFactory {
 
 
@@ -173,9 +174,9 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
         var pInnov = 0.0;
         while(p < parent.size) {
           var c = 0;
-          if(parent(p) > parentMax + beamThreshold)
+          if(parent(p) >= parentMax + beamThreshold)
             while(c < child.size) {
-              if(child(c) > childMax + beamThreshold) {
+              if(child(c) >= childMax + beamThreshold) {
                 // p(wc,wp)
                 val score = math.exp(parent(p) + child(c) + edgeParams.summed(p,c) - partition);
                 // log p(new|wc,wp) (numerator)
@@ -203,24 +204,29 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
       def posteriorInnovationProb = {
         val parent = this.parent.get.beliefs;
         val child = this.child.get.beliefs;
+        val parentMax = this.parent.get.max;
+        val childMax = this.child.get.max;
         var p = 0;
 
         var pInnov = 0.0;
         while(p < parent.size) {
           var c = 0;
-          while(c < child.size) {
-            // p(wc,wp)
-            val score = math.exp(parent(p) + child(c) + edgeParams.summed(p,c) - partition);
-            // log p(new|wc,wp) (numerator)
-            val posteriorInnovation = edgeParams.withInnovation(c) + edgeParams.logInnov;
-            // log p(not new|wc,wp) (numerator)
-            val nonInnovation = edgeParams.withoutInnovation(p,c) + edgeParams.logNonInnov;
-            // p(new|wc,wp) (normalized)
-            val normalizedPosteriorInnovation = math.exp(posteriorInnovation - Numerics.logSum(posteriorInnovation,nonInnovation));
-            pInnov += normalizedPosteriorInnovation * score;
+          if(parent(p) >= parentMax + beamThreshold)
+            while(c < child.size) {
+              if(child(c) >= childMax + beamThreshold) {
+                // p(wc,wp)
+                val score = math.exp(parent(p) + child(c) + edgeParams.summed(p,c) - partition);
+                // log p(new|wc,wp) (numerator)
+                val posteriorInnovation = edgeParams.withInnovation(c) + edgeParams.logInnov;
+                // log p(not new|wc,wp) (numerator)
+                val nonInnovation = edgeParams.withoutInnovation(p,c) + edgeParams.logNonInnov;
+                // p(new|wc,wp) (normalized)
+                val normalizedPosteriorInnovation = math.exp(posteriorInnovation - Numerics.logSum(posteriorInnovation,nonInnovation));
+                pInnov += normalizedPosteriorInnovation * score;
+              }
 
-            c += 1;
-          }
+              c += 1;
+            }
 
           p += 1
         }
@@ -231,17 +237,22 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
       lazy val partition = {
         val parent = this.parent.get.beliefs;
         val child = this.child.get.beliefs;
-        val scores = Array.fill(parent.size * child.size) { Double.NegativeInfinity};
+        val scores = negativeInfinityArray(parent.size * child.size);
         var p = 0;
         var i = 0;
+        val parentMax = this.parent.get.max;
+        val childMax = this.child.get.max;
         while(p < parent.size) {
           var c = 0;
-          while(c < child.size) {
-            val score = parent(p) + child(c) + edgeParams.summed(p,c)
-            scores(i) = score;
-            i += 1;
-            c += 1;
-          }
+          if(parent(p) >= parentMax + beamThreshold)
+            while(c < child.size) {
+              if(child(c) >= childMax + beamThreshold) {
+                val score = parent(p) + child(c) + edgeParams.summed(p,c)
+                scores(i) = score;
+              }
+              i += 1;
+              c += 1;
+            }
 
           p += 1
         }
@@ -257,7 +268,7 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
         var newMax = Double.NegativeInfinity
         var parent = 0;
         while(parent < newParent.size) {
-          val scores = Array.fill(childBeliefs.size)(Double.NegativeInfinity);
+          val scores = negativeInfinityArray(wordIndex.size);
           var child = 0;
           while(child < wordIndex.size) {
             if(childBeliefs(child) >= maxChild + beamThreshold)
@@ -278,7 +289,7 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
         val maxParent = this.parent.get.max;
         var newMax = Double.NegativeInfinity
         for( child <- 0 until wordIndex.size) {
-          val scores = Array.fill(parentBeliefs.size)(Double.NegativeInfinity);
+          val scores = negativeInfinityArray(wordIndex.size);
           var parent = 0;
           while(parent < wordIndex.size) {
             if(parentBeliefs(parent) >= maxParent + beamThreshold)
@@ -292,5 +303,11 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory](val baseFactory:
         result;
       }
     }
+  }
+
+  def negativeInfinityArray(size: Int): Array[Double] = {
+    val r = new Array[Double](size);
+    Arrays.fill(r,Double.NegativeInfinity);
+    r;
   }
 }
