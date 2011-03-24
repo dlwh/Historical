@@ -2,34 +2,42 @@ package dlwh.newcognates
 
 import scalanlp.math.Numerics
 import scalala.tensor.dense.DenseVector
-import scalanlp.util.{Encoder, Index}
 import scalala.tensor.sparse.SparseVector
+import scalala.Scalala._
+import scalala.tensor.Vector
+import scalanlp.util.{Lazy, Encoder, Index}
+;
 
 /**
  * 
  * @author dlwh
+ **/
 
 class LanguageModelFactorsFactory(charIndex: Index[Char]) extends SuffStatsFactorsFactory {
   val pe = new AlignmentPairEncoder(charIndex);
 
-  def mkFactors(legalWords: Set[Word], edgeParameters: (Language) => EdgeParameters):Factors
+  def mkFactors(legalWords: Set[Word], edgeParameters: (Language) => EdgeParameters):Factors = new Factors(Index(legalWords),edgeParameters);
 
   def optimize(suffStats: Map[Language, SufficientStatistics]):Map[Language,EdgeParameters] = {
-
+    Map.empty.withDefaultValue(initialParameters);
   }
 
 
-  def emptySufficientStatistics = null
+  def emptySufficientStatistics = new SufficientStatistics(new SparseVector(charIndex.size * charIndex.size));
 
-  def initialParameters :EdgeParameters=  new EdgeParameters {
+  val initialParameters :EdgeParameters=  new EdgeParameters {
     val theScore = -math.log(charIndex.size);
-    def score(prev: Char, next: Char) =  theScore;
+    def apply(prev: Char, next: Char) =  theScore;
   }
 
   trait EdgeParameters {
-    def score(prev: Char, next: Char):Double
+    def apply(prev: Char, next: Char):Double
   }
-  case class SufficientStatistics(transitions: Vector)
+  case class SufficientStatistics(transitions: Vector) extends BaseSufficientStatistics {
+    def +(stats: SufficientStatistics) = SufficientStatistics(this.transitions + stats.transitions)
+
+    def *(weight: Double) = SufficientStatistics(this.transitions * weight value);
+  }
 
   class Factors(legalWords: Index[Word], parameters: Language=>EdgeParameters) extends FactorsWithSuffStats {
     val wordIndex = Index(legalWords);
@@ -54,8 +62,52 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends SuffStatsFacto
       v
     }
 
+    import collection.{mutable=>m}
+    private val precomputedECounts = new m.HashMap[Language,(Int)=>Lazy[SparseVector]] with m.SynchronizedMap[Language,(Int)=>Lazy[SparseVector]];
+    private val precomputedCosts = new m.HashMap[Language,(Int)=>Lazy[Double]] with m.SynchronizedMap[Language,(Int)=>Lazy[Double]];
+
     def edgeFor(parent: Language, child: Language) = {
-      new Edge(paremeters(child));
+      val counts = precomputedECounts.getOrElseUpdate(child,computeECounts(parameters(child))) andThen (_.result);
+      val scores = precomputedCosts.getOrElseUpdate(child,computeCosts(parameters(child))) andThen (_.result);
+      new Edge(scores, counts);
+    }
+
+    private def computeCosts(parameters: EdgeParameters) = {
+      Array.tabulate(wordIndex.size) { c =>
+        Lazy.delay {
+          val w = wordIndex.get(c);
+          var cost = 0.0;
+          var ch = '\0';
+          var i = 0;
+          while(i < w.length) {
+            val chn = w(i);
+            cost += parameters(ch,chn)
+            ch = chn;
+            i += 1
+          }
+          cost += parameters(ch,'\0')
+          cost
+        }
+      }
+    }
+
+    private def computeECounts(parameters: EdgeParameters) = {
+      Array.tabulate(wordIndex.size) { c =>
+        Lazy.delay {
+          val w = wordIndex.get(c);
+          val result = new SparseVector(charIndex.size * charIndex.size,w.length + 1);
+          var ch = '\0';
+          var i = 0;
+          while(i < w.length) {
+            val chn = w(i);
+            result(pe.encode(ch,chn)) += 1;
+            ch = chn;
+            i += 1
+          }
+          result(pe.encode(ch,'\0')) += 1;
+          result;
+        }
+      }
     }
 
     case class Belief(beliefs: DenseVector) extends BeliefBase {
@@ -83,20 +135,35 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends SuffStatsFacto
 
     }
 
-    case class Edge(costs: DenseVector, counts: Int=>SparseVector, child: Option[Belief]=None) extends EdgeBase with HasSufficientStatistics {
+    case class Edge(costs: Int=>Double, counts: Int=>SparseVector, child: Option[Belief]=None) extends EdgeBase with HasSufficientStatistics {
       def score(a: Word, b: Word) = costs(wordIndex(b));
 
       def sufficientStatistics = {
-        val child = this.child.get;
+        val child = this.child.get.beliefs;
         var c = 0;
+        val suffStats = emptySufficientStatistics.transitions;
         while(c < child.size) {
-
+          if(child(c) != Double.NegativeInfinity) {
+            suffStats += (counts(c) * (child(c)/partition))
+          }
           c += 1;
         }
+        new SufficientStatistics(suffStats);
+      }
+
+      lazy val partition = childProjection.partition;
+
+      def edgeMarginal(parent: Belief, child: Belief) = this.copy(child = Some(child));
+
+      lazy val childProjection = {
+        new Belief(new DenseVector(Array.tabulate(wordIndex.size)(costs)));
+      }
+
+      def parentProjection = {
+        new Belief(allOnes + child.get.partition value);
       }
     }
 
   }
 }
- */
 
