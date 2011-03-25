@@ -19,11 +19,26 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends SuffStatsFacto
   def mkFactors(legalWords: Set[Word], edgeParameters: (Language) => EdgeParameters):Factors = new Factors(Index(legalWords),edgeParameters);
 
   def optimize(suffStats: Map[Language, SufficientStatistics]):Map[Language,EdgeParameters] = {
-    Map.empty.withDefaultValue(initialParameters);
+    suffStats.mapValues { stats =>
+      val totals = new Array[Double](charIndex.size);
+      for( (k,v) <- stats.transitions.activeElements) {
+        val (prev,_) = pe.decode(k);
+        totals(prev) += v;
+      }
+
+      new EdgeParameters {
+        def apply(prev: Char, next: Char) = {
+          val r = math.log(stats.transitions(pe.encode(prev,next)) + 0.01) - math.log(totals(charIndex(prev)) + .01 * charIndex.size);
+          assert(!r.isNaN, stats.transitions(pe.encode(prev,next)) -> (totals(charIndex(prev)) + .1 * charIndex.size));
+          r
+        }
+      }
+
+    }
   }
 
 
-  def emptySufficientStatistics = new SufficientStatistics(new SparseVector(charIndex.size * charIndex.size));
+  lazy val emptySufficientStatistics = new SufficientStatistics(new SparseVector(charIndex.size * charIndex.size));
 
   val initialParameters :EdgeParameters=  new EdgeParameters {
     val theScore = -math.log(charIndex.size);
@@ -141,10 +156,10 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends SuffStatsFacto
       def sufficientStatistics = {
         val child = this.child.get.beliefs;
         var c = 0;
-        val suffStats = emptySufficientStatistics.transitions;
+        val suffStats = new SparseVector(charIndex.size * charIndex.size);
         while(c < child.size) {
           if(child(c) != Double.NegativeInfinity) {
-            suffStats += (counts(c) * (child(c)/partition))
+            suffStats += (counts(c) * math.exp(child(c) + costs(c) - partition))
           }
           c += 1;
         }
@@ -156,7 +171,8 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends SuffStatsFacto
       def edgeMarginal(parent: Belief, child: Belief) = this.copy(child = Some(child));
 
       lazy val childProjection = {
-        new Belief(new DenseVector(Array.tabulate(wordIndex.size)(costs)));
+        val cc = new Belief(new DenseVector(Array.tabulate(wordIndex.size)(costs)));
+        child.foldLeft(cc)(_ * _);
       }
 
       def parentProjection = {

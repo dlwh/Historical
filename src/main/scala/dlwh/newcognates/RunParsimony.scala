@@ -5,7 +5,7 @@ import java.io.File
 import scalanlp.concurrent.ParallelOps._;
 import collection.mutable.ArrayBuffer
 
-class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
+class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol], innovationProb: Double) {
   val tree = dataset.tree
   val gold = dataset.cognates.filter(group => legalGloss(group.head.gloss));
   val alphabet = dataset.alphabet;
@@ -16,7 +16,8 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
 
   val editDistance = new ThreeStateEditDistance(alphabet) with FeaturizedOptimization;
   val wordFactory: WordFactorsFactory = new WordFactorsFactory(editDistance);
-  val factorFactory: ParsimonyFactorsFactory[WordFactorsFactory] = new ParsimonyFactorsFactory(wordFactory, 1E-2, 1E-4);
+  val innovFactory = new LanguageModelFactorsFactory(alphabet);
+  val factorFactory = new ParsimonyFactorsFactory(wordFactory, innovFactory, 1E-10, innovationProb);
   import factorFactory._;
   val cognatesByGloss = legalWords.groupBy(_.gloss);
   val legalByGloss: Map[Symbol, Set[String]] = legalWords.groupBy(_.gloss).mapValues( cognates => cognates.map(_.word));
@@ -50,7 +51,7 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
       printGold(gloss)
 
       val myGroups = decodeCognates(inference,tree).filterNot(_.isEmpty);
-      //      val myGroups = iterativeDecode(cognates.toIndexedSeq,costs,tree, if(cogs.isEmpty) 1E-1 else 1e-4);
+//      val myGroups = iterativeDecode(cognates.toIndexedSeq,costs,tree, if(cogs.isEmpty) 1E-1 else 1e-4);
       println(myGroups);
       assert(myGroups.iterator.map(_.size).sum == cognatesByGloss(gloss).size);
 
@@ -109,9 +110,11 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol]) {
       val wordsToConsider = remainingWords.filterNot(_.language == theWord.language) + theWord toIndexedSeq
 
       val pathToRoot = CognateGroup(theWord).nodesWithObservedDescendants(tree);
-      def innovationProb(a: String, b:String) = if(pathToRoot(b)) 0.0 else 1E-4;
+      val adjParams = params.map { case (l,param) =>
+        l -> {if(pathToRoot(l)) param.copy(innovationProb = 0.0) else param};
+      };
 
-      val factors = factorFactory.mkFactors(cognates.map(_.word).toSet, params);
+      val factors = factorFactory.mkFactors(cognates.map(_.word).toSet, adjParams);
       val inference = new ParsimonyInference(factors,tree,wordsToConsider)
       printMarginals(theWord.gloss, inference)
 
@@ -164,10 +167,11 @@ object RunParsimony {
     println(legalGloss);
     val config = Configuration.fromPropertiesFiles(args.drop(1).map(new File(_)));
     val dataset = Dataset.fromConfiguration(config);
+    val innovationProb = config.readIn[Double]("innovationProb",0.996);
 
     val learningEpochs = config.readIn[Int]("learningEpochs",10);
 
-    val runner = new ParsimonyRunner(dataset,legalGloss);
+    val runner = new ParsimonyRunner(dataset,legalGloss, innovationProb);
     import runner.gold;
     import runner.goldTags;
 

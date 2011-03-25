@@ -8,15 +8,15 @@ import collection.mutable.ArrayBuffer
 import scalanlp.config.Configuration
 import java.io.File
 import scalala.Scalala._
-import scalanlp.optimize.{CachedDiffFunction, FirstOrderMinimizer, DiffFunction}
 import scalanlp.maxent.MaxEntObjectiveFunction
+import scalanlp.optimize._
 
 trait FeaturizedOptimization { this: ThreeStateEditDistance =>
   override def makeParameters(stats: Map[Language, SufficientStatistics]):Map[Language,Parameters] = {
     val nicer = stats.mapValues(_.counts);
     val obj = new EditDistanceObjectiveFunction(pe,nicer, EditDistanceObjectiveFunction.featuresFor _, EditDistanceObjectiveFunction.insertionFeaturesFor _ );
 
-    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 50, regularization = 2, tolerance = 1E-3).minimizer(obj);
+    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 100, regularization = 2).minimizer(obj);
     val params = opt.minimize(new CachedDiffFunction(obj), obj.initialWeightVector);
     val theMap = stats.map { case (child,_) =>
       val matrix = obj.costMatrixFor(child,params);
@@ -61,7 +61,7 @@ class EditDistanceObjectiveFunction[F](pe: AlignmentPairEncoder, expectedCounts:
   def computeLogProbs(lang: Language,featureWeights: DenseVector) = {
     val featuresArray = featuresForPair(lang);
     val insertionScore = score(insertionFeatures(lang),featureWeights);
-    val logProbInsertion = insertionScore - Numerics.logSum(0.0,math.exp(insertionScore));
+    val logProbInsertion = math.log(Numerics.sigmoid(insertionScore));
     val unnormalized = Array.tabulate(pe.charIndex.size,pe.charIndex.size) { (p,c) =>
       val pair = pe.encode(p,c);
       if(pair != pe.doubleEpsilon) {
@@ -155,9 +155,13 @@ class EditDistanceObjectiveFunction[F](pe: AlignmentPairEncoder, expectedCounts:
 
       // ll = insertionCounts * log p(insert) + nonInsertionCounts * log p(not Insert)
       // grad = insertionCounts * feats - insertionCounts * (
+
       logProb += insertionCounts * logProbInsertion
       logProb += nonInsertionCounts * math.log(1-math.exp(logProbInsertion));
-      weightedSum(deriv,insertionFeatures(lang),-(insertionCounts - (insertionCounts + nonInsertionCounts) * math.exp(logProbInsertion)));
+      val yesGradPart = insertionCounts * (1 - math.exp(logProbInsertion));
+      val noGradPart = -(nonInsertionCounts) * math.exp(logProbInsertion)
+      val gradContribution = yesGradPart + noGradPart;
+      weightedSum(deriv,insertionFeatures(lang),-gradContribution);
     }
     assert(!logProb.isNaN);
 

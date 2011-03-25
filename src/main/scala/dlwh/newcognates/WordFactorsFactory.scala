@@ -176,7 +176,7 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
 
           p += 1
         }
-        Numerics.logSum(scores);
+        Numerics.logSum(scores, i);
       }
 
 
