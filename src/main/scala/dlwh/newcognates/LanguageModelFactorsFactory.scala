@@ -19,17 +19,19 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends SuffStatsFacto
   def mkFactors(legalWords: Set[Word], edgeParameters: (Language) => EdgeParameters):Factors = new Factors(Index(legalWords),edgeParameters);
 
   def optimize(suffStats: Map[Language, SufficientStatistics]):Map[Language,EdgeParameters] = {
+    val allCounts = suffStats.values.foldLeft(new DenseVector(charIndex.size * charIndex.size)) { (v,v2) => v += v2.transitions; v};
     suffStats.mapValues { stats =>
       val totals = new Array[Double](charIndex.size);
-      for( (k,v) <- stats.transitions.activeElements) {
+      val counts = allCounts * .5 + stats.transitions value;
+      for( (k,v) <- counts.activeElements) {
         val (prev,_) = pe.decode(k);
         totals(prev) += v;
       }
 
       new EdgeParameters {
         def apply(prev: Char, next: Char) = {
-          val r = math.log(stats.transitions(pe.encode(prev,next)) + 0.01) - math.log(totals(charIndex(prev)) + .01 * charIndex.size);
-          assert(!r.isNaN, stats.transitions(pe.encode(prev,next)) -> (totals(charIndex(prev)) + .1 * charIndex.size));
+          val r = math.log(counts(pe.encode(prev,next)) + 0.01) - math.log(totals(charIndex(prev)) + .01 * charIndex.size);
+          assert(!r.isNaN, counts(pe.encode(prev,next)) -> (totals(charIndex(prev)) + .1 * charIndex.size));
           r
         }
       }

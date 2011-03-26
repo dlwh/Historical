@@ -22,7 +22,7 @@ import java.util.Arrays
  * @author dlwh
  */
 
-class ThreeStateEditDistance(val charIndex: Index[Char], subRatio: Double = -2, insRatio: Double= -1) extends EditDistance {
+class ThreeStateEditDistance(val charIndex: Index[Char], subRatio: Double = -3, insRatio: Double= -3) extends EditDistance {
   import math._;
 
   protected val pe = new AlignmentPairEncoder(charIndex)

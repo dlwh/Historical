@@ -14,10 +14,11 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol], innovationProb:
   println(data.length);
   val legalWords = data.toSet;
 
-  val editDistance = new ThreeStateEditDistance(alphabet) with FeaturizedOptimization;
+  val editDistance = new ThreeStateEditDistance(alphabet, -3, -3) with FeaturizedOptimization;
   val wordFactory: WordFactorsFactory = new WordFactorsFactory(editDistance);
+//  val wordFactory2: WordFactorsFactory = new WordFactorsFactory(new ThreeStateEditDistance(alphabet,-2,-2) with FeaturizedOptimization);
   val innovFactory = new LanguageModelFactorsFactory(alphabet);
-  val factorFactory = new ParsimonyFactorsFactory(wordFactory, innovFactory, 1E-10, innovationProb);
+  val factorFactory = new ParsimonyFactorsFactory(wordFactory, innovFactory, 0.5, innovationProb, viterbi = true);
   import factorFactory._;
   val cognatesByGloss = legalWords.groupBy(_.gloss);
   val legalByGloss: Map[Symbol, Set[String]] = legalWords.groupBy(_.gloss).mapValues( cognates => cognates.map(_.word));
@@ -37,13 +38,13 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol], innovationProb:
     r.toMap
   }
 
-  case class State(cognates: IndexedSeq[CognateGroup], parameters: Map[Language,EdgeParameters])
+  case class State(cognates: IndexedSeq[CognateGroup], parameters: Map[Language,EdgeParameters], likelihood: Double)
 
   private def initialState = State(IndexedSeq.empty,
-    Map.empty[Language,EdgeParameters].withDefaultValue(initialParameters))
+    Map.empty[Language,EdgeParameters].withDefaultValue(initialParameters), Double.NegativeInfinity)
 
 
-  def iterator:Iterator[State] = { Iterator.iterate(initialState) { case State(cogs,costs) =>
+  def iterator:Iterator[State] = { Iterator.iterate(initialState) { case State(cogs,costs, oldLL) =>
     def mapStep(gloss: Symbol, cognates: Set[Cognate]) = {
       val factors = factorFactory.mkFactors(cognates.map(_.word).toSet, costs);
       val inference: ParsimonyInference[factorFactory.Factors] = new ParsimonyInference(factors,tree,cognatesByGloss(gloss).toSeq);
@@ -63,15 +64,15 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol], innovationProb:
                              edge <- marginal.iterator)
       yield {pair._2 -> edge.sufficientStatistics}).toMap;
 
-      (flattenedGroups,edgeCounts);
+      (flattenedGroups,edgeCounts, inference.likelihood);
     }
 
     def sumGroups(g1: IndexedSeq[CognateGroup], g2: IndexedSeq[CognateGroup]) = g1 ++ g2;
-    def reduceStep( g1: (IndexedSeq[CognateGroup], ECounts), g2: (IndexedSeq[CognateGroup],ECounts)) = (sumGroups(g1._1,g2._1),sumCounts(g1._2,g2._2));
+    def reduceStep( g1: (IndexedSeq[CognateGroup], ECounts, Double), g2: (IndexedSeq[CognateGroup],ECounts, Double)) = (sumGroups(g1._1,g2._1),sumCounts(g1._2,g2._2),g1._3 + g2._3);
 
-    val (guessGroups,counts) = cognatesByGloss.toIndexedSeq.par.mapReduce(Function.tupled(mapStep), reduceStep _);
+    val (guessGroups,counts, ll) = cognatesByGloss.toIndexedSeq.par.mapReduce(Function.tupled(mapStep), reduceStep _);
     val newCosts = factorFactory.optimize(counts);
-    State(guessGroups,newCosts);
+    State(guessGroups,newCosts, ll);
   }}.drop(1)
 
 
@@ -178,10 +179,10 @@ object RunParsimony {
     println(gold.length);
     val numGold = Accuracy.numGold(gold);
 
-    for((runner.State(guessGroups,costs),iter) <- runner.iterator.take(learningEpochs).zipWithIndex) {
+    for((runner.State(guessGroups,costs,likelihood),iter) <- runner.iterator.take(learningEpochs).zipWithIndex) {
       val (precision,recall) = Accuracy.precisionAndRecall(goldTags, numGold, guessGroups)
       val f1 = 2 * (precision * recall) / (precision + recall)
-      println(":: " + iter + "\t"+ precision + "\t" + recall +"\t" + f1 + "\t" + guessGroups.length + "\t" + Accuracy.purity(goldTags,guessGroups));
+      println(":: " + iter + "\t"+ precision + "\t" + recall +"\t" + f1 + "\t" + guessGroups.length + "\t" + likelihood + "\t" + Accuracy.purity(goldTags,guessGroups));
     }
 
   }
