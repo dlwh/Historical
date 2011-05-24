@@ -234,11 +234,6 @@ class ParsimonyFactorsFactory[Factory<:SuffStatsFactorsFactory,
 
           p += 1
         }
-        if(!(1/(1-pInnov)).isInfinite)
-          wordChangeCounts *= 1/(1-pInnov);
-        if(!(1/(pInnov)).isInfinite)
-          innovCounts *=  1 /(pInnov);
-
 
         SufficientStatistics(wordChangeCounts,innovCounts, pInnov,1);
       }
@@ -367,7 +362,7 @@ class InnovationObjective(innovationCounts: Map[Language,(Double,Double)]) exten
 
     var lang = 0;
     while(lang < encodedYes.size) {
-      assert(encodedYes(lang) <= encodedTotal(lang));
+      assert(encodedYes(lang) <= encodedTotal(lang), encodedYes(lang) + " " + encodedTotal(lang));
       if(lang != globalFeature) {
         val pYes = Numerics.sigmoid(x(lang) + x(globalFeature));
         ll -= (math.log(pYes) * encodedYes(lang) + math.log(1-pYes) * (encodedTotal(lang) - encodedYes(lang)));

@@ -13,6 +13,7 @@ trait Dataset  {
   def tree: Tree
   def languages: Seq[Language]
   def cognates: IndexedSeq[Seq[Cognate]];
+  def base:Dataset;
 
   lazy val alphabet: Index[Char] = {
     val allChars = cognates.iterator.flatMap(_.iterator).flatMap(_.word.iterator);
@@ -22,7 +23,7 @@ trait Dataset  {
 
 object Dataset {
 
-  def simple(tree: Tree, languages: Seq[Language], cognates: IndexedSeq[Seq[Cognate]]):Dataset = {
+  def simple(tree: Tree, languages: Seq[Language], cognates: IndexedSeq[Seq[Cognate]], full: Option[Dataset]=None):Dataset = {
     val t = tree;
     val l = languages;
     val c = cognates;
@@ -31,6 +32,7 @@ object Dataset {
       val tree = t;
       val languages = l;
       val cognates = c;
+      val base = full getOrElse this;
     }
   }
 
@@ -44,6 +46,6 @@ object Dataset {
     val tree = basetree.subtreeAt(config.readIn[String]("subtree",basetree.label));
     val leaves = tree.leaves;
     val cogs = dataset.cognates.map(_.filter(cog => leaves(cog.language))).filterNot(_.isEmpty);;
-    simple(tree,languages,cogs);
+    simple(tree,languages,cogs,Some(dataset));
   }
 }

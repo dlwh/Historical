@@ -1,7 +1,9 @@
 package dlwh.newcognates
 
 import scala.io._;
-import java.io._;
+import java.io._
+import scalanlp.config.Configuration
+;
 
 case class Cognate(word: String, language: String, gloss: Symbol = 'None);
 
@@ -109,4 +111,32 @@ object CognateGroup {
   def apply(cogs: Cognate*):CognateGroup = new CognateGroup(cogs.toSet);
 
   def empty = apply();
+
+  def writeCognateGroups(cogs: Iterable[CognateGroup], langs: Seq[Language], path: File, evalLanguage:Language="", evalWord: Map[Cognate,Cognate]=Map.empty) {
+    val out = new PrintStream(new BufferedOutputStream(new FileOutputStream(path)),false, "UTF-8");
+    out.println(langs.mkString("# ","\t",""));
+    for(group <- cogs) {
+      val cognates = group.cognatesByLanguage.values.toIndexedSeq;
+      val goldWords = cognates.flatMap(evalWord.get);
+      val gold = if(goldWords.isEmpty) None else Some(scalala.tensor.counters.Counters.count(goldWords).argmax);
+      val words = langs.map{l =>
+        if(l == evalLanguage && !gold.isEmpty) gold.get.word
+        else group.cognatesByLanguage.get(l).map(_.word).getOrElse("?")
+      }
+      out.println(words.mkString("","\t",""));
+    }
+    out.close();
+  }
+}
+
+
+object PrintClade {
+  def main(args: Array[String]) {
+    val config = Configuration.fromPropertiesFiles(args.drop(1).map(new File(_)));
+    val dataset = Dataset.fromConfiguration(config);
+    val base = dataset.base;
+    val leaves = dataset.tree.leaves + dataset.tree.label;
+    val myWords = base.cognates.map(_.filter(c => leaves(c.language))).filterNot(_.isEmpty);
+    CognateGroup.writeCognateGroups(myWords.map(g => CognateGroup(g:_*)), base.languages, new File("clade"));
+  }
 }

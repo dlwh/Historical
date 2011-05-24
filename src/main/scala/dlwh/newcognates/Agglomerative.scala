@@ -11,7 +11,7 @@ import scalanlp.util.Index
 import scalala.tensor.sparse.SparseVector
 import scalala.tensor.Vector;
 
-class Agglomerative[MyAff<:AffinityScorer](affFactory: Map[Symbol,AffinityScorer.Factory[MyAff]], tree: Tree) {
+class Agglomerative[MyAff<:AffinityScorer](affFactory: Map[Symbol,AffinityScorer.Factory[MyAff]], tree: Tree, singletonBonus: Double =0) {
 
   case class Item(groupA: CognateGroup, groupB: CognateGroup, priority: Double);
   implicit val itemOrdering = Ordering[Double].on((_:Item).priority);
@@ -41,8 +41,9 @@ class Agglomerative[MyAff<:AffinityScorer](affFactory: Map[Symbol,AffinityScorer
 
       val scores = toConsider.par.map { case(a,b) =>
         val score = state.affScorer(a.gloss)(a,b);
-        println(a,b,score,emptyScores(a),emptyScores(b), score - emptyScores(a)-emptyScores(b));
-        Item(a,b,score - emptyScores(a)-emptyScores(b));
+        val bonus: Double = if(a.cognates.size == 1 || b.cognates.size == 1) singletonBonus else 0.0
+        println(a,b,score,bonus,emptyScores(a),emptyScores(b), score + bonus - emptyScores(a)-emptyScores(b));
+        Item(a,b,score +bonus - emptyScores(a)-emptyScores(b));
       }
 
 

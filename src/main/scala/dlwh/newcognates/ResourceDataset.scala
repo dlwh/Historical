@@ -12,6 +12,8 @@ class ResourceDataset(name: String, val languages: Seq[String]=Seq.empty, hasGlo
     Tree.readTree(line)
   }
 
+  def base = this;
+
 }
 
 
