@@ -6,22 +6,62 @@ import scalala.tensor.adaptive.AdaptiveVector
 import scalala.Scalala._;
 import scalala.tensor.Vector
 import scalala.tensor.dense.{DenseVector, DenseMatrix}
-import scalala.tensor.counters.Counters.PairedDoubleCounter
 import scalala.tensor.counters.Counters
 import java.util.Arrays
 import sun.font.StandardTextSource
+import scalala.tensor.counters.Counters._
+import scalanlp.optimize.{CachedDiffFunction, FirstOrderMinimizer}
+import collection.mutable.ArrayBuffer
+import collection.mutable.ArrayBuffer
+import dlwh.newcognates.EditDistanceObjectiveFunction.{Feature,Insertion, MatchFeature, PairFeature, ChildFeature, LangFeature, StatefulFeature}
 
 /**
  * 
  * @author dlwh
  */
-class GeneralEditDistance(val charIndex: Index[Char], subRatio: Double = -3, insRatio: Double= -3) extends EditDistance {
+class GeneralEditDistance(nStates:Int,
+                          val charIndex: Index[Char],
+                          subRatio: Int=>Double,
+                          insRatio: Int=>Double,
+                          transRatio: (Int,Int)=>Double) extends EditDistance {
   import math._;
 
   protected val pe = new AlignmentPairEncoder(charIndex)
 
+
+  def featuresFor(l: Language, from:Int, to:Int, p: Char, c: Char): Array[Feature] = {
+    val base = ArrayBuffer[Feature](PairFeature(p,c),ChildFeature(c));
+    if(p == c) base += MatchFeature;
+    val langFeats = base.map(LangFeature(l,_));
+    base ++ langFeats ++ langFeats.map(StatefulFeature(from,to,_)) toArray
+  }
+
+  def insertionFeaturesFor(l: Language, from: Int):Array[Feature] = {
+    Array(LangFeature(l,Insertion),Insertion,StatefulFeature(from,from,Insertion),StatefulFeature(from,from,LangFeature(l,Insertion)));
+  }
+
+  var decodedParams:DoubleCounter[EditDistanceObjectiveFunction.Feature] = null;
   def makeParameters(stats: Map[Language, SufficientStatistics]):Map[Language,Parameters] = {
-    TODO
+    val nicer = stats.mapValues(_.counts);
+    val obj = new EditDistanceObjectiveFunction(pe,nicer, featuresFor _, insertionFeaturesFor _, nStates);
+
+    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 100, regularization = 2).minimizer(obj);
+    val params = opt.minimize(new CachedDiffFunction(obj), if(decodedParams eq null) obj.initialWeightVector else obj.featureEncoder.encodeDense(decodedParams));
+    decodedParams = obj.featureEncoder.decode(params);
+    val theMap = stats.map { case (child,_) =>
+      val matrices = Array.tabulate(nStates) { from =>
+        val matrix = obj.costMatrixFor(child,from,params);
+        matrix
+      }
+      (child)-> new Parameters {
+        def initialStateWeight(s: Int) = if(s == 0) 0.0 else Double.NegativeInfinity
+
+        def finalCost(s: Int) = 0.0
+
+        def apply(s: Int, t: Int, c1: Int, c2: Int) = matrices(s)(t)(c1)(c2);
+      }
+    }
+    theMap
   }
 
   case class SufficientStatistics(counts: Vector) extends BaseSufficientStatistics {
@@ -30,17 +70,16 @@ class GeneralEditDistance(val charIndex: Index[Char], subRatio: Double = -3, ins
   }
 
   trait Parameters {
-    def apply(s: Int, t: Int, c1: Char, c2: Char):Double
+    def apply(s: Int, t: Int, c1: Int, c2: Int):Double
     def finalCost(s: Int):Double
-    def nStates:Int;
     def initialStateWeight(s: Int):Double;
   }
 
-  def emptySufficientStatistics = new SufficientStatistics(new AdaptiveVector(charIndex.size * charIndex.size))
+  def emptySufficientStatistics = new SufficientStatistics(new AdaptiveVector(nStates * nStates * charIndex.size * charIndex.size))
 
-  def initialParameters = simpleCostMatrix(charIndex.size,subRatio,insRatio)
+  def initialParameters = simpleCostMatrix(charIndex.size,subRatio,insRatio, transRatio)
 
-  def simpleCostMatrix(numChars: Int, subRatio: Double, insRatio: Double) = {
+  def simpleCostMatrix(numChars: Int, subRatio: Int=>Double, insRatio: Int=>Double, transRatio: (Int,Int)=>Double) = {
     val (insCost,subCost,matchCost) = {
       val n = numChars;
       import math.{exp,log};
@@ -48,26 +87,38 @@ class GeneralEditDistance(val charIndex: Index[Char], subRatio: Double = -3, ins
       // but we also have to accept an insertion of any kind, so there are n of those.
       //  c * ((n - 1 ) exp(sub) + 1 * exp(0) + (n+1) exp(del)) = 1.0
       // log c + log ((n -1 ) exp(sub) + 1 * exp(0) + (n+1) exp(del)) = 0.0
-      val logC = - log( (n-1) * exp(subRatio) + 1 + (n+1) * exp(insRatio))
-      (insRatio + logC,subRatio + logC,logC)
+      val r = (Array.tabulate(nStates){state =>
+        val logC = - log( (n-1) * exp(subRatio(state)) + 1 + (n+1) * exp(insRatio(state)))
+        (insRatio(state) + logC,subRatio(state) + logC,logC)
+      })
+      (r.map(_._1),r.map(_._2),r.map(_._3));
+    }
+
+    val transCost = {
+      val mat = Array.tabulate(nStates,nStates) { transRatio } map { new DenseVector(_)};
+      for(row <- mat) {
+        row -= Numerics.logSum(row.data);
+      }
+      mat
     }
 
     new Parameters {
-      def apply(s: Int, t: Int, c1: Char, c2: Char) = {
-        if(t != s) Double.NegativeInfinity
-        else if(c1 == c2) matchCost
-        else if (c1 == '\0' || c2 == '\0') insCost;
-        else subCost;
+      def apply(s: Int, t: Int, c1: Int, c2: Int) = {
+        val trans = transCost(s)(t);
+        if(c1 == c2) matchCost(s) + trans
+        else if (c1 == pe.epsIndex || c2 == pe.epsIndex) insCost(s) + trans
+        else subCost(s) + trans
       }
 
-      def finalCost(s: Int) = 0.0  //math.log(1 - math.exp(math.log(totalChars) + insCost));
-      val nStates = 1
+      def finalCost(s: Int) = math.log(1 - math.exp(math.log(numChars) + insCost(s)));
 
-      def initialStateWeight(s: Int) = 0.0
+      def initialStateWeight(s: Int) = if(s == 0) 0.0 else Double.NegativeInfinity
+
     }
 
 
   }
+
 
   final def logsum(a: Double, b: Double, c: Double) = {
     val max = a max b max c;
@@ -90,9 +141,10 @@ class GeneralEditDistance(val charIndex: Index[Char], subRatio: Double = -3, ins
   val NOEPS = 0;
   val LEFTEPS = 1;
   val RIGHTEPS = 2;
-  def editMatrix(s1: String, s2: String, costs: Parameters): Array[Array[DenseMatrix]] = {
+  def editMatrix(ss1: String, ss2: String, costs: Parameters): Array[Array[DenseMatrix]] = {
     import costs._;
-    val nStates = costs.nStates;
+    val s1 = ss1.map(charIndex);
+    val s2 = ss2.map(charIndex);
     val matrix: Array[Array[DenseMatrix]] = Array.fill(nStates,3)(new DenseMatrix(s1.length + 1,s2.length+ 1));
     //Array.fill(s1.length+1,s2.length+1,3)(Double.NegativeInfinity);
     var state = 0;
@@ -169,9 +221,10 @@ class GeneralEditDistance(val charIndex: Index[Char], subRatio: Double = -3, ins
     (matrix)
   }
 
-  def backwardEditMatrix(s1: String, s2: String, costs: Parameters) = {
+  def backwardEditMatrix(ss1: String, ss2: String, costs: Parameters) = {
     import costs._;
-    val nStates = costs.nStates;
+    val s1 = ss1.map(charIndex);
+    val s2 = ss2.map(charIndex);
     val matrix: Array[Array[DenseMatrix]] = Array.fill(nStates,3)(new DenseMatrix(s1.length + 1,s2.length+ 1));
     //Array.fill(s1.length+1,s2.length+1,3)(Double.NegativeInfinity);
     var state = 0;
@@ -249,9 +302,9 @@ class GeneralEditDistance(val charIndex: Index[Char], subRatio: Double = -3, ins
 
 
   def partition(costs: GeneralEditDistance.this.type#Parameters, matrix: Array[Array[DenseMatrix]], s1: String, s2: String): Double = {
-    val scratch = new Array[Double](costs.nStates * 3);
+    val scratch = new Array[Double](nStates * 3);
     var state = 0;
-    while (state < costs.nStates) {
+    while (state < nStates) {
       val finalCost = costs.finalCost(state)
       scratch(state * 3) = matrix(state)(NOEPS)(s1.length, s2.length) + finalCost;
       scratch(state * 3 + 1) = matrix(state)(LEFTEPS)(s1.length, s2.length) + finalCost;
@@ -268,7 +321,6 @@ class GeneralEditDistance(val charIndex: Index[Char], subRatio: Double = -3, ins
   }
 
   def sufficientStatistics(costs:Parameters, s1: String, s2: String): SufficientStatistics = {
-    val nStates = costs.nStates;
     val forwardMatrix = editMatrix(s1,s2,costs);
     val reverseMatrix = backwardEditMatrix(s1,s2,costs);
     val partition = this.partition(costs,forwardMatrix,s1,s2);

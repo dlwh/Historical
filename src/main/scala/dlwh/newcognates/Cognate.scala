@@ -2,37 +2,29 @@ package dlwh.newcognates
 
 import scala.io._;
 import java.io._
-import scalanlp.config.Configuration
+import scalanlp.config.{ArgumentParser, Configuration}
 ;
 
 case class Cognate(word: String, language: String, gloss: Symbol = 'None);
 
 object Cognates {
-  def romance(): Seq[Seq[Cognate]]= {
-    readCognates("romance_ipa",Seq("Spanish","Italian","Latin","Portuguese"));
-  }
 
-  def basic(): Seq[Seq[Cognate]]= {
-    readCognates("basic_ipa",Seq("Aish","Bish"));
-  }
-
-  def readCognates(file: String, languages: Seq[String]=Seq.empty, hasGloss:Boolean = false) ={
+  def readCognates(stream: InputStream, languages: Seq[String]=Seq.empty, hasGloss:Boolean = false) ={
+    val src = Source.fromInputStream(stream)(Codec.UTF8).getLines().toIndexedSeq;
     val ls = if(languages.length == 0) {
-      inferLangs(file, hasGloss)
+      inferLangs(src.head, hasGloss)
     } else {
       languages
     };
-    val stream = this.getClass.getClassLoader().getResourceAsStream(file);
-    val src = Source.fromInputStream(stream)(Codec.UTF8).getLines().filter(!_.startsWith("#"));
     val cognates =  if(hasGloss) {
-      for(line <- src) yield {
+      for(line <- src.filterNot(line => line.startsWith("#") || line.isEmpty)) yield {
         val Array(glossIndex:String, words @ _*) = line.split("\\s");
         val gloss = glossIndex.takeWhile(_ != '('); // drop any unique identifier
         for( (w,l) <- words zip ls if w != "?")
         yield Cognate(w,l,Symbol(gloss));
       }
     } else {
-      for(line <- src) yield {
+      for(line <- src.filterNot(line => line.startsWith("#") || line.isEmpty)) yield {
         for( (w,l) <- line.split(' ').toSeq zip ls if w != "?")
         yield Cognate(w,l);
       }
@@ -43,13 +35,8 @@ object Cognates {
     ret
   }
 
-  private def inferLangs(file: String, hasGloss: Boolean):IndexedSeq[String] = {
-    val stream = this.getClass.getClassLoader().getResourceAsStream(file);
-    val line = Source.fromInputStream(stream)(Codec.UTF8).getLines().next;
-
-    
+  private def inferLangs(line: String, hasGloss: Boolean):IndexedSeq[String] = {
     val ret = line.split(" ").drop(1);
-    stream.close();
     ret;
   }
 }
@@ -124,6 +111,28 @@ object CognateGroup {
         else group.cognatesByLanguage.get(l).map(_.word).getOrElse("?")
       }
       out.println(words.mkString("","\t",""));
+    }
+    out.close();
+  }
+}
+
+object GoldWords {
+  def main(args: Array[String]) {
+    val config = Configuration.fromPropertiesFiles(args.drop(1).map(new File(_)));
+    val dataset = Dataset.fromConfiguration(config);
+    ArgumentParser.stringParser;
+    val otherCognates = new FileDataset(new File(args(0)), config.readIn[String]("dataset.name"), dataset.languages)
+    val base = dataset.base;
+    val leaves = dataset.tree.leaves + dataset.tree.label;
+    val myWords = base.cognates.map(_.filter(c => leaves(c.language) )).filterNot(_.isEmpty);
+    writeGoldWords(myWords.map(g => CognateGroup(g:_*)),  new File("gold_map"), dataset.tree.label);
+  }
+
+  def writeGoldWords(cogs: Iterable[CognateGroup], path: File, evalLanguage: String) {
+    val out = new PrintStream(new BufferedOutputStream(new FileOutputStream(path)),false, "UTF-8");
+    out.println("Language\tWord\tGoldWord");
+    for(group <- cogs; gold <- group.cognatesByLanguage.get(evalLanguage); c <- group.cognates if c.language != evalLanguage) {
+      out.println(c.language +"\t" + c.word + "\t" + gold.word);
     }
     out.close();
   }

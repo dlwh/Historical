@@ -32,7 +32,7 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
 
   type Factors = WordFactors
   def mkFactors(legalWords: Set[Word], edgeParameters: (Language) => EdgeParameters) = {
-    new WordFactors(legalWords,edgeParameters, false);
+    new WordFactors(legalWords,edgeParameters, true);
   }
 
 

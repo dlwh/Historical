@@ -23,4 +23,6 @@ class AlignmentPairEncoder(val charIndex: Index[Char]) {
     }
     r
   }
+
+  def size = charIndex.size * charIndex.size;
 }

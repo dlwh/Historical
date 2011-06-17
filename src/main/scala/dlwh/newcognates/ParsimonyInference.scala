@@ -45,6 +45,8 @@ class ParsimonyInference[F<:Factors](val factors: F, val tree: Tree, val cognate
         for(w <- cognates) yield beliefForWord(w.word);
       }} getOrElse {
         val messages = for(c <- children(l) if hasUpwardMessage(c); up <- upwardMessages(c)) yield up;
+        assert(hasUpwardMessage(l),l + " does not have an upward message!")
+        assert(!messages.isEmpty,cognates + " " + l + " " + tree.prettyString(x => groupedByLanguage.get(x).map(_.mkString(","))));
         IndexedSeq(messages.reduceLeft(_ * _));
       }
       update(l,belief);

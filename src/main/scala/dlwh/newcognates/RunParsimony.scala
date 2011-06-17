@@ -14,11 +14,32 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol], innovationProb:
   println(data.length);
   val legalWords = data.toSet;
 
-  val editDistance = new ThreeStateEditDistance(alphabet, -3, -3) with FeaturizedOptimization;
+
+//  val editDistance = new ThreeStateEditDistance(alphabet, -3, -3) with FeaturizedOptimization;
+  val initSubs = Array(0,-3,0,-4,-5,-6,-5,1)
+  val initIns = Array(10,-3,10,-3,-2,-1,-4,-1)
+  def subRatio(state: Int) = initSubs(state)
+  def insRatio(state: Int) = initIns(state)
+  def transRatio(from: Int, to:Int) = if(from == to) 0.0 else if(from > to) Double.NegativeInfinity else if (to == 1) 1. else -1.
+  val editDistance = new GeneralEditDistance(3,alphabet, subRatio, insRatio, transRatio) {
+    override def initialParameters = new Parameters {
+      def apply(s: Int, t: Int, c1: Int, c2: Int) = {
+        if(s > t) Double.NegativeInfinity
+        else if( t ==0 || t == 2) if(c1 != pe.epsIndex) Double.NegativeInfinity else -3
+        else if (t == 1) if(c1 == c2) 0.0 else -4
+        else Double.NegativeInfinity;
+      }
+
+      def finalCost(s: Int) = if(s == 0) Double.NegativeInfinity else 0.0
+
+      def initialStateWeight(s: Int) = if(s == 0.0) 0.0 else Double.NegativeInfinity
+    }
+
+  }
   val wordFactory: WordFactorsFactory = new WordFactorsFactory(editDistance);
 //  val wordFactory2: WordFactorsFactory = new WordFactorsFactory(new ThreeStateEditDistance(alphabet,-2,-2) with FeaturizedOptimization);
   val innovFactory = new LanguageModelFactorsFactory(alphabet);
-  val factorFactory = new ContinuumFactorsFactory(tree, wordFactory, innovFactory, 0.5, 0.3);
+  val factorFactory = new ParsimonyFactorsFactory(wordFactory, innovFactory, 0.5, 0.3);
   import factorFactory._;
   val cognatesByGloss = legalWords.groupBy(_.gloss);
   val legalByGloss: Map[Symbol, Set[String]] = legalWords.groupBy(_.gloss).mapValues( cognates => cognates.map(_.word));
@@ -51,8 +72,8 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol], innovationProb:
       printMarginals(gloss, inference)
       printGold(gloss)
 
-//      val myGroups = decodeCognates(inference,tree).filterNot(_.isEmpty);
-       val myGroups = newDecode(inference,tree).filterNot(_.isEmpty);
+      val myGroups = decodeCognates(inference,tree).filterNot(_.isEmpty);
+//       val myGroups = newDecode(inference,tree).filterNot(_.isEmpty);
 //      val myGroups = iterativeDecode(cognates.toIndexedSeq,costs,tree, if(cogs.isEmpty) 1E-1 else 1e-4);
       println(myGroups);
       assert(myGroups.iterator.map(_.size).sum == cognatesByGloss(gloss).size);
@@ -98,6 +119,8 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol], innovationProb:
     val goldTree = GoldStatus.buildTree(tree, byLanguage, goldTags).get._1;
     println(goldTree.prettyString(Some(_)));
   }
+
+  /*
 
   def newDecode(inference: ParsimonyInference[factorFactory.Factors],
                 tree: Tree,
@@ -168,6 +191,7 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol], innovationProb:
     }
     groups;
   }
+  */
 
   def decodeCognates(inference: ParsimonyInference[factorFactory.Factors],
                      tree: Tree,
@@ -178,12 +202,12 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol], innovationProb:
         val edges = inference.edgeMarginal(label,c.label).get;
         val fromChild = if(c.isInstanceOf[Child]) {
           var rest = IndexedSeq.empty[Cognate];
-          for( (w,e:inference.factors.SingleSingleEdge) <- inference.groupedByLanguage(c.label) zip edges) {
+          for( (w,e:inference.factors.Edge) <- inference.groupedByLanguage(c.label) zip edges) {
             if(e.posteriorInnovationProb >= 0.5) rest :+= w
             else cur += w
           }
           rest.map(IndexedSeq(_));
-        } else if(edges.head.asInstanceOf[inference.factors.SingleSingleEdge].posteriorInnovationProb < 0.5){
+        } else if(edges.head.posteriorInnovationProb < 0.5){
           decodeCognates(inference,c,cur).drop(1)
         } else {
           decodeCognates(inference,c);
