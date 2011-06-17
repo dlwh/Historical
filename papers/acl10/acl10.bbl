@@ -1,0 +1,168 @@
+\begin{thebibliography}{}
+
+\bibitem[\protect\citename{Bloomfield}1938]{bloomfield38language}
+Leonard Bloomfield.
+\newblock 1938.
+\newblock {\em Language}.
+\newblock Holt, New York.
+
+\bibitem[\protect\citename{Bouchard-C\^{o}t\'{e} \bgroup et al.\egroup
+  }2007]{bouchard07probabilistic}
+Alexandre Bouchard-C\^{o}t\'{e}, Percy Liang, Thomas Griffiths, and Dan Klein.
+\newblock 2007.
+\newblock A probabilistic approach to diachronic phonology.
+\newblock In {\em EMNLP}.
+
+\bibitem[\protect\citename{Bouchard-C\^{o}t\'{e} \bgroup et al.\egroup
+  }2009]{bouchard09improved}
+Alexandre Bouchard-C\^{o}t\'{e}, Thomas~L. Griffiths, and Dan Klein.
+\newblock 2009.
+\newblock Improved reconstruction of protolanguage word forms.
+\newblock In {\em NAACL}, pages 65--73.
+
+\bibitem[\protect\citename{{Daum\'e III} and Campbell}2007]{daume07implication}
+Hal {Daum\'e III} and Lyle Campbell.
+\newblock 2007.
+\newblock A {B}ayesian model for discovering typological implications.
+\newblock In {\em Conference of the Association for Computational Linguistics
+  (ACL)}.
+
+\bibitem[\protect\citename{{Daum\'e III}}2009]{daume09areal}
+Hal {Daum\'e III}.
+\newblock 2009.
+\newblock Non-parametric {B}ayesian model areal linguistics.
+\newblock In {\em NAACL}.
+
+\bibitem[\protect\citename{Dreyer and Eisner}2009]{dreyer2009graphical}
+Markus Dreyer and Jason Eisner.
+\newblock 2009.
+\newblock Graphical models over multiple strings.
+\newblock In {\em EMNLP}, Singapore, August.
+
+\bibitem[\protect\citename{Eisner}2001]{eisner2001expectation}
+Jason Eisner.
+\newblock 2001.
+\newblock Expectation semirings: Flexible {EM} for finite-state transducers.
+\newblock In Gertjan van Noord, editor, {\em FSMNLP}.
+
+\bibitem[\protect\citename{Eisner}2002]{eisner2002parameter}
+Jason Eisner.
+\newblock 2002.
+\newblock Parameter estimation for probabilistic finite-state transducers.
+\newblock In {\em ACL}.
+
+\bibitem[\protect\citename{Kondrak \bgroup et al.\egroup
+  }2003]{Kondrak03cognatescan}
+Grzegorz Kondrak, Daniel Marcu, and Keven Knight.
+\newblock 2003.
+\newblock Cognates can improve statistical translation models.
+\newblock In {\em NAACL}.
+
+\bibitem[\protect\citename{Kondrak}2001]{Kondrak01identifyingcognates}
+Grzegorz Kondrak.
+\newblock 2001.
+\newblock Identifying cognates by phonetic and semantic similarity.
+\newblock In {\em NAACL}.
+
+\bibitem[\protect\citename{Kuhn}1955]{Kuhn1955}
+Harold~W. Kuhn.
+\newblock 1955.
+\newblock The {H}ungarian method for the assignment problem.
+\newblock {\em Naval Research Logistics Quarterly}, 2:83--97.
+
+\bibitem[\protect\citename{Li and Eisner}2009]{li2009first}
+Zhifei Li and Jason Eisner.
+\newblock 2009.
+\newblock First- and second-order expectation semirings with applications to
+  minimum-risk training on translation forests.
+\newblock In {\em EMNLP}.
+
+\bibitem[\protect\citename{Lowe and Mazaudon}1994]{lowe94reconstruction}
+John~B. Lowe and Martine Mazaudon.
+\newblock 1994.
+\newblock The reconstruction engine: a computer implementation of the
+  comparative method.
+\newblock {\em Computational Linguistics}, 20(3):381--417.
+
+\bibitem[\protect\citename{Mann and Yarowsky}2001]{mann01multipath}
+Gideon~S. Mann and David Yarowsky.
+\newblock 2001.
+\newblock Multipath translation lexicon induction via bridge languages.
+\newblock In {\em NAACL}, pages 1--8. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\citename{Mohri \bgroup et al.\egroup
+  }1996]{Mohri96weightedautomata}
+Mehryar Mohri, Fernando Pereira, and Michael Riley.
+\newblock 1996.
+\newblock Weighted automata in text and speech processing.
+\newblock In {\em ECAI-96 Workshop}. John Wiley and Sons.
+
+\bibitem[\protect\citename{Mohri}2009]{mohri09weighted}
+Mehryar Mohri, 2009.
+\newblock {\em Handbook of Weighted Automata}, chapter Weighted Automata
+  Algorithms.
+\newblock Springer.
+
+\bibitem[\protect\citename{Mulloni}2007]{mulloni07automatic}
+Andrea Mulloni.
+\newblock 2007.
+\newblock Automatic prediction of cognate orthography using support vector
+  machines.
+\newblock In {\em ACL}, pages 25--30.
+
+\bibitem[\protect\citename{Nerbonne}2010]{nerbonne08measuring}
+John Nerbonne.
+\newblock 2010.
+\newblock Measuring the diffusion of linguistic change.
+\newblock {\em Philosophical Transactions of the Royal Society B: Biological
+  Sciences}.
+
+\bibitem[\protect\citename{Oakes}2000]{oakes00computer}
+Michael~P. Oakes.
+\newblock 2000.
+\newblock Computer estimation of vocabulary in a protolanguage from word lists
+  in four daughter languages.
+\newblock {\em Quantitative Linguistics}, 7(3):233--243.
+
+\bibitem[\protect\citename{OED}1989]{oedDay}
+OED.
+\newblock 1989.
+\newblock ``day, n.''.
+\newblock In {\em The {O}xford {E}nglish {D}ictionary online}. Oxford
+  University Press.
+
+\bibitem[\protect\citename{Ohala}1993]{ohala93phonetics}
+John Ohala, 1993.
+\newblock {\em Historical linguistics: Problems and perspectives}, chapter The
+  phonetics of sound change, pages 237--238.
+\newblock Longman.
+
+\bibitem[\protect\citename{Oncina and Sebban}2006]{Oncina20061575}
+Jose Oncina and Marc Sebban.
+\newblock 2006.
+\newblock Learning stochastic edit distance: Application in handwritten
+  character recognition.
+\newblock {\em Pattern Recognition}, 39(9).
+
+\bibitem[\protect\citename{Ringe \bgroup et al.\egroup }2002]{ringe02IE}
+Don Ringe, Tandy Warnow, and Ann Taylor.
+\newblock 2002.
+\newblock Indo-european and computational cladistics.
+\newblock {\em Transactions of the Philological Society}, 100(1):59--129.
+
+\bibitem[\protect\citename{Ross}1950]{ross50philological}
+Alan~S.C. Ross.
+\newblock 1950.
+\newblock Philological probability problems.
+\newblock {\em Journal of the Royal Statistical Society Series B}.
+
+\bibitem[\protect\citename{Yarowsky \bgroup et al.\egroup
+  }2000]{Yarowsky00inducingmultilingual}
+David Yarowsky, Grace Ngai, and Richard Wicentowski.
+\newblock 2000.
+\newblock Inducing multilingual text analysis tools via robust projection
+  across aligned corpora.
+\newblock In {\em NAACL}.
+
+\end{thebibliography}
