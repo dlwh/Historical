@@ -1,0 +1,16 @@
+dataset.languages=Spanish,Italian,Portuguese
+dataset.name=pruned
+treePenalty=-4
+initDeathProb=0.01
+allowDeath=true
+
+transducers.message.type=posunigram
+transducers.message.klThreshold=1E-4
+transducers.message.maxStates=10
+
+transducers.root.type=uni
+transducers.root.klThreshold=1E-4
+transducers.root.maxStates=7
+
+transducers.learning=false
+transducers.editdistance=uni

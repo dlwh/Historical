@@ -1,0 +1,16 @@
+dataset.languages=Spanish,Italian,Latin,Portuguese
+dataset.name=tiny
+treePenalty=3
+initDeathProb=0.01
+allowDeath=true
+
+transducers.message.type=posunigram
+transducers.message.klThreshold=1E-4
+transducers.message.maxStates=10
+
+transducers.root.type=bigram
+transducers.root.klThreshold=1E-4
+transducers.root.maxStates=7
+
+transducers.learning=true
+transducers.editdistance=uni
