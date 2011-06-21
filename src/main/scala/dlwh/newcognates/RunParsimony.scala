@@ -16,12 +16,13 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol], innovationProb:
 
 
 //  val editDistance = new ThreeStateEditDistance(alphabet, -3, -3) with FeaturizedOptimization;
-  val initSubs = Array(0,-3,0,-4,-5,-6,-5,1)
-  val initIns = Array(10,-3,10,-3,-2,-1,-4,-1)
+  val initSubs = Array(-3,-5,-2,-4,-5,-6,-5,1)
+  val initIns = Array(-3,1,-4,-3,-2,-1,-4,-1)
   def subRatio(state: Int) = initSubs(state)
   def insRatio(state: Int) = initIns(state)
-  def transRatio(from: Int, to:Int) = if(from == to) 0.0 else if(from > to) Double.NegativeInfinity else if (to == 1) 1. else -1.
-  val editDistance = new GeneralEditDistance(3,alphabet, subRatio, insRatio, transRatio) {
+  def transRatio(from: Int, to:Int) = if(from == to) 0.0 else -3.0;
+  val editDistance = new GeneralEditDistance(4,alphabet, subRatio, insRatio, transRatio) {
+    /*
     override def initialParameters = new Parameters {
       def apply(s: Int, t: Int, c1: Int, c2: Int) = {
         if(s > t) Double.NegativeInfinity
@@ -34,6 +35,7 @@ class ParsimonyRunner(dataset: Dataset, legalGloss: Set[Symbol], innovationProb:
 
       def initialStateWeight(s: Int) = if(s == 0.0) 0.0 else Double.NegativeInfinity
     }
+    */
 
   }
   val wordFactory: WordFactorsFactory = new WordFactorsFactory(editDistance);

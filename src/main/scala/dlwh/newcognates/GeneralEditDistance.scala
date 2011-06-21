@@ -33,7 +33,8 @@ class GeneralEditDistance(nStates:Int,
     val base = ArrayBuffer[Feature](PairFeature(p,c),ChildFeature(c));
     if(p == c) base += MatchFeature;
     val langFeats = base.map(LangFeature(l,_));
-    base ++ langFeats ++ langFeats.map(StatefulFeature(from,to,_)) toArray
+    base ++= langFeats
+    base ++ base.map(StatefulFeature(from,to,_)) toArray
   }
 
   def insertionFeaturesFor(l: Language, from: Int):Array[Feature] = {

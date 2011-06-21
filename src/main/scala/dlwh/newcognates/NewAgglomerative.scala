@@ -22,10 +22,11 @@ abstract class NewAgglomerative(tree: Tree, singletonBonus: Double = 0) {
     new Iterator[State] {
       var state = initialState(cognates, factors);
       def hasNext = !pq.isEmpty;
-      var emptyScores = state.groups.par.map { g =>
+      var emptyScores = state.groups.par.map { g => try {
         val r = score(g,factors(g.gloss))
         println(g->r);
         g -> r
+      } catch { case e => e.printStackTrace(); g -> -100.0}
       }.toMap;
       state = state.copy(likelihood = emptyScores.values.reduceLeft(_+_));
       var byGloss = state.groups.groupBy(_.glosses.head).mapValues(_.toSet);
@@ -40,7 +41,7 @@ abstract class NewAgglomerative(tree: Tree, singletonBonus: Double = 0) {
       }.flatten
 
       val scores = toConsider.par.map { case(a,b) =>
-        val _score = score(a merge b, factors(a.gloss)) + { if(a.cognates.size == 1 || b.cognates.size == 1) singletonBonus else 0.0};
+        val _score = {try { score(a merge b, factors(a.gloss)) } catch { case (e:Throwable) => println("Error coming from: "+ a + " " + b); e.printStackTrace(); -500}}+ { if(a.cognates.size == 1 || b.cognates.size == 1) singletonBonus else 0.0};
         println(a,b,_score,emptyScores(a),emptyScores(b), _score - emptyScores(a)-emptyScores(b));
         Item(a,b,_score - emptyScores(a)-emptyScores(b));
       }
