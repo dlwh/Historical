@@ -1,0 +1,26 @@
+Recall problems:
+long word/doublet: 10  
+    * fish, nine (x2), cold, all, woods, bone, blood, smell, smingnut, inside
+long word/triple: 2
+    * fire, wing
+modelling errors: 8
+    * we,house, towalk(x2), five, white, two, big
+sound laws too weak?: 14
+    * wind (x2), fire, road/pathx2, tocount, toblow, cold, yellow, man, five, four, rope, shoulder
+
+
+precision problem:
+many singletons garbage collected: 3
+  * mouth, house, tohold
+short words getting swept up: 3
+  * we x2, three, fire(?)
+maybe sound laws: 6
+  * three, all, towalk, tosqueeze, not
+maybe we're right?: 3
+  * wide, blood, black
+modeling errors: 5
+  * bone, blood, father, two, head
+
+
+viterbiable: 5
+   * wing, smell(x2),  white, inside, qsia
