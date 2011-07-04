@@ -5,3 +5,7 @@ target
 .externalToolBuilders/org.devzuz.q.maven.jdt.core.mavenIncrementalBuilder.launch
 .project
 .settings/org.eclipse.jdt.core.prefs
+.DS_Store
+*.iml
+*.ipr
+*.iws
