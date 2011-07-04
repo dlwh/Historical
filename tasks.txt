@@ -1,4 +1,0 @@
-Trigram Overlap marginals
-Trigram overlap mutation
-Trigram overlap learning
-State splitting for TriCompression
