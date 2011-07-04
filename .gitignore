@@ -9,3 +9,5 @@ target
 *.iml
 *.ipr
 *.iws
+lib_managed
+project/boot

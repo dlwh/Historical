@@ -1,9 +1,8 @@
-package dlwh.newcognates
+package dlwh.baldur
 
 import scala.io._;
 import java.io._
 import scalanlp.config.{ArgumentParser, Configuration}
-;
 
 case class Cognate(word: String, language: String, gloss: Symbol = 'None);
 
@@ -105,7 +104,7 @@ object CognateGroup {
     for(group <- cogs) {
       val cognates = group.cognatesByLanguage.values.toIndexedSeq;
       val goldWords = cognates.flatMap(evalWord.get);
-      val gold = if(goldWords.isEmpty) None else Some(scalala.tensor.counters.Counters.count(goldWords).argmax);
+      val gold = if(goldWords.isEmpty) None else Some(scalala.tensor.Counter.count(goldWords:_*).argmax);
       val words = langs.map{l =>
         if(l == evalLanguage && !gold.isEmpty) gold.get.word
         else group.cognatesByLanguage.get(l).map(_.word).getOrElse("?")

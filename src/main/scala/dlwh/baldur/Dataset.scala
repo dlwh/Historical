@@ -1,4 +1,4 @@
-package dlwh.newcognates
+package dlwh.baldur
 
 import scalanlp.config.Configuration
 import scalanlp.util.Index
@@ -17,7 +17,7 @@ trait Dataset  {
 
   lazy val alphabet: Index[Char] = {
     val allChars = cognates.iterator.flatMap(_.iterator).flatMap(_.word.iterator);
-    new scalanlp.fst.CharIndex('\0',allChars.toSet);
+    Index(allChars.toSet + '\0');
   }
 }
 

@@ -1,7 +1,7 @@
 package dlwh.coalescent
 
 import collection.mutable.ArrayBuffer
-import scalanlp.stats.sampling.{Rand, RandBasis, DiscreteDistr, Gamma}
+import scalanlp.stats.distributions.{Rand, RandBasis, DiscreteDistr, Gamma}
 
 object Coalescents {
   /**
