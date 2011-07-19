@@ -40,6 +40,7 @@ object Cognates {
   }
 }
 
+/*
 object PruneCognates {
   def main(args: Array[String]) {
     val percentage = args(1).toDouble;
@@ -54,6 +55,7 @@ object PruneCognates {
 
   }
 }
+*/
 
 case class CognateGroup private(cognates: Set[Cognate]) {
   lazy val cognatesByLanguage = cognates.iterator.map(c => c.language -> c).toMap
@@ -115,6 +117,7 @@ object CognateGroup {
   }
 }
 
+/*
 object GoldWords {
   def main(args: Array[String]) {
     val config = Configuration.fromPropertiesFiles(args.drop(1).map(new File(_)));
@@ -137,7 +140,6 @@ object GoldWords {
   }
 }
 
-
 object PrintClade {
   def main(args: Array[String]) {
     val config = Configuration.fromPropertiesFiles(args.drop(1).map(new File(_)));
@@ -148,3 +150,4 @@ object PrintClade {
     CognateGroup.writeCognateGroups(myWords.map(g => CognateGroup(g:_*)), base.languages, new File("clade"));
   }
 }
+*/
