@@ -1,4 +1,4 @@
-package dlwh.baldur
+package dlwh.cognates
 
 import scala.io.Source
 import java.io.{FileInputStream, BufferedInputStream, File}

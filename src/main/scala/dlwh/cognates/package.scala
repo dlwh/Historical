@@ -1,4 +1,4 @@
-package dlwh
+package dlwh.cognates
 
 package object baldur {
   type Language = String

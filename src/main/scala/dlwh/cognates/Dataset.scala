@@ -1,4 +1,4 @@
-package dlwh.baldur
+package dlwh.cognates
 
 import scalanlp.config.Configuration
 import scalanlp.util.Index
