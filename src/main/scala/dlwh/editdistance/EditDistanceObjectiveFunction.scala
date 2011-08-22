@@ -10,6 +10,7 @@ import scalanlp.config.Configuration
 import java.io.File
 import scalanlp.optimize._
 import scalala.library.Library._
+import phylo.Tree
 
 
 /**
@@ -228,9 +229,8 @@ object RunEditDistanceObjectiveFunction {
 
     val dataset_name = config.readIn[String]("dataset.name")
     val dataset = new ResourceDataset(dataset_name,languages, withGloss)
-    val basetree: Tree = dataset.tree
+    val basetree: Tree[String] = dataset.tree
     val tree = basetree.subtreeAt(config.readIn[String]("subtree",basetree.label))
-    val leaves = tree.leaves
     val file = config.readIn[File]("oldcounts")
     val oldCounts: Map[(Language,Language),Vector[Double]] = readObject(file)
     val nicer = oldCounts.map { case (k,v) => k._2 -> v}

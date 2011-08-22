@@ -3,6 +3,7 @@ package dlwh.baldur
 import scala.io._;
 import java.io._
 import scalanlp.config.{ArgumentParser, Configuration}
+import phylo.Tree
 
 case class Cognate(word: String, language: String, gloss: Symbol = 'None);
 
@@ -74,7 +75,7 @@ case class CognateGroup private(cognates: Set[Cognate]) {
 
   def canMerge(b: CognateGroup) = !cognatesByLanguage.keys.exists(b.cognatesByLanguage.keySet);
 
-  def prettyString(t: Tree) = {
+  def prettyString(t: Tree[String]) = {
     val nodes = nodesWithObservedDescendants(t);
     t.prettyString { label =>
       cognatesByLanguage.get(label).map(label + ": " + _) orElse Some(label).filter(nodes);
@@ -82,15 +83,13 @@ case class CognateGroup private(cognates: Set[Cognate]) {
 
   }
 
-  def nodesWithObservedDescendants(t: Tree):Set[Language] = {
+  def nodesWithObservedDescendants(t: Tree[String]):Set[Language] = {
     if(cognatesByLanguage.contains(t.label)) {
       Set(t.label)
-    } else t match {
-      case t: Child => Set.empty;
-      case a: Ancestor =>
-        val children = a.children.map(nodesWithObservedDescendants _).reduceLeft(_ ++ _);
-        if(children.isEmpty) children;
-        else children + t.label;
+    } else {
+      val children = t.children.map(nodesWithObservedDescendants _).reduceLeft(_ ++ _);
+      if(children.isEmpty) children;
+      else children + t.label;
     }
   }
 }

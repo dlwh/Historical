@@ -7,7 +7,6 @@ import java.util.Iterator
 /**
  * 
  * @author dlwh
- */
 
 object PrintFormosan extends App {
   val configuration = Configuration.fromPropertiesFiles(args.map(new File(_)))
@@ -16,7 +15,7 @@ object PrintFormosan extends App {
 
   val languages = Set("Paiwan","Rukai","SquliqAtay","CiuliAtaya")
 
-  val leaves = dataset.tree.leaves
+  val leaves = dataset.tree.leaves.toSet
 
 
   val targets = for( group <- dataset.cognates) yield for(c <- group if leaves(c.language)) yield c
@@ -27,4 +26,5 @@ object PrintFormosan extends App {
   println(targets.flatten.groupBy(_.language).mapValues(_.size))
 
 
-}
+} */
+

@@ -3,6 +3,7 @@ package dlwh.baldur
 import scalanlp.config.Configuration
 import scalanlp.util.Index
 import scalanlp.fst.Alphabet
+import phylo.Tree
 
 /**
  * 
@@ -10,7 +11,7 @@ import scalanlp.fst.Alphabet
  */
 
 trait Dataset  {
-  def tree: Tree
+  def tree: Tree[String]
   def languages: Seq[Language]
   def cognates: IndexedSeq[Seq[Cognate]]
   def base:Dataset
@@ -23,7 +24,7 @@ trait Dataset  {
 
 object Dataset {
 
-  def simple(tree: Tree, languages: Seq[Language], cognates: IndexedSeq[Seq[Cognate]], full: Option[Dataset]=None):Dataset = {
+  def simple(tree: Tree[String], languages: Seq[Language], cognates: IndexedSeq[Seq[Cognate]], full: Option[Dataset]=None):Dataset = {
     val t = tree
     val l = languages
     val c = cognates
@@ -42,9 +43,9 @@ object Dataset {
 
     val dataset_name = config.readIn[String]("dataset.name")
     val dataset = new ResourceDataset(dataset_name,languages, withGloss)
-    val basetree: Tree = dataset.tree
+    val basetree: Tree[String] = dataset.tree
     val tree = basetree.subtreeAt(config.readIn[String]("subtree",basetree.label))
-    val leaves = tree.leaves
+    val leaves = tree.leaves.toSet
     val cogs = if(filterLeaves) dataset.cognates.map(_.filter(cog => leaves(cog.language))).filterNot(_.isEmpty)
                else dataset.cognates.filter(_.nonEmpty)
     simple(tree,languages,cogs,Some(dataset))
