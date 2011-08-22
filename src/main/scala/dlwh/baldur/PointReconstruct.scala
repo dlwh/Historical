@@ -28,7 +28,7 @@ object PointReconstruct extends App {
   val myLangs = Set(originLang,targetLang)
   println(myLangs)
 
-  val words: IndexedSeq[Seq[Cognate]] = dataset.cognates.map(_.filter(cog => myLangs(cog.language))).filter(_.nonEmpty).take(100)
+  val words: IndexedSeq[Seq[Cognate]] = dataset.cognates.map(_.filter(cog => myLangs(cog.language))).filter(_.nonEmpty)
 
   val pairs = for {
     set <- words
