@@ -1,6 +1,6 @@
 package dlwh.editdistance
 
-import dlwh.baldur._
+import dlwh.cognates._
 import scalala.library.Numerics
 import scalanlp.util._
 import scalala.tensor._

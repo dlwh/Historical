@@ -1,6 +1,6 @@
-package dlwh.cognates
+package dlwh
 
-package object baldur {
+package object cognates {
   type Language = String
   type Word = String
 }

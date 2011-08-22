@@ -1,6 +1,6 @@
 package dlwh.editdistance
 
-import dlwh.baldur._
+import dlwh.cognates._
 import scalanlp.util.Index
 
 /**

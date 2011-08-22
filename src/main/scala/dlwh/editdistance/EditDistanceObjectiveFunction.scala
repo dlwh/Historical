@@ -1,6 +1,6 @@
 package dlwh.editdistance
 
-import dlwh.baldur._
+import dlwh.cognates._
 import scalala.tensor.dense.DenseVector
 import scalala.tensor.Vector
 import scalanlp.util._

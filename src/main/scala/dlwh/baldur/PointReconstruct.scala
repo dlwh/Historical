@@ -1,5 +1,7 @@
 package dlwh.baldur
 
+import dlwh.cognates._
+
 import scalanlp.config.Configuration
 import java.io.File
 import collection.{Seq, IndexedSeq}
