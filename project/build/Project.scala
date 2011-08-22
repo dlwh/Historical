@@ -36,6 +36,7 @@ class Project(info: ProjectInfo) extends DefaultProject(info) with assembly.Asse
   val scalanlp_learn = "org.scalanlp" %% "learn" % "0.4-SNAPSHOT"
   val scalanlp_graphs = "org.scalanlp" %% "graphs" % "0.4-SNAPSHOT"
   val scalanlp_fst = "org.scalanlp" %% "fst" % "0.4-SNAPSHOT"
+  val phylo = "edu.berkeley.nlp" %% "phylo" % "1.0"
 
   //
   // configuration
