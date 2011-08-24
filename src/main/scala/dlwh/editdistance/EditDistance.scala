@@ -8,7 +8,7 @@ import scalanlp.util.Index
  * @author dlwh
  */
 
-trait EditDistance  {
+trait EditDistance[K] {
   type Parameters;
   type SufficientStatistics <: BaseSufficientStatistics;
 
@@ -30,7 +30,7 @@ trait EditDistance  {
   }
 
   def initialParameters: Parameters
-  def makeParameters(stats: Map[Language,SufficientStatistics]):Map[Language,Parameters]
+  def makeParameters(stats: Map[K,SufficientStatistics]):Map[K,Parameters]
 
   def distance(parameters: Parameters, a: String, b: String):Double
 
