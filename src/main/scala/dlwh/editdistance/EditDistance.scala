@@ -1,6 +1,7 @@
 package dlwh.editdistance
 
 import dlwh.cognates._
+import scalanlp.stats.distributions.{SufficientStatistic=>BaseSufficientStatistic}
 import scalanlp.util.Index
 
 /**
@@ -8,19 +9,14 @@ import scalanlp.util.Index
  * @author dlwh
  */
 
-trait EditDistance[K] {
+trait EditDistance {
   type Parameters;
-  type SufficientStatistics <: BaseSufficientStatistics;
+  type SufficientStatistic <: BaseSufficientStatistic[SufficientStatistic];
 
   val charIndex: Index[Char];
 
-  trait BaseSufficientStatistics {
-    def +(stats: SufficientStatistics):SufficientStatistics;
-    def *(weight: Double):SufficientStatistics;
-  }
-
-  def sumCounts[K](s1: Map[K,SufficientStatistics], s2: Map[K,SufficientStatistics]) = {
-    val r = collection.mutable.Map[K,SufficientStatistics]();
+  def sumCounts[K](s1: Map[K,SufficientStatistic], s2: Map[K,SufficientStatistic]) = {
+    val r = collection.mutable.Map[K,SufficientStatistic]();
     r ++= s1;
     for( (k,v) <- s2) {
       if(r.contains(k)) r(k) += v
@@ -30,10 +26,10 @@ trait EditDistance[K] {
   }
 
   def initialParameters: Parameters
-  def makeParameters(stats: Map[K,SufficientStatistics]):Map[K,Parameters]
+  def makeParameters[K](stats: Map[K,SufficientStatistic]):Map[K,Parameters]
 
   def distance(parameters: Parameters, a: String, b: String):Double
 
-  def sufficientStatistics(paremeters: Parameters, a: String, b: String):SufficientStatistics;
-  def emptySufficientStatistics:SufficientStatistics
+  def sufficientStatistics(paremeters: Parameters, a: String, b: String):SufficientStatistic;
+  def emptySufficientStatistic:SufficientStatistic
 }

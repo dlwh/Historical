@@ -1,6 +1,6 @@
 package dlwh.parsim
 
-import phylo._
+import phylo.{Dataset => _, _}
 import scalanlp.config.Configuration
 import java.io.File
 import dlwh.cognates._

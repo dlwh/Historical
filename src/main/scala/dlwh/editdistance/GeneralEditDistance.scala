@@ -2,6 +2,7 @@ package dlwh.editdistance
 
 import dlwh.cognates._
 import scalala.library.Numerics
+import scalanlp.stats.distributions.{SufficientStatistic=>BaseSufficientStatistic}
 import scalanlp.util._
 import scalala.tensor._
 import dense.{DenseVectorCol, DenseVector, DenseMatrix}
@@ -39,7 +40,7 @@ class GeneralEditDistance(nStates:Int,
   }
 
   var decodedParams:Counter[EditDistanceObjectiveFunction.Feature,Double] = null;
-  def makeParameters(stats: Map[Language, SufficientStatistics]):Map[Language,Parameters] = {
+  def makeParameters(stats: Map[Language, SufficientStatistic]):Map[Language,Parameters] = {
     val nicer = stats.mapValues(_.counts);
     val obj = new EditDistanceObjectiveFunction(pe,nicer, featuresFor _, insertionFeaturesFor _, nStates);
 
@@ -62,12 +63,12 @@ class GeneralEditDistance(nStates:Int,
     theMap
   }
 
-  case class SufficientStatistics(counts: Vector[Double]) extends BaseSufficientStatistics {
-    def +(stats: SufficientStatistics) = {
+  case class SufficientStatistic(counts: Vector[Double]) extends BaseSufficientStatistic[SufficientStatistic] {
+    def +(stats: SufficientStatistic) = {
       println(this.counts.norm(1),stats.counts.norm(1),(this.counts + stats.counts).norm(1))
-      SufficientStatistics(this.counts + stats.counts)
+      SufficientStatistic(this.counts + stats.counts)
     };
-    def *(weight: Double) = SufficientStatistics(this.counts * weight);
+    def *(weight: Double) = SufficientStatistic(this.counts * weight);
 
     def decode = {
       val result = Array.fill(nStates,nStates) { DenseVector.zeros[Double](charIndex.size*charIndex.size)}
@@ -87,7 +88,7 @@ class GeneralEditDistance(nStates:Int,
     def initialStateWeight(s: Int):Double;
   }
 
-  def emptySufficientStatistics = new SufficientStatistics(SparseVector.zeros[Double](nStates * nStates * charIndex.size * charIndex.size))
+  def emptySufficientStatistic = new SufficientStatistic(SparseVector.zeros[Double](nStates * nStates * charIndex.size * charIndex.size))
 
   def initialParameters = simpleCostMatrix(charIndex.size,subRatio,insRatio, transRatio)
 
@@ -336,7 +337,7 @@ class GeneralEditDistance(nStates:Int,
     state + nStates * (nextState + nStates * pe.encode(x, y))
   }
 
-  def sufficientStatistics(costs:Parameters, s1: String, s2: String): SufficientStatistics = {
+  def sufficientStatistics(costs:Parameters, s1: String, s2: String): SufficientStatistic = {
     val forwardMatrix = editMatrix(s1,s2,costs);
     val reverseMatrix = backwardEditMatrix(s1,s2,costs);
     val partition = this.partition(costs,forwardMatrix,s1,s2);
@@ -405,7 +406,7 @@ class GeneralEditDistance(nStates:Int,
       i += 1
     }
 
-    SufficientStatistics(result);
+    SufficientStatistic(result);
 
   }
 
