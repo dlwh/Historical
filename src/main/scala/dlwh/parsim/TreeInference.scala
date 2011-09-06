@@ -2,34 +2,34 @@ package dlwh.parsim
 
 import dlwh.cognates._
 import phylo.Tree
-import collection.mutable
+import scalanlp.util._
 
 /**
  * 
  * @author dlwh
  */
 
-class TreeInference[F<:Factors[Language]](val factors: F, val tree: Tree[Language], val group: CognateGroup) {
+class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val group: CognateGroup) {
   import factors._;
-  def parent(l: Language) = parentMap(l);
-  private val parentMap = buildParentMap(tree, ROOT)
+  def parent(l: T) = parentMap(l);
+  private val parentMap = buildParentMap(tree, None)
 
-  private def  buildParentMap(tree: Tree[Language], parent: Language):Map[Language,Language] = {
-    tree.children.map(buildParentMap(_,tree.label)).reduceLeft(_ ++ _) + (tree.label -> parent);
+  private def  buildParentMap(tree: Tree[T], parent: Option[T]):Map[T,Option[T]] = {
+    tree.children.map(buildParentMap(_,Some(tree.label))).reduceLeft(_ ++ _) + (tree.label -> parent);
   }
 
-  val hasUpwardMessage = group.nodesWithObservedDescendants(tree);
+  val hasUpwardMessage: (T=>Boolean) = TODO
 
   val children = {
-    def buildChildren(tree: Tree[Language], parent: Language):Map[Language,Set[Language]] = {
+    def buildChildren(tree: Tree[T], parent: Option[T]):Map[T,Set[T]] = {
       val myContribution = (tree.label -> (tree.children.map(_.label).toSet));
-      tree.children.map(buildChildren(_,tree.label)).reduceLeft(_ ++ _) + myContribution;
+      tree.children.map(buildChildren(_,Some(tree.label))).reduceLeft(_ ++ _) + myContribution;
     }
-    buildChildren(tree,ROOT);
+    buildChildren(tree,None);
   }
 
-  val upwardMessages:collection.mutable.Map[Language,Belief] = new collection.mutable.HashMap[Language,Belief] {
-    override def default(l: Language) = {
+  val upwardMessages:collection.mutable.Map[T,Belief] = new collection.mutable.HashMap[T,Belief] {
+    override def default(l: T) = {
       val b:Belief = upwardBeliefs(l);
       val message = edgeFor(l).edgeMarginal(uniformBelief,b).parentProjection;
       update(l,message);
@@ -37,10 +37,10 @@ class TreeInference[F<:Factors[Language]](val factors: F, val tree: Tree[Languag
     }
   }
 
-  val upwardBeliefs: collection.mutable.Map[Language,Belief] = new collection.mutable.HashMap[Language,Belief] {
-    override def default(l: Language) = {
-      val belief =  if(group.cognatesByLanguage.contains(l)) {
-        indicatorBelief(group.cognatesByLanguage(l).word)
+  val upwardBeliefs: collection.mutable.Map[T,Belief] = new collection.mutable.HashMap[T,Belief] {
+    override def default(l: T) = {
+      val belief =  if(group.cognatesByT.contains(l)) {
+        indicatorBelief(group.cognatesByT(l).word)
       } else  {
         val messages = for(c <- children(l) if hasUpwardMessage(c)) yield upwardMessages(c);
         messages.reduceLeft(_ * _);
@@ -52,8 +52,8 @@ class TreeInference[F<:Factors[Language]](val factors: F, val tree: Tree[Languag
 
   // message to the factor (p->l) from p.
   // indexed by l.
-  val downwardMessages: collection.mutable.Map[Language,Belief] = new collection.mutable.HashMap[Language,Belief] {
-    override def default(l: Language) = if(l == ROOT || l == tree.label) rootMessage else {
+  val downwardMessages: collection.mutable.Map[T,Belief] = new collection.mutable.HashMap[T,Belief] {
+    override def default(l: T) = if(l == ROOT || l == tree.label) rootMessage else {
       val p = parent(l)
       val messageToP = downwardMessages(p)
       val messages = for(c <- children(p) if hasUpwardMessage(c) && l != c) yield upwardMessages(c)
@@ -68,8 +68,8 @@ class TreeInference[F<:Factors[Language]](val factors: F, val tree: Tree[Languag
     else l -> edgeMarginals(l).childProjection;
   } toMap
 
-  val edgeMarginals:collection.mutable.Map[Language,EdgeMarginal] = new collection.mutable.HashMap[Language,EdgeMarginal] {
-    override def default(l: Language) = {
+  val edgeMarginals:collection.mutable.Map[T,EdgeMarginal] = new collection.mutable.HashMap[T,EdgeMarginal] {
+    override def default(l: T) = {
       val qp = downwardMessages(l);
       val message = edgeFor(l).edgeMarginal(qp,upwardBeliefs(l));
       update(l,message);
@@ -83,5 +83,5 @@ class TreeInference[F<:Factors[Language]](val factors: F, val tree: Tree[Languag
     up * down partition;
   };
 
-  def edgeMarginal(child: Language) = if(hasUpwardMessage(child)) Some(edgeMarginals(child)) else None;
+  def edgeMarginal(child: T) = if(hasUpwardMessage(child)) Some(edgeMarginals(child)) else None;
 }
