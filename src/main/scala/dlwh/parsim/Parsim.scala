@@ -19,23 +19,24 @@ import collection.IndexedSeq
  * 
  * @author dlwh
  */
+object Parsim extends App {
 
-object ParsimTree extends App {
   val configuration = Configuration.fromPropertiesFiles(args.map(new File(_)))
   val dataset = Dataset.fromConfiguration(configuration)
   val langIndex = Index(dataset.languages)
-  val cognates = dataset.cognates.flatten;
+  val baseTree = dataset.tree
+  val tree = dataset.tree.extend(_.leaves.toSet)
+  val leaves = baseTree.leaves.toSet
+  val cognates = dataset.cognates.flatten.filter(c => leaves(c.language));
   val groupedCognates = groupCognates(cognates)
 
   val ntaxa = langIndex.size
 
-  val charIndex = Index(cognates.flatMap(_.word))
+  val charIndex = Index(cognates.flatMap(_.word) ++  Iterator('\0'))
 
   // parameters
   val tau = 10000.0 // oldest time
   val gamma0 = 5E-6
-
-  val process = new PPTree(ntaxa, tau, gamma0, IndexedSeq.empty)
 
   type T = Set[Language]
 
@@ -45,9 +46,10 @@ object ParsimTree extends App {
   val factorsFactory = new InnovationFactorsFactory(new WordFactorsFactory(ed),
                                                     new LanguageModelFactorsFactory(charIndex), 0.2)
 
+  import factorsFactory.Factors
 
-  def likelihood(initParams: Map[T,factorsFactory.EdgeParameters], tree: Tree[Int]):Double = {
-    val annTree = tree.map(i => if(i >= 0) langIndex.get(i) else "").extend(_.leaves.toSet)
+
+  def likelihood(initParams: Map[T,factorsFactory.EdgeParameters], annTree: Tree[T]):Double = {
     def cognateFor(group: Map[Language,IndexedSeq[Cognate]], lang: Set[Language]) = {
       if(lang.size == 1) group.get(lang.iterator.next).map(_.head)
       else None
@@ -56,57 +58,28 @@ object ParsimTree extends App {
     var params = initParams
 
     var likelihood = -1E10
+    var iter = 0;
     while(true) {
-      var inference: IndexedSeq[TreeInference[T,factorsFactory.Factors[T]]] = for ( c <- groupedCognates) yield {
+      val inference = for ( c <- groupedCognates.par) yield {
         val factors = factorsFactory.factorsFor(c.values.flatMap(_.map(_.word)).toSet,params)
         new TreeInference(factors, annTree, { (x:T) => cognateFor(c, x)})
       }
       val newLikelihood : Double = inference.par.map(_.likelihood).sum
       println(newLikelihood)
-      if( (newLikelihood - likelihood)/newLikelihood < 1E-4) return newLikelihood
+      if( (newLikelihood - likelihood)/newLikelihood.abs < 1E-4 && iter > 3) return newLikelihood
 
       likelihood = newLikelihood
       val ecounts = inference.par.map(_.sufficientStatistics).reduceLeft(sumStats _)
+      assert(ecounts.size > 0)
       params = factorsFactory.optimize(ecounts)
+      iter += 1
     }
     likelihood
   }
 
-  val initialFactors = XXX
-  var state = process.initialState(likelihood(initialFactors, _ ))
-  def ll_data = state.likelihood
-  def ll_points = state.prior
+  val initParams = {for(t <- tree.postorder) yield (t.label) -> factorsFactory.initialParameters}.toMap
 
-  val treeDrawer = new TreeDrawer()
-
-  xlim(0,1000*ntaxa)
-  ylim(ll_data * 1.1,0)
-
-  val lls = ArrayBuffer[Double]();
-
-  for(time <- 0 until (1000 * ntaxa)) {
-    val temp = (1000.0 * ntaxa - time) / ntaxa / 200
-    if(time % 20 == 0) {
-      println("[temp %.3f] [ll %.2f %.2f %.2f] [root %.2f]"
-        .format(temp, ll_points + ll_data, ll_points, ll_data, state.appliedEvents.last.time))
-      plot(DenseVector.range(0,time),lls.toArray)
-    }
-    if(time % 200 == 199) {
-      val ss = state
-      import ss._
-      println(points.map(_.map(langIndex.get _)))
-      println(appliedEvents.map(_.map(langIndex.get _)))
-      treeDrawer.trees = forest.map(_.map(i => if(i < 0) "" else langIndex.get(i)))
-      for( tree <- forest) println(tree.map(i => if(i < 0) "" else langIndex.get(i)))
-      println("Saving points...")
-      new java.io.File("serialized").mkdirs()
-      scalanlp.util.writeObject(new java.io.File("serialized/k2p-events-" + (time+1) +".ser"), appliedEvents.map(_.map(langIndex.get _)))
-    }
-
-    state = process.resample(state, likelihood(initialFactors, _), temp)
-
-    lls += (ll_points + ll_data)
-  }
+  likelihood(initParams, tree)
 
 
   // helper methods:
@@ -127,5 +100,4 @@ object ParsimTree extends App {
     result.toMap
 
   }
-
 }

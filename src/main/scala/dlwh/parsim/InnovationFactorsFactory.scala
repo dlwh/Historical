@@ -47,13 +47,13 @@ class InnovationFactorsFactory[F<:FactorsFactory,
     }
   }
 
-  def mkFactors[T](legalWords: Set[Word], edgeParameters: Map[T,EdgeParameters]) =  {
+  def factorsFor[T](legalWords: Set[Word], edgeParameters: Map[T,EdgeParameters]) =  {
     val factors = baseFactory.factorsFor(legalWords, edgeParameters.mapValues(_.params))
     val innovFactors = innovationFactory.factorsFor(legalWords, edgeParameters.mapValues(_.innovParams))
     new Factors(Index(legalWords),factors, innovFactors, edgeParameters)
   }
 
-  def optimize(stats: Map[Language,SufficientStatistic]) = {
+  def optimize[T](stats: Map[T,SufficientStatistic]) = {
     val newInnerParams = baseFactory.optimize(stats.mapValues(_.alignmentCounts))
     val newInnovParams = innovationFactory.optimize(stats.mapValues(_.innovationCounts))
     val innoProbs = optimizeInnovation(stats.mapValues(s => (s.probInnovation, s.n)))
@@ -61,7 +61,7 @@ class InnovationFactorsFactory[F<:FactorsFactory,
     newInnerParams.map{case (k,inner) => k -> EdgeParameters(inner,newInnovParams(k), innoProbs(k))}.withDefaultValue(initialParameters)
   }
 
-  def optimizeInnovation(stats: Map[Language,(Double,Double)]) = {
+  def optimizeInnovation[Language](stats: Map[Language,(Double,Double)]) = {
     val obj = new InnovationObjective(stats)
     val opt = FirstOrderMinimizer.OptParams(regularization = 1E-4, useStochastic = false, maxIterations = 50)
     val result = opt.minimizer(obj).minimize(obj, obj.enc.mkDenseVector())
@@ -79,13 +79,10 @@ class InnovationFactorsFactory[F<:FactorsFactory,
                         params: T=>EdgeParameters) extends dlwh.parsim.Factors[T] {
     type SufficientStatistic = outer.SufficientStatistic
 
-    def initialBelief(lang: Language) ={ NullState }
 
-    def initialMessage(from: Language, to: Language) = {
-      initialBelief(to)
-    }
+    def uniformBelief = NullState
 
-    def beliefForWord(w: Word) = {
+    def indicatorBelief(w: Word) = {
       val r = new OldSparseVector(wordIndex.size, Double.NegativeInfinity)
       r(wordIndex(w)) = 0
       new SingleState(r)
@@ -130,7 +127,7 @@ class InnovationFactorsFactory[F<:FactorsFactory,
 
       def scaleBy(score: Double) = TODO
 
-      def normalized = this
+      override def normalized = this
 
     }
     case class SingleState(beliefs: Vector[Double]) extends Belief { // no homoplasy
@@ -150,8 +147,6 @@ class InnovationFactorsFactory[F<:FactorsFactory,
       def scaleBy(score: Double) = {
         new SingleState(beliefs + score)
       }
-
-      def normalized = scaleBy(-partition)
 
       override def toString() = {
         val ctr = (Encoder.fromIndex(wordIndex).decode(beliefs))
@@ -177,14 +172,14 @@ class InnovationFactorsFactory[F<:FactorsFactory,
       def posteriorFromInnovativeParent = 0.0
 
       def edgeMarginal(parent: Belief, child: Belief):EdgeMarginal = (parent,child) match {
-        case (NullState,NullState) => error("...")
+        case (NullState,NullState) => sys.error("...")
         case (NullState,x:SingleState) =>
           SingleSingleEdge(edgeParams,baseCounts,innovBaseCounts,None,Some(x))
         case (y:SingleState,NullState) =>
           SingleSingleEdge(edgeParams,baseCounts,innovBaseCounts,Some(y),None)
         case (y:SingleState,x: SingleState) =>
           SingleSingleEdge(edgeParams,baseCounts,innovBaseCounts,Some(y),Some(x))
-        case _ => error("bad edge types!" + this + " " + parent + " " + child)
+        case _ => sys.error("bad edge types!" + this + " " + parent + " " + child)
       }
 
       def childProjection:Belief = XXX
@@ -207,7 +202,7 @@ class InnovationFactorsFactory[F<:FactorsFactory,
         case (NullState,x:SingleState) => copy(parent=None,child=Some(x))
         case (y:SingleState,x:SingleState) => copy(parent=Some(y),child=Some(x))
         case (y:SingleState,NullState) => copy(parent=Some(y),child=None)
-        case _ => error("bad edge types!" + this + " " + parent + " " + child)
+        case _ => sys.error("bad edge types!" + this + " " + parent + " " + child)
       }
 
       def score(a: Word, b: Word) = {

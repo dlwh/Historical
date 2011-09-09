@@ -35,25 +35,23 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
 
   private type edSS = editDistance.SufficientStatistic
 
-  def mkFactors(legalWords: Set[Word], edgeParameters: (Language) => EdgeParameters) = {
+  def factorsFor[T](legalWords: Set[Word], edgeParameters: Map[T,EdgeParameters]) = {
     new Factors(legalWords,edgeParameters, true)
   }
 
 
-  def optimize(suffStats: Map[Language, SufficientStatistic]) = {
+  def optimize[T](suffStats: Map[T, SufficientStatistic]) = {
     editDistance.makeParameters(suffStats.mapValues(_.inner))
   }
 
 
-  class Factors(legalWords: Set[Word], costMatrix: (Language)=>Parameters, viterbi:Boolean) extends dlwh.parsim.Factors[Language] {
+  class Factors[Language](legalWords: Set[Word], costMatrix: (Language)=>Parameters, viterbi:Boolean) extends dlwh.parsim.Factors[Language] {
     type SufficientStatistic = factory.SufficientStatistic
 
     val wordIndex = Index(legalWords)
-    def initialBelief(lang: Language) = new Belief(allOnes,0.0)
+    def uniformBelief = new Belief(allOnes,0.0)
 
-    def initialMessage(from: Language, to: Language) = new Belief(allOnes, 0.0)
-
-    def beliefForWord(w: Word) = new Belief({
+    def indicatorBelief(w: Word) = new Belief({
       val r = Encoder.fromIndex(wordIndex).mkDenseVector(Double.NegativeInfinity)
       r(wordIndex(w)) = 0.0
       r
@@ -71,12 +69,12 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
     }
 
     import collection.{mutable=>m}
-    private val precomputedCosts = new m.HashMap[(Language,Language),ArrayCache] with m.SynchronizedMap[(Language,Language),ArrayCache]
-    private val precomputedECounts = new m.HashMap[(Language,Language),(Int,Int)=>Lazy[edSS]] with m.SynchronizedMap[(Language,Language),(Int,Int)=>Lazy[edSS]]
+    private val precomputedCosts = new m.HashMap[Language,ArrayCache] with m.SynchronizedMap[Language,ArrayCache]
+    private val precomputedECounts = new m.HashMap[Language,(Int,Int)=>Lazy[edSS]] with m.SynchronizedMap[Language,(Int,Int)=>Lazy[edSS]]
 
-    def edgeFor(parent: Language, child: Language) = {
-      val matrix = precomputedCosts.getOrElseUpdate(parent->child,computeCosts(costMatrix(child)))
-      def expCosts(wordA: Int, wordB: Int)  = precomputedECounts.getOrElseUpdate(parent->child,computeECounts(costMatrix(child)))(wordA,wordB)
+    def edgeFor(child: Language) = {
+      val matrix = precomputedCosts.getOrElseUpdate(child,computeCosts(costMatrix(child)))
+      def expCosts(wordA: Int, wordB: Int)  = precomputedECounts.getOrElseUpdate(child,computeECounts(costMatrix(child)))(wordA,wordB)
       new Edge(matrix,expCosts _, None,None)
     }
 
@@ -96,7 +94,7 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
       foo
     }
 
-    case class Belief(beliefs: DenseVector[Double], max: Double) extends {
+    case class Belief(beliefs: DenseVector[Double], max: Double) extends BaseBelief {
       lazy val partition = { val r = Library.softmax(beliefs); assert(!r.isNaN & !r.isInfinite); r}
       def apply(word: String)= beliefs(wordIndex(word))
 
@@ -114,8 +112,6 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
       }
 
       override def toString() = ("Belief: " + Encoder.fromIndex(wordIndex).decode(beliefs))
-
-      def normalized = scaleBy(-partition)
 
       def scaleBy(score: Double) = {
         val scaled = (beliefs + score)

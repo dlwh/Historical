@@ -17,7 +17,7 @@ import phylo.Tree
  * 
  * @author dlwh
  **/
-class EditDistanceObjectiveFunction[F:ClassManifest](pe: AlignmentPairEncoder, expectedCounts: Map[Language,Vector[Double]],
+class EditDistanceObjectiveFunction[Language,F:ClassManifest](pe: AlignmentPairEncoder, expectedCounts: Map[Language,Vector[Double]],
                                     featurizer: (Language,Int,Int,Char,Char)=>Array[F],
                                     insertionFeaturizer: (Language,Int)=>Array[F],
                                     nStates:Int = 1) extends DiffFunction[DenseVector[Double]] {
@@ -106,10 +106,10 @@ class EditDistanceObjectiveFunction[F:ClassManifest](pe: AlignmentPairEncoder, e
   }
 
   def calculate(featureWeights: DenseVector[Double]) = {
-    val (logProb,deriv) = expectedCounts.toIndexedSeq.view.map { (pair:(Language,Vector[Double])) =>
+    val (logProb,deriv) = expectedCounts.toIndexedSeq.par.map { (pair:(Language,Vector[Double])) =>
       var logProb:Double = 0.0
       val deriv = DenseVector.zeros[Double](featureWeights.length)
-      val (lang:String,ecounts) = pair
+      val (lang:Language,ecounts) = pair
       for(from <- 0 until nStates) {
         val featuresForPair:Array[Array[Int]] = this.featuresForPair(lang)
         // alignmentLogProbs: (p)(to)(c)->p(to,c|from,plang)
@@ -174,7 +174,7 @@ class EditDistanceObjectiveFunction[F:ClassManifest](pe: AlignmentPairEncoder, e
       a._2 += b._2
       (a._1 + b._1, a._2)
     }
-    println((logProb,norm(deriv,2)))
+    println(("norm",logProb,norm(deriv,2)))
     (-logProb,deriv)
   }
 }
@@ -182,7 +182,7 @@ class EditDistanceObjectiveFunction[F:ClassManifest](pe: AlignmentPairEncoder, e
 object EditDistanceObjectiveFunction {
   class Feature
   case object Insertion extends Feature
-  case class LangFeature(l: Language, f: Feature) extends Feature
+  case class LangFeature[Language](l: Language, f: Feature) extends Feature
   case class PairFeature(p : Char, c: Char) extends Feature
   case class ChildFeature(c: Char) extends Feature
   case object MatchFeature extends Feature

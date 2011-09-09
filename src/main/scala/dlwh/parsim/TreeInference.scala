@@ -9,21 +9,29 @@ import scalanlp.util._
  * @author dlwh
  */
 
-class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val group: CognateGroup) {
+class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val cognates: T=>Option[Cognate]) {
   import factors._;
   def parent(l: T) = parentMap(l);
   private val parentMap = buildParentMap(tree, None)
 
   private def  buildParentMap(tree: Tree[T], parent: Option[T]):Map[T,Option[T]] = {
-    tree.children.map(buildParentMap(_,Some(tree.label))).reduceLeft(_ ++ _) + (tree.label -> parent);
+    tree.children.map(buildParentMap(_,Some(tree.label))).foldLeft(Map(tree.label->parent))(_ ++ _)
   }
 
-  val hasUpwardMessage: (T=>Boolean) = TODO
+  val hasUpwardMessage = {
+    def recHasMessage(t: Tree[T]):Set[T] = {
+      import scala.collection.breakOut
+      val children: Set[T] = t.children.flatMap(recHasMessage)(breakOut)
+      if(children.nonEmpty || cognates(t.label).nonEmpty)  children + t.label
+      else Set.empty
+    }
+    recHasMessage(tree)
+  }
 
   val children = {
     def buildChildren(tree: Tree[T], parent: Option[T]):Map[T,Set[T]] = {
       val myContribution = (tree.label -> (tree.children.map(_.label).toSet));
-      tree.children.map(buildChildren(_,Some(tree.label))).reduceLeft(_ ++ _) + myContribution;
+      tree.children.map(buildChildren(_,Some(tree.label))).foldLeft(Map(myContribution))(_ ++ _)
     }
     buildChildren(tree,None);
   }
@@ -39,11 +47,12 @@ class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val grou
 
   val upwardBeliefs: collection.mutable.Map[T,Belief] = new collection.mutable.HashMap[T,Belief] {
     override def default(l: T) = {
-      val belief =  if(group.cognatesByT.contains(l)) {
-        indicatorBelief(group.cognatesByT(l).word)
-      } else  {
-        val messages = for(c <- children(l) if hasUpwardMessage(c)) yield upwardMessages(c);
-        messages.reduceLeft(_ * _);
+      val belief = cognates(l) match {
+        case Some(cognate) =>
+          indicatorBelief(cognate.word)
+        case None =>
+          val messages = for(c <- children(l) if hasUpwardMessage(c)) yield upwardMessages(c);
+          messages.reduceLeft(_ * _);
       }
       update(l,belief);
       belief;
@@ -53,10 +62,10 @@ class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val grou
   // message to the factor (p->l) from p.
   // indexed by l.
   val downwardMessages: collection.mutable.Map[T,Belief] = new collection.mutable.HashMap[T,Belief] {
-    override def default(l: T) = if(l == ROOT || l == tree.label) rootMessage else {
+    override def default(l: T) = {
       val p = parent(l)
-      val messageToP = downwardMessages(p)
-      val messages = for(c <- children(p) if hasUpwardMessage(c) && l != c) yield upwardMessages(c)
+      val messageToP = p.map(downwardMessages).getOrElse(rootMessage)
+      val messages = for(c <- p.toIterator.flatMap(children) if hasUpwardMessage(c) && l != c) yield upwardMessages(c)
       val qp = messages.foldLeft(messageToP)(_ * _);
       qp
     }
@@ -76,6 +85,8 @@ class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val grou
       message
     }
   }
+
+  def sufficientStatistics: Map[T,factors.SufficientStatistic] = hasUpwardMessage.map(t => t -> edgeMarginals(t).sufficientStatistic).toMap
 
   lazy val likelihood  = {
     val up = upwardBeliefs(tree.label)

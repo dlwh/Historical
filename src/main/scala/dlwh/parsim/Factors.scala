@@ -42,7 +42,7 @@ trait Factors[T] { outer =>
   }
 
   trait BaseEdge {
-    def edgeMarginal(parent: Belief, child: Belief):BaseEdgeMarginal
+    def edgeMarginal(parent: Belief, child: Belief):EdgeMarginal
     def score(parent: Word, child: Word):Double
   }
 

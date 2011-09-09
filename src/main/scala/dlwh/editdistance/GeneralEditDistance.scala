@@ -27,7 +27,7 @@ class GeneralEditDistance(nStates:Int,
   def pairEncoder = pe
 
 
-  def featuresFor(l: Language, from:Int, to:Int, p: Char, c: Char): Array[Feature] = {
+  def featuresFor[K](l: K, from:Int, to:Int, p: Char, c: Char): Array[Feature] = {
     val base = ArrayBuffer[Feature](PairFeature(p,c),ChildFeature(c));
     if(p == c) base += MatchFeature;
     val langFeats = base.map(LangFeature(l,_));
@@ -35,12 +35,12 @@ class GeneralEditDistance(nStates:Int,
     (base ++ base.map(StatefulFeature(from, to, _))).toArray
   }
 
-  def insertionFeaturesFor(l: Language, from: Int):Array[Feature] = {
+  def insertionFeaturesFor[Language](l: Language, from: Int):Array[Feature] = {
     Array(LangFeature(l,Insertion),Insertion,StatefulFeature(from,from,Insertion),StatefulFeature(from,from,LangFeature(l,Insertion)));
   }
 
   var decodedParams:Counter[EditDistanceObjectiveFunction.Feature,Double] = null;
-  def makeParameters(stats: Map[Language, SufficientStatistic]):Map[Language,Parameters] = {
+  def makeParameters[K](stats: Map[K, SufficientStatistic]):Map[K,Parameters] = {
     val nicer = stats.mapValues(_.counts);
     val obj = new EditDistanceObjectiveFunction(pe,nicer, featuresFor _, insertionFeaturesFor _, nStates);
 
@@ -65,7 +65,6 @@ class GeneralEditDistance(nStates:Int,
 
   case class SufficientStatistic(counts: Vector[Double]) extends BaseSufficientStatistic[SufficientStatistic] {
     def +(stats: SufficientStatistic) = {
-      println(this.counts.norm(1),stats.counts.norm(1),(this.counts + stats.counts).norm(1))
       SufficientStatistic(this.counts + stats.counts)
     };
     def *(weight: Double) = SufficientStatistic(this.counts * weight);
@@ -343,6 +342,7 @@ class GeneralEditDistance(nStates:Int,
     val partition = this.partition(costs,forwardMatrix,s1,s2);
     val result = DenseVector.zeros[Double](nStates * nStates * charIndex.size * charIndex.size);
     val epsIndex = charIndex('\0')
+    assert(epsIndex != '\0', "epsilon must be in charIndex!")
     val indexedS1 = s1.map(charIndex);
     val indexedS2 = s2.map(charIndex);
     var i = 0;

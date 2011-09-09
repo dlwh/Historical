@@ -16,7 +16,7 @@ import scalala.library.{Library, Numerics}
 class LanguageModelFactorsFactory(charIndex: Index[Char]) extends FactorsFactory { factory =>
   val pe = new AlignmentPairEncoder(charIndex)
 
-  def factorsFor[T](legalWords: Set[Word], edgeParameters: (T) => EdgeParameters) = new Factors(Index(legalWords),edgeParameters)
+  def factorsFor[T](legalWords: Set[Word], edgeParameters: Map[T,EdgeParameters]) = new Factors(Index(legalWords),edgeParameters)
 
   def optimize[T](suffStats: Map[T, SufficientStatistic]):Map[T,EdgeParameters] = {
     val allCounts = suffStats.values.foldLeft(DenseVector.zeros[Double](charIndex.size * charIndex.size)) { (v,v2) => v += v2.transitions; v}
@@ -40,7 +40,7 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends FactorsFactory
   }
 
 
-  lazy val emptySufficientStatistics = new SufficientStatistic(SparseVector.zeros[Double](charIndex.size * charIndex.size))
+  lazy val emptySufficientStatistic = new SufficientStatistic(SparseVector.zeros[Double](charIndex.size * charIndex.size))
 
   val initialParameters :EdgeParameters=  new EdgeParameters {
     val theScore = -math.log(charIndex.size)
@@ -57,12 +57,12 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends FactorsFactory
   }
 
   class Factors[Language](legalWords: Index[Word], parameters: Language=>EdgeParameters) extends dlwh.parsim.Factors[Language] {
+
+    type SufficientStatistic = factory.SufficientStatistic
     val wordIndex = Index(legalWords)
-    def initialBelief(lang: Language) = new Belief(allOnes)
+    def uniformBelief = new Belief(allOnes)
 
-    def initialMessage(from: Language, to: Language) = new Belief(allOnes)
-
-    def beliefForWord(w: Word) = new Belief({
+    def indicatorBelief(w: Word) = new Belief({
       val r = Encoder.fromIndex(wordIndex).mkDenseVector(Double.NegativeInfinity)
       r(wordIndex(w)) = 0.0
       r
@@ -83,7 +83,7 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends FactorsFactory
     private val precomputedECounts = new m.HashMap[Language,(Int)=>Lazy[SparseVector[Double]]] with m.SynchronizedMap[Language,(Int)=>Lazy[SparseVector[Double]]]
     private val precomputedCosts = new m.HashMap[Language,(Int)=>Lazy[Double]] with m.SynchronizedMap[Language,(Int)=>Lazy[Double]]
 
-    def edgeFor(parent: Language, child: Language) = {
+    def edgeFor(child: Language) = {
       val counts = precomputedECounts.getOrElseUpdate(child,computeECounts(parameters(child))) andThen (_.result)
       val scores = precomputedCosts.getOrElseUpdate(child,computeCosts(parameters(child))) andThen (_.result)
       new Edge(scores, counts)
@@ -150,10 +150,12 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends FactorsFactory
 
     }
 
+    type EdgeMarginal = Edge
+
     case class Edge(costs: Int=>Double, counts: Int=>SparseVector[Double], child: Option[Belief]=None) extends BaseEdge with BaseEdgeMarginal {
       def score(a: Word, b: Word) = costs(wordIndex(b))
 
-      def sufficientStatistics = {
+      def sufficientStatistic = {
         val child = this.child.get.beliefs
         var c = 0
         val suffStats = SparseVector.zeros[Double](charIndex.size * charIndex.size)
