@@ -44,7 +44,7 @@ class GeneralEditDistance(nStates:Int,
     val nicer = stats.mapValues(_.counts);
     val obj = new EditDistanceObjectiveFunction(pe,nicer, featuresFor _, insertionFeaturesFor _, nStates);
 
-    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 100, regularization = 2).minimizer(obj);
+    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 20, regularization = 2).minimizer(obj);
     val params = opt.minimize(new CachedDiffFunction(obj), if(decodedParams eq null) obj.initialWeightVector else obj.featureEncoder.encodeDense(decodedParams));
     decodedParams = obj.featureEncoder.decode(params);
     val theMap = stats.map { case (child,_) =>

@@ -99,8 +99,9 @@ class EditDistanceObjectiveFunction[Language,F:ClassManifest](pe: AlignmentPairE
 
   def weightedSum(deriv: DenseVector[Double], features:Array[Int], weight: Double) ={
     var fi = 0
+    val data = deriv.data
     while(fi < features.length) {
-      deriv(features(fi)) += weight
+      data(features(fi)) += weight
       fi+=1
     }
   }
