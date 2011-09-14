@@ -48,8 +48,8 @@ class InnovationFactorsFactory[F<:FactorsFactory,
   }
 
   def factorsFor[T](legalWords: Set[Word], edgeParameters: Map[T,EdgeParameters]) =  {
-    val factors = baseFactory.factorsFor(legalWords, edgeParameters.mapValues(_.params))
-    val innovFactors = innovationFactory.factorsFor(legalWords, edgeParameters.mapValues(_.innovParams))
+    val factors = baseFactory.factorsFor(legalWords, edgeParameters.mapValues(_.params).withDefault(k => edgeParameters(k).params))
+    val innovFactors = innovationFactory.factorsFor(legalWords, edgeParameters.mapValues(_.innovParams).withDefault(k => edgeParameters(k).innovParams))
     new Factors(Index(legalWords),factors, innovFactors, edgeParameters)
   }
 

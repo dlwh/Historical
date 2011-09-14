@@ -40,6 +40,7 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
   }
 
 
+
   def optimize[T](suffStats: Map[T, SufficientStatistic]) = {
     editDistance.makeParameters(suffStats.mapValues(_.inner))
   }
