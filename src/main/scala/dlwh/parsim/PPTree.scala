@@ -11,7 +11,7 @@ import phylo.{Event, Tree, BorrowingEvent}
  * @author dlwh
  */
 
-class PPTree(ntaxa: Int, tau: Double= 10000., mass: Double = 5E-6, immortalPoints: IndexedSeq[Event[Int]])  {
+class PPTree(ntaxa: Int, tau: Double= 10000., mass: Double = 5E-3, immortalPoints: IndexedSeq[Event[Int]])  {
   case class State(points: IndexedSeq[BorrowingEvent[Int]],
                    forest: IndexedSeq[Tree[Int]],
                    appliedEvents: IndexedSeq[Event[Int]],
@@ -22,7 +22,7 @@ class PPTree(ntaxa: Int, tau: Double= 10000., mass: Double = 5E-6, immortalPoint
   def initialSample = {
     for {
       n <- new Poisson(ntaxa * ntaxa * tau * mass)
-      rr = IndexedSeq.fill(n)(BorrowingEvent.randBorrowingEvent(ntaxa, tau))
+      rr = IndexedSeq.fill(n min (ntaxa * 2))(BorrowingEvent.randBorrowingEvent(ntaxa, tau))
       r <- Rand.promote(rr)
     } yield r.toIndexedSeq
   }
@@ -41,6 +41,7 @@ class PPTree(ntaxa: Int, tau: Double= 10000., mass: Double = 5E-6, immortalPoint
       import state._
       val new_points = prop(state.points).get
       val (new_trees, new_appliedevents) = BorrowingEvent.treeFromBorrowingEvents(immortalPoints ++ new_points, ntaxa)
+      assert(new_trees.length == 1, immortalPoints)
       val ll_data_ratio = {
         if(new_appliedevents == appliedEvents) 0.0
         else new_trees.map(likelihoodFunction).sum - state.likelihood
@@ -54,8 +55,10 @@ class PPTree(ntaxa: Int, tau: Double= 10000., mass: Double = 5E-6, immortalPoint
 
       val ll_ratio = ll_data_ratio + ll_points_ratio
       if(log(random) <= ll_ratio/temperature) {
+        println("Accept!" + ll_ratio)
         State(new_points, new_trees, new_appliedevents, likelihood + ll_data_ratio, prior + ll_points_ratio)
       } else {
+        println("Reject!" + ll_ratio)
         state
       }
     }
@@ -77,7 +80,7 @@ class PPTree(ntaxa: Int, tau: Double= 10000., mass: Double = 5E-6, immortalPoint
     really_new_t = if(new_t > tau) 2 * tau - new_t
                        else if (new_t < 0.0) -new_t
                        else new_t
-    new_p = p.copy(time = new_t)
+    new_p = p.copy(time = really_new_t)
   } yield Set(s:_*) - p + new_p toIndexedSeq
 
   private val proposals = IndexedSeq(add _,delete _,move _)
