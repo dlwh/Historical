@@ -39,14 +39,18 @@ class GeneralEditDistance(nStates:Int,
     Array(LangFeature(l,Insertion),Insertion,StatefulFeature(from,from,Insertion),StatefulFeature(from,from,LangFeature(l,Insertion)));
   }
 
-  var decodedParams:Counter[EditDistanceObjectiveFunction.Feature,Double] = null;
+  val decodedParams = Counter[EditDistanceObjectiveFunction.Feature,Double]
   def makeParameters[K](stats: Map[K, SufficientStatistic]):Map[K,Parameters] = {
     val nicer = stats.mapValues(_.counts);
     val obj = new EditDistanceObjectiveFunction(pe,nicer, featuresFor _, insertionFeaturesFor _, nStates);
 
     val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 20, regularization = 2).minimizer(obj);
-    val params = opt.minimize(new CachedDiffFunction(obj), if(decodedParams eq null) obj.initialWeightVector else obj.featureEncoder.encodeDense(decodedParams));
-    decodedParams = obj.featureEncoder.decode(params);
+
+    val init =  obj.featureEncoder.tabulateDenseVector(decodedParams)
+    val params = opt.minimize(new CachedDiffFunction(obj), init)
+    for( (k,v) <- obj.featureEncoder.decode(params).pairsIteratorNonZero) {
+      decodedParams(k) = v
+    }
     val theMap = stats.map { case (child,_) =>
       val matrices = Array.tabulate(nStates) { from =>
         val matrix = obj.costMatrixFor(child,from,params);
@@ -344,7 +348,9 @@ class GeneralEditDistance(nStates:Int,
     val epsIndex = charIndex('\0')
     assert(epsIndex != '\0', "epsilon must be in charIndex!")
     val indexedS1 = s1.map(charIndex);
+    assert(indexedS1.forall(_ >= 0), s1 + " " + indexedS1 + " " + charIndex)
     val indexedS2 = s2.map(charIndex);
+    assert(indexedS2.forall(_ >= 0), s2 + " " + indexedS2 + " " + charIndex)
     var i = 0;
     while (i <= s1.length) {
       var j = 0;
