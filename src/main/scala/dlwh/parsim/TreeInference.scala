@@ -64,7 +64,7 @@ class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val cogn
   val downwardMessages: collection.mutable.Map[T,Belief] = new collection.mutable.HashMap[T,Belief] {
     override def default(l: T) = {
       val p = parent(l)
-      val messageToP = p.map(downwardMessages).getOrElse(rootMessage)
+      val messageToP = p.map(downwardMessages).getOrElse(rootMessage(l))
       val messages = for(c <- p.toIterator.flatMap(children) if hasUpwardMessage(c) && l != c) yield upwardMessages(c)
       val qp = messages.foldLeft(messageToP)(_ * _);
       qp
@@ -73,7 +73,7 @@ class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val cogn
   }
 
   lazy val beliefs = hasUpwardMessage.iterator.map { l =>
-    if(l == tree.label) l -> (rootMessage * upwardBeliefs(l))
+    if(l == tree.label) l -> (rootMessage(l) * upwardBeliefs(l))
     else l -> edgeMarginals(l).childProjection;
   } toMap
 
@@ -90,7 +90,7 @@ class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val cogn
 
   lazy val likelihood  = {
     val up = upwardBeliefs(tree.label)
-    val down = rootMessage;
+    val down = rootMessage(tree.label);
     up * down partition;
   };
 

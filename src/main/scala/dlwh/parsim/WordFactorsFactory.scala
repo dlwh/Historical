@@ -59,9 +59,15 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
     }, 0.0)
     val allOnes = DenseVector.zeros[Double](wordIndex.size)
 
-    val rootMessage = {
-      val allOnes = logNormalizeInPlace(DenseVector.zeros[Double](wordIndex.size))
-      new Belief(allOnes,allOnes(0))
+    private var _rootMessage : Belief = null;
+    def rootMessage(t: Language) = synchronized {
+      if(_rootMessage == null) {
+        val matrix = costMatrix(t)
+        val v = Encoder.fromIndex(wordIndex).tabulateDenseVector(editDistance.distance(matrix,"",_))
+        _rootMessage = new Belief(v,v.max)
+      }
+
+      _rootMessage
     }
 
     def logNormalizeInPlace(v: DenseVector[Double]) = {

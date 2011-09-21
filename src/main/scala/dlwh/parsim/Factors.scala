@@ -28,7 +28,7 @@ trait Factors[T] { outer =>
   type Edge <: BaseEdge;
   type EdgeMarginal <: BaseEdgeMarginal
 
-  def rootMessage: Belief
+  def rootMessage(language: T): Belief
   def indicatorBelief(w: Word):Belief
   def uniformBelief: Belief
   def edgeFor(t: T):Edge

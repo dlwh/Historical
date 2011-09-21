@@ -69,9 +69,10 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends FactorsFactory
     })
     val allOnes = DenseVector.zeros[Double](wordIndex.size)
 
-    val rootMessage = {
-      val allOnes = DenseVector.zeros[Double](wordIndex.size)
-      new Belief(logNormalizeInPlace(allOnes))
+    def rootMessage(language: Language) = {
+      val edge = edgeFor(language)
+      val v = DenseVector.tabulate(wordIndex.size)(edge.costs)
+      new Belief(v)
     }
 
     def logNormalizeInPlace(v: DenseVector[Double]) = {

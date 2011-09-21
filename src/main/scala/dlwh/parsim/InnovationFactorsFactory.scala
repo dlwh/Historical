@@ -88,9 +88,9 @@ class InnovationFactorsFactory[F<:FactorsFactory,
       new SingleState(r)
     }
 
-    def rootMessage = {
-      val r = DenseVector.zeros[Double](wordIndex.size)
-      r -= math.log(wordIndex.size)
+    def rootMessage(t: T) = {
+      val innovRoot = innovationFactors.rootMessage(t)
+      val r = Encoder.fromIndex(wordIndex).tabulateDenseVector(innovRoot.apply _)
       SingleState(r)
     }
 
