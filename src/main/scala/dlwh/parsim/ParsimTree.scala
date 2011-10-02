@@ -53,8 +53,8 @@ object ParsimTree extends App {
   def likelihood(tree: Tree[Int]):Double = {
     val annTree = tree.map(i => if(i >= 0) langIndex.get(i) else "").extend(_.leaves.toSet)
     def cognateFor(group: Map[Language,IndexedSeq[Cognate]], lang: Set[Language]) = {
-      if(lang.size == 1) group.get(lang.iterator.next).map(_.head)
-      else None
+      if(lang.size == 1) group.get(lang.iterator.next).getOrElse(Seq.empty)
+      else Seq.empty
     }
 
     var likelihood = -1E10

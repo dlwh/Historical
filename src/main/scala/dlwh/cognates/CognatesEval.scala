@@ -24,7 +24,6 @@ class CognatesEval(val goldClusters: Seq[Seq[Cognate]]) {
     }
 
     val r= (numCorrect * 1.0 / numGuesses,numCorrect * 1.0 / numGold);
-    println(r,numGuesses,numGold);
     r
   }
 

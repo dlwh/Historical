@@ -54,8 +54,8 @@ object Parsim extends App {
   var decoded:IndexedSeq[IndexedSeq[Cognate]] = null
   def likelihood(initParams: Map[T,factorsFactory.EdgeParameters], annTree: Tree[T]):Double = {
     def cognateFor(group: Map[Language,IndexedSeq[Cognate]], lang: Set[Language]) = {
-      if(lang.size == 1) group.get(lang.iterator.next).map(_.head)
-      else None
+      if(lang.size == 1) group.get(lang.iterator.next).getOrElse(Seq.empty)
+      else Seq.empty
     }
 
     var params = initParams
@@ -89,6 +89,7 @@ object Parsim extends App {
   val initParams = {for(t <- tree.postorder) yield (t.label) -> factorsFactory.initialParameters}.toMap
 
   likelihood(initParams, tree)
+
 
 
   // helper methods:

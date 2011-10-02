@@ -9,9 +9,9 @@ import scalanlp.util._
  * @author dlwh
  */
 
-class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val cognates: T=>Option[Cognate]) {
-  import factors._;
-  def parent(l: T) = parentMap(l);
+class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val cognates: T=>Seq[Cognate]) {
+  import factors._
+  def parent(l: T) = parentMap(l)
   private val parentMap = buildParentMap(tree, None)
 
   private def  buildParentMap(tree: Tree[T], parent: Option[T]):Map[T,Option[T]] = {
@@ -30,32 +30,33 @@ class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val cogn
 
   val children = {
     def buildChildren(tree: Tree[T], parent: Option[T]):Map[T,Set[T]] = {
-      val myContribution = (tree.label -> (tree.children.map(_.label).toSet));
+      val myContribution = (tree.label -> (tree.children.map(_.label).toSet))
       tree.children.map(buildChildren(_,Some(tree.label))).foldLeft(Map(myContribution))(_ ++ _)
     }
-    buildChildren(tree,None);
+    buildChildren(tree,None)
   }
 
   val upwardMessages:collection.mutable.Map[T,Belief] = new collection.mutable.HashMap[T,Belief] {
     override def default(l: T) = {
-      val b:Belief = upwardBeliefs(l);
-      val message = edgeFor(l).edgeMarginal(uniformBelief,b).parentProjection;
-      update(l,message);
+      val beliefs:Seq[Belief] = upwardBeliefs(l)
+      val edge = edgeFor(l)
+      val message = beliefs.map(b => edge.edgeMarginal(uniformBelief,b).parentProjection).reduceLeft(_ * _)
+      update(l,message)
       message
     }
   }
 
-  val upwardBeliefs: collection.mutable.Map[T,Belief] = new collection.mutable.HashMap[T,Belief] {
+  val upwardBeliefs: collection.mutable.Map[T,Seq[Belief]] = new collection.mutable.HashMap[T,Seq[Belief]] {
     override def default(l: T) = {
-      val belief = cognates(l) match {
-        case Some(cognate) =>
-          indicatorBelief(cognate.word)
-        case None =>
-          val messages = for(c <- children(l) if hasUpwardMessage(c)) yield upwardMessages(c);
-          messages.reduceLeft(_ * _);
+      val cogs = cognates(l)
+      val beliefs = if(cogs.isEmpty) {
+        val messages = for(c <- children(l) if hasUpwardMessage(c)) yield upwardMessages(c)
+        Seq(messages.reduceLeft(_ * _))
+      } else {
+        cogs.map(c => indicatorBelief(c.word))
       }
-      update(l,belief);
-      belief;
+      update(l,beliefs)
+      beliefs
     }
   }
 
@@ -66,33 +67,36 @@ class TreeInference[T,F<:Factors[T]](val factors: F, val tree: Tree[T], val cogn
       val p = parent(l)
       val messageToP = p.map(downwardMessages).getOrElse(rootMessage(l))
       val messages = for(c <- p.toIterator.flatMap(children) if hasUpwardMessage(c) && l != c) yield upwardMessages(c)
-      val qp = messages.foldLeft(messageToP)(_ * _);
+      val qp = messages.foldLeft(messageToP)(_ * _)
       qp
     }
 
   }
 
   lazy val beliefs = hasUpwardMessage.iterator.map { l =>
-    if(l == tree.label) l -> (rootMessage(l) * upwardBeliefs(l))
-    else l -> edgeMarginals(l).childProjection;
-  } toMap
+    if(l == tree.label) l -> Seq(rootMessage(l) * upwardBeliefs(l).head)
+    else l -> edgeMarginals(l).map(_.childProjection)
+  }.toMap
 
-  val edgeMarginals:collection.mutable.Map[T,EdgeMarginal] = new collection.mutable.HashMap[T,EdgeMarginal] {
+  val edgeMarginals:collection.mutable.Map[T,Seq[EdgeMarginal]] = new collection.mutable.HashMap[T,Seq[EdgeMarginal]] {
     override def default(l: T) = {
-      val qp = downwardMessages(l);
-      val message = edgeFor(l).edgeMarginal(qp,upwardBeliefs(l));
-      update(l,message);
+      val qp = downwardMessages(l)
+      val edge = edgeFor(l)
+      val message = upwardBeliefs(l).map(edge.edgeMarginal(qp,_))
+      update(l,message)
       message
     }
   }
 
-  def sufficientStatistics: Map[T,factors.SufficientStatistic] = hasUpwardMessage.map(t => t -> edgeMarginals(t).sufficientStatistic).toMap
+  def sufficientStatistics: Map[T,factors.SufficientStatistic] = hasUpwardMessage.map{t => t ->
+    edgeMarginals(t).map(_.sufficientStatistic).reduce(_ + _)
+  }.toMap
 
   lazy val likelihood  = {
-    val up = upwardBeliefs(tree.label)
-    val down = rootMessage(tree.label);
-    up * down partition;
-  };
+    val up = upwardBeliefs(tree.label).head
+    val down = rootMessage(tree.label)
+    up * down partition
+  }
 
-  def edgeMarginal(child: T) = if(hasUpwardMessage(child)) Some(edgeMarginals(child)) else None;
+  def edgeMarginal(child: T):Seq[factors.EdgeMarginal] = if(hasUpwardMessage(child)) edgeMarginals(child) else Seq.empty
 }
