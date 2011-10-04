@@ -29,6 +29,8 @@ object ParsimTree extends App {
   val cognates = dataset.cognates.flatten.filter(c => leaves(c.language));
   val langIndex = Index(dataset.languages.filter(leaves))
   val groupedCognates: IndexedSeq[Map[_root_.dlwh.cognates.Language, IndexedSeq[Cognate]]] = groupCognates(cognates)
+  val gold = new CognatesEval(dataset.cognates.map(_.filter(c => leaves(c.language))));
+
 
   val ntaxa = langIndex.size
 
@@ -49,6 +51,7 @@ object ParsimTree extends App {
                                                     new LanguageModelFactorsFactory(charIndex), 0.2)
 
 
+  var decoded:IndexedSeq[IndexedSeq[Cognate]] = null
   var params = Map.empty[T,factorsFactory.EdgeParameters] withDefaultValue factorsFactory.initialParameters;
   def likelihood(tree: Tree[Int]):Double = {
     val annTree = tree.map(i => if(i >= 0) langIndex.get(i) else "").extend(_.leaves.toSet)
@@ -75,6 +78,12 @@ object ParsimTree extends App {
         println("...")
         return newLikelihood
       }
+
+      decoded = inference.par.flatMap(decodeCognates(_,annTree)).seq.toIndexedSeq
+      val (p,r)  = gold.precisionAndRecall(decoded.map(g => CognateGroup(g:_*)))
+      val f1 = 2 * p * r / (p + r)
+
+      println(newLikelihood,likelihood,change,p,r,f1)
 
       likelihood = newLikelihood
       val ecounts = inference.par.map(_.sufficientStatistics).reduceLeft(sumStats _)
@@ -144,4 +153,28 @@ object ParsimTree extends App {
 
   }
 
+    def decodeCognates(inference: TreeInference[T,factorsFactory.Factors[T]],
+                     tree: Tree[T],
+                     cur: ArrayBuffer[Cognate]= new ArrayBuffer[Cognate]):IndexedSeq[IndexedSeq[Cognate]] = {
+    val label = tree.label
+    val children = tree.children
+    val childGroups = for(c <- children if inference.hasUpwardMessage(c.label)) yield {
+      val edges = inference.edgeMarginal(c.label);
+      val fromChild = if(c.isLeaf) {
+        var rest = IndexedSeq.empty[Cognate];
+        for( (w,e) <- inference.cognates(c.label) zip edges) {
+          if(e.posteriorInnovationProb >= 0.5) rest :+= w
+          else cur += w
+        }
+        rest.map(IndexedSeq(_));
+      } else if(edges.head.posteriorInnovationProb < 0.5){
+        decodeCognates(inference,c,cur).drop(1)
+      } else {
+        decodeCognates(inference,c);
+      }
+      fromChild;
+    }
+
+    (cur +: (childGroups.flatten.filterNot(_.isEmpty))).toIndexedSeq;
+  }
 }
