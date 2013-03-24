@@ -2,6 +2,7 @@ package dlwh.parsim
 
 import dlwh.cognates._
 import scalanlp.stats.distributions.{SufficientStatistic => BaseSuffStats}
+import phylo.Tree
 
 /**
  * 
@@ -18,7 +19,7 @@ trait FactorsFactory { ff =>
   def emptySufficientStatistic: SufficientStatistic
   def initialParameters: EdgeParameters
 
-  def optimize[T](stats: Map[T,SufficientStatistic]):Map[T,EdgeParameters]
+  def optimize[T](tree: Tree[T], stats: Map[T,SufficientStatistic]):Map[T,EdgeParameters]
   def factorsFor[T](legalWords: Set[Word], t: Map[T,EdgeParameters]):Factors[T]
 }
 

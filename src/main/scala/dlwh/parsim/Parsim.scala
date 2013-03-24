@@ -80,7 +80,7 @@ object Parsim extends App {
       likelihood = newLikelihood
       val ecounts = inference.par.map(_.sufficientStatistics).reduceLeft(sumStats _)
       assert(ecounts.size > 0)
-      params = factorsFactory.optimize(ecounts)
+      params = factorsFactory.optimize(annTree, ecounts)
       iter += 1
     }
     likelihood

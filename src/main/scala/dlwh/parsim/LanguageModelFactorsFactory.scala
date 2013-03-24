@@ -7,6 +7,7 @@ import scalala.tensor.dense.DenseVector
 import scalala.tensor.sparse.SparseVector
 import scalanlp.util.{Encoder, Index, Lazy}
 import scalala.library.{Library, Numerics}
+import phylo.Tree
 
 /**
  * 
@@ -18,7 +19,7 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends FactorsFactory
 
   def factorsFor[T](legalWords: Set[Word], edgeParameters: Map[T,EdgeParameters]) = new Factors(Index(legalWords),edgeParameters)
 
-  def optimize[T](suffStats: Map[T, SufficientStatistic]):Map[T,EdgeParameters] = {
+  def optimize[T](tree: Tree[T], suffStats: Map[T, SufficientStatistic]):Map[T,EdgeParameters] = {
     val allCounts = suffStats.values.foldLeft(DenseVector.zeros[Double](charIndex.size * charIndex.size)) { (v,v2) => v += v2.transitions; v}
     suffStats.mapValues { stats =>
       val totals = new Array[Double](charIndex.size)

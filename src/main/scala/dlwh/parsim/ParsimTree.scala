@@ -48,7 +48,7 @@ object ParsimTree extends App {
   def transRatio(x: Int, b: Int) = if(x == b) 0 else -4
   val ed = new GeneralEditDistance(1, charIndex, initWeight, initWeight, transRatio)
   val factorsFactory = new InnovationFactorsFactory(new WordFactorsFactory(ed),
-                                                    new LanguageModelFactorsFactory(charIndex), 0.2)
+                                                    new LanguageModelFactorsFactory(charIndex), 0.2, useBranchLengths = true)
 
 
   var decoded:IndexedSeq[IndexedSeq[Cognate]] = null
@@ -83,11 +83,11 @@ object ParsimTree extends App {
       val (p,r)  = gold.precisionAndRecall(decoded.map(g => CognateGroup(g:_*)))
       val f1 = 2 * p * r / (p + r)
 
-      println(newLikelihood,likelihood,change,p,r,f1)
+      println(":::" + (newLikelihood,likelihood,change,p,r,f1))
 
       likelihood = newLikelihood
       val ecounts = inference.par.map(_.sufficientStatistics).reduceLeft(sumStats _)
-      params = factorsFactory.optimize(ecounts)
+      params = factorsFactory.optimize(annTree, ecounts)
     }
     likelihood
   }

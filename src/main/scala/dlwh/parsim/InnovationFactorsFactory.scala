@@ -13,7 +13,9 @@ import java.util.Arrays
 import scalala.tensor.dense.DenseVector
 import scalanlp.stats.distributions.{SufficientStatistic=>BaseSufficientStatistic}
 import scalanlp.optimize.{DiffFunction, FirstOrderMinimizer}
-import scalala.tensor.Counter
+import scalanlp.maxent.{EasyMaxEnt, MaxEntObjectiveFunction}
+import scalala.tensor.{Counter2, Counter}
+import phylo.Tree
 
 /**
  * 
@@ -22,7 +24,7 @@ import scalala.tensor.Counter
 class InnovationFactorsFactory[F<:FactorsFactory,
                               IF<:FactorsFactory](val baseFactory: F,
                                                   val innovationFactory: IF,
-                                                  val initialInnovationProb: Double,
+                                                  val initialInnovationProb: Double, useBranchLengths: Boolean = false,
                                                   beamThreshold: Double = - 10) extends FactorsFactory { outer =>
 
   val viterbi = true
@@ -53,19 +55,30 @@ class InnovationFactorsFactory[F<:FactorsFactory,
     new Factors(Index(legalWords),factors, innovFactors, edgeParameters)
   }
 
-  def optimize[T](stats: Map[T,SufficientStatistic]) = {
-    val newInnerParams = baseFactory.optimize(stats.mapValues(_.alignmentCounts))
-    val newInnovParams = innovationFactory.optimize(stats.mapValues(_.innovationCounts))
-    val innoProbs = optimizeInnovation(stats.mapValues(s => (s.probInnovation, s.n)))
+  def optimize[T](tree: Tree[T], stats: Map[T,SufficientStatistic]) = {
+    val newInnerParams = baseFactory.optimize(tree, stats.mapValues(_.alignmentCounts))
+    val newInnovParams = innovationFactory.optimize(tree, stats.mapValues(_.innovationCounts))
+    val innoProbs = optimizeInnovation(tree, stats.mapValues(s => (s.probInnovation, s.n)))
     println(innoProbs)
     newInnerParams.map{case (k,inner) => k -> EdgeParameters(inner,newInnovParams(k), innoProbs(k))}.withDefaultValue(initialParameters)
   }
 
-  def optimizeInnovation[Language](stats: Map[Language,(Double,Double)]) = {
-    val obj = new InnovationObjective(stats)
-    val opt = FirstOrderMinimizer.OptParams(regularization = 1E-4, useStochastic = false, maxIterations = 50)
-    val result = opt.minimizer(obj).minimize(obj, obj.enc.mkDenseVector())
-    obj.extractProbs(result)
+  var iter = 0
+
+  def optimizeInnovation[Language](tree: Tree[Language], stats: Map[Language,(Double,Double)]) = {
+    val scores = tree.postorder.map(x => x.label -> x.branchLength).toMap
+    iter += 1
+    if(useBranchLengths && iter > 10) {
+      val obj = new GlobalRateObjective[Language](scores, stats)
+      val opt = FirstOrderMinimizer.OptParams(regularization = 1E-4, useStochastic = false, maxIterations = 50)
+      val result = opt.minimizer(obj).minimize(obj, obj.enc.mkDenseVector())
+      obj.extractProbs(result)
+    } else {
+      val obj = new InnovationObjective[Language](stats)
+      val opt = FirstOrderMinimizer.OptParams(regularization = 1E-4, useStochastic = false, maxIterations = 50)
+      val result = opt.minimizer(obj).minimize(obj, obj.enc.mkDenseVector())
+      obj.extractProbs(result)
+    }
   }
 
   def initialParameters = new EdgeParameters(baseFactory.initialParameters,
@@ -404,6 +417,42 @@ class InnovationFactorsFactory[F<:FactorsFactory,
     val r = new Array[Double](size)
     Arrays.fill(r,Double.NegativeInfinity)
     r
+  }
+
+}
+
+class GlobalRateObjective[T](branchLengths: Map[T,Double], innovationCounts: Map[T,(Double,Double)]) extends DiffFunction[DenseVector[Double]] {
+  val langIndex = Index(innovationCounts.keys)
+  val enc = Encoder.fromIndex(langIndex)
+  val encodedYes = enc.encodeDense(Counter(innovationCounts.map { case (k,v) => k -> v._1}))
+  val encodedTotal = enc.encodeDense(Counter(innovationCounts.map { case (k,v) => k -> v._2}))
+  val encodedBranchLengths = enc.encodeDense(Counter(branchLengths))
+  def initial = DenseVector(1E-4)
+  def calculate(x: DenseVector[Double]) = {
+    var ll = 0.0
+    val grad = DenseVector.zeros[Double](x.size)
+    println(x)
+
+    var lang = 0
+    while(lang < encodedYes.size) {
+      val branchLength = encodedBranchLengths(lang)
+      if(!branchLength.isInfinite) {
+        assert(encodedYes(lang) <= encodedTotal(lang), encodedYes(lang) + " " + encodedTotal(lang))
+        val pYes = Numerics.sigmoid(branchLength * x(0))
+        ll -= (math.log(pYes) * encodedYes(lang) + math.log(1-pYes) * (encodedTotal(lang) - encodedYes(lang)))
+        val yesGradPart = encodedYes(lang)
+        val noGradPart = -(encodedTotal(lang) - encodedYes(lang)) * pYes
+        val gradContribution = yesGradPart + noGradPart
+        grad(0) -= gradContribution * (branchLength)
+      }
+      lang += 1
+    }
+
+    (ll,grad)
+  }
+
+  def extractProbs(x: DenseVector[Double]): Map[T, Double] = {
+    branchLengths.mapValues(l => Numerics.sigmoid(l* x(0)))
   }
 
 }

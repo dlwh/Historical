@@ -10,6 +10,7 @@ import scalala.tensor.Vector
 import scalala.tensor.sparse.SparseVector
 import scalanlp.util.{Lazy, Encoder, Index}
 import java.util.Arrays
+import phylo.Tree
 
 /**
  * 
@@ -41,7 +42,7 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
 
 
 
-  def optimize[T](suffStats: Map[T, SufficientStatistic]) = {
+  def optimize[T](tree: Tree[T], suffStats: Map[T, SufficientStatistic]) = {
     editDistance.makeParameters(suffStats.mapValues(_.inner))
   }
 
