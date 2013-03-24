@@ -1,8 +1,8 @@
 package dlwh.editdistance
 
-import scalanlp.util.Index
-import scalala.tensor.Vector
-import scalala.tensor._
+import breeze.util.Index
+import breeze.linalg.Vector
+import breeze.linalg._
 
 /**
  * 
@@ -21,7 +21,7 @@ class AlignmentPairEncoder(val charIndex: Index[Char]) {
   }
   def decode(vec: Vector[Double]):Counter2[Char,Char,Double] = {
     val r = Counter2[Char,Char,Double]()
-    for( (ind,v) <- vec.pairsIteratorNonZero) {
+    for( (ind,v) <- vec.activeIterator) {
       val (pI,cI) =  decode(ind)
       r(charIndex.get(pI),charIndex.get(cI)) = v
     }

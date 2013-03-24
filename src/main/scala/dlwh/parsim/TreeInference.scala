@@ -1,8 +1,7 @@
 package dlwh.parsim
 
 import dlwh.cognates._
-import phylo.Tree
-import scalanlp.util._
+import breeze.util._
 
 /**
  * 

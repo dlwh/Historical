@@ -1,15 +1,12 @@
 package dlwh.parsim
 
-import phylo.{Dataset => _, _}
-import scalanlp.config.Configuration
+import breeze.config.Configuration
 import java.io.File
 import dlwh.cognates._
-import scalanlp.util.Index
 import math._
-import scalanlp.util._
-import scalala.library.Plotting._
-import scalala.tensor.dense.DenseVector
-import scalanlp.stats.distributions.{Rand, Poisson}
+import breeze.util._
+import breeze.linalg._
+import breeze.stats.distributions.{Rand, Poisson}
 import collection.mutable.ArrayBuffer
 import dlwh.editdistance.GeneralEditDistance
 import collection.immutable.Map
@@ -41,9 +38,9 @@ object Parsim extends App {
 
   type T = Set[Language]
 
-  def initWeight(x: Int) = -4. + x
-  def subWeight(x: Int) = -4. - x
-  def transRatio(x: Int, b: Int) = if(x == b) 0.0 else -1.
+  def initWeight(x: Int) = -4.0 + x
+  def subWeight(x: Int) = -4.0 - x
+  def transRatio(x: Int, b: Int) = if(x == b) 0.0 else -1.0
   val ed = new GeneralEditDistance(1, charIndex, subWeight, initWeight, transRatio)
   val factorsFactory = new InnovationFactorsFactory(new WordFactorsFactory(ed),
                                                     new LanguageModelFactorsFactory(charIndex), 0.4)

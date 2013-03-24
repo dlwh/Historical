@@ -1,8 +1,7 @@
 package dlwh.parsim
 
 import dlwh.cognates._
-import scalanlp.stats.distributions.{SufficientStatistic => BaseSuffStats}
-import phylo.Tree
+import breeze.stats.distributions.{SufficientStatistic => BaseSuffStats}
 
 /**
  * 

@@ -12,19 +12,19 @@ class ArrayCache(xSize: Int, ySize: Int)(baseFn: (Int,Int)=>Double) extends ((In
   val cache = Array.fill(xSize)(null:Array[Double])
 
   def apply(v1: Int, v2: Int) = {
-    var arr = cache(v1);
+    var arr = cache(v1)
     if (arr eq null) {
-      arr = new Array[Double](ySize);
-      Arrays.fill(arr,Double.NaN);
-      cache(v1) = arr;
+      arr = new Array[Double](ySize)
+      Arrays.fill(arr,Double.NaN)
+      cache(v1) = arr
     }
-    var result = arr(v2);
+    var result = arr(v2)
     if(result.isNaN) {
-      result = baseFn(v1,v2);
+      result = baseFn(v1,v2)
       assert(!result.isNaN)
-      arr(v2) = result;
+      arr(v2) = result
     }
-    result;
+    result
   }
 
 }

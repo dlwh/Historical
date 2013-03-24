@@ -2,12 +2,10 @@ package dlwh.parsim
 
 import dlwh.cognates._
 import dlwh.editdistance._
-import scalala.tensor.Vector
-import scalala.tensor.dense.DenseVector
-import scalala.tensor.sparse.SparseVector
-import scalanlp.util.{Encoder, Index, Lazy}
-import scalala.library.{Library, Numerics}
-import phylo.Tree
+import breeze.linalg._
+import breeze.util.{Encoder, Index}
+import dlwh.util._
+import breeze.numerics._
 
 /**
  * 
@@ -24,7 +22,7 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends FactorsFactory
     suffStats.mapValues { stats =>
       val totals = new Array[Double](charIndex.size)
       val counts = allCounts * .5 + stats.transitions
-      for( (k,v) <- counts.pairsIteratorNonZero) {
+      for( (k,v) <- counts.iterator) {
         val (prev,_) = pe.decode(k)
         totals(prev) += v
       }
@@ -51,7 +49,7 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends FactorsFactory
   trait EdgeParameters {
     def apply(prev: Char, next: Char):Double
   }
-  case class SufficientStatistic(transitions: Vector[Double]) extends scalanlp.stats.distributions.SufficientStatistic[SufficientStatistic] {
+  case class SufficientStatistic(transitions: Vector[Double]) extends breeze.stats.distributions.SufficientStatistic[SufficientStatistic] {
     def +(stats: SufficientStatistic) = SufficientStatistic(this.transitions + stats.transitions)
 
     def *(weight: Double) = SufficientStatistic(this.transitions * weight)
@@ -77,7 +75,7 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends FactorsFactory
     }
 
     def logNormalizeInPlace(v: DenseVector[Double]) = {
-      v -= Library.softmax(v)
+      v -= softmax(v)
       v
     }
 
@@ -130,7 +128,7 @@ class LanguageModelFactorsFactory(charIndex: Index[Char]) extends FactorsFactory
     }
 
     case class Belief(beliefs: DenseVector[Double]) extends BaseBelief {
-      lazy val partition = { val r = Numerics.logSum(beliefs.data); assert(!r.isNaN & !r.isInfinite); r}
+      lazy val partition = { val r = logSum(beliefs.data); assert(!r.isNaN & !r.isInfinite); r}
       def apply(word: String)= beliefs(wordIndex(word))
 
       def /(b: Belief):Belief = {

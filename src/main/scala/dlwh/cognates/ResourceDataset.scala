@@ -2,7 +2,6 @@ package dlwh.cognates
 
 import scala.io.Source
 import java.io.{FileInputStream, BufferedInputStream, File}
-import phylo.Tree
 
 class ResourceDataset(name: String, val languages: Seq[String]=Seq.empty, hasGloss: Boolean = false) extends Dataset {
   def cognates = Cognates.readCognates( this.getClass.getClassLoader().getResourceAsStream(name + "_ipa"), languages, hasGloss);

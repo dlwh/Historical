@@ -3,14 +3,12 @@ package dlwh.parsim
 import dlwh.cognates._
 import dlwh.editdistance._
 
-import scalanlp.stats.distributions.{SufficientStatistic=>BaseSufficientStatistic}
-import scalala.library.{Numerics,Library}
-import scalala.tensor.dense.{DenseVector, DenseMatrix}
-import scalala.tensor.Vector
-import scalala.tensor.sparse.SparseVector
-import scalanlp.util.{Lazy, Encoder, Index}
+import breeze.stats.distributions.{SufficientStatistic=>BaseSufficientStatistic}
+import breeze.linalg._
+import breeze.util.{Encoder, Index}
 import java.util.Arrays
-import phylo.Tree
+import breeze.numerics
+import dlwh.util.Lazy
 
 /**
  * 
@@ -72,7 +70,7 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
     }
 
     def logNormalizeInPlace(v: DenseVector[Double]) = {
-      v -= Library.softmax(v)
+      v -= softmax(v)
       v
     }
 
@@ -103,7 +101,7 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
     }
 
     case class Belief(beliefs: DenseVector[Double], max: Double) extends BaseBelief {
-      lazy val partition = { val r = Library.softmax(beliefs); assert(!r.isNaN & !r.isInfinite); r}
+      lazy val partition = { val r = softmax(beliefs); assert(!r.isNaN & !r.isInfinite); r}
       def apply(word: String)= beliefs(wordIndex(word))
 
       def /(b: Belief):Belief = {
@@ -189,7 +187,7 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
 
           p += 1
         }
-        Numerics.logSum(scores, i)
+        numerics.logSum(scores, i)
       }
 
 
@@ -205,7 +203,7 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
               scores(child) = childBeliefs(child) + costs(parent,child)
             child += 1
           }
-          newParent(parent) = if(viterbi) max(scores) else Numerics.logSum(scores)
+          newParent(parent) = if(viterbi) max(scores) else numerics.logSum(scores)
           assert(!newParent(parent).isNaN && !newParent(parent).isInfinite)
         }
         val result = parent.foldLeft(new Belief(newParent, max(newParent.data)))(_ * _)
@@ -223,7 +221,7 @@ class WordFactorsFactory(val editDistance:EditDistance, beamThreshold: Double = 
               scores(parent) = parentBeliefs(parent) + costs(parent,child)
             parent += 1
           }
-          newChild(child) = if(viterbi) max(scores) else Numerics.logSum(scores)
+          newChild(child) = if(viterbi) max(scores) else numerics.logSum(scores)
           assert(!newChild(child).isNaN && !newChild(child).isInfinite)
         }
         val result = child.foldLeft(new Belief(newChild, (newChild.data).max))(_ * _)

@@ -2,20 +2,14 @@ package dlwh.parsim
 
 import dlwh.cognates._
 
-import scalala.tensor.sparse.SparseVector
-import scalanlp.util.Index
-import scalala.library.Numerics
-import scalanlp.util._
-import scalala.tensor.mutable.Vector
-import scalanlp.tensor.sparse.OldSparseVector
-import scalala.library.Library._
+import breeze.linalg._
+import breeze.numerics
+import breeze.numerics._
+import breeze.util._
 import java.util.Arrays
-import scalala.tensor.dense.DenseVector
-import scalanlp.stats.distributions.{SufficientStatistic=>BaseSufficientStatistic}
-import scalanlp.optimize.{DiffFunction, FirstOrderMinimizer}
-import scalanlp.maxent.{EasyMaxEnt, MaxEntObjectiveFunction}
-import scalala.tensor.{Counter2, Counter}
-import phylo.Tree
+import breeze.stats.distributions.{SufficientStatistic=>BaseSufficientStatistic}
+import breeze.optimize.{DiffFunction, FirstOrderMinimizer}
+import dlwh.util.Lazy
 
 /**
  * 
@@ -71,12 +65,12 @@ class InnovationFactorsFactory[F<:FactorsFactory,
     if(useBranchLengths && iter > 10) {
       val obj = new GlobalRateObjective[Language](scores, stats)
       val opt = FirstOrderMinimizer.OptParams(regularization = 1E-4, useStochastic = false, maxIterations = 50)
-      val result = opt.minimizer(obj).minimize(obj, obj.enc.mkDenseVector())
+      val result = opt.minimize(obj, obj.enc.mkDenseVector())
       obj.extractProbs(result)
     } else {
       val obj = new InnovationObjective[Language](stats)
       val opt = FirstOrderMinimizer.OptParams(regularization = 1E-4, useStochastic = false, maxIterations = 50)
-      val result = opt.minimizer(obj).minimize(obj, obj.enc.mkDenseVector())
+      val result = opt.minimize(obj, obj.enc.mkDenseVector())
       obj.extractProbs(result)
     }
   }
@@ -95,11 +89,14 @@ class InnovationFactorsFactory[F<:FactorsFactory,
 
     def uniformBelief = NullState
 
-    def indicatorBelief(w: Word) = {
-      val r = new OldSparseVector(wordIndex.size, Double.NegativeInfinity)
-      r(wordIndex(w)) = 0
-      new SingleState(r)
+    val indicatorBeliefs = Array.tabulate(wordIndex.size){i =>
+      val arr = new Array[Double](wordIndex.size)
+      Arrays.fill(arr, Double.NegativeInfinity)
+      arr(i) = 0.0
+      new SingleState(new DenseVector(arr))
     }
+
+    def indicatorBelief(w: Word) = indicatorBeliefs(wordIndex(w))
 
     def rootMessage(t: T) = {
       val innovRoot = innovationFactors.rootMessage(t)
@@ -244,7 +241,7 @@ class InnovationFactorsFactory[F<:FactorsFactory,
                 // log p(not new|wc,wp) (numerator)
                 val nonInnovation = edgeParams.withoutInnovation(p,c) + edgeParams.logNonInnov
                 // p(new|wc,wp) (normalized)
-                val normalizedPosteriorInnovation = math.exp(posteriorInnovation - Numerics.logSum(posteriorInnovation,nonInnovation))
+                val normalizedPosteriorInnovation = math.exp(posteriorInnovation - logSum(posteriorInnovation,nonInnovation))
                 val normNonInnov = 1-normalizedPosteriorInnovation
                 if(normNonInnov * score > 1E-8) // counts for p and c weighted by p(not new,wc,wp)
                   wordChangeCounts += (baseCounts(p,c).result * (normNonInnov * score))
@@ -285,7 +282,7 @@ class InnovationFactorsFactory[F<:FactorsFactory,
                 // log p(not new|wc,wp) (numerator)
                 val nonInnovation = edgeParams.withoutInnovation(p,c) + edgeParams.logNonInnov
                 // p(new|wc,wp) (normalized)
-                val normalizedPosteriorInnovation = math.exp(posteriorInnovation - Numerics.logSum(posteriorInnovation,nonInnovation))
+                val normalizedPosteriorInnovation = math.exp(posteriorInnovation - logSum(posteriorInnovation,nonInnovation))
 
                 pInnov += normalizedPosteriorInnovation * score
               }
@@ -321,7 +318,7 @@ class InnovationFactorsFactory[F<:FactorsFactory,
 
           p += 1
         }
-        Numerics.logSum(scores, i)
+        logSum(scores, i)
       }
 
 
@@ -339,7 +336,7 @@ class InnovationFactorsFactory[F<:FactorsFactory,
               scores(child) = childBeliefs(child) + edgeParams.summed(parent,child)
             child += 1
           }
-          newParent(parent) = if(viterbi) (scores).max else Numerics.logSum(scores)
+          newParent(parent) = if(viterbi) (scores).max else numerics.logSum(scores)
           parent += 1
         }
         val result = this.parent.foldLeft(new SingleState(newParent))( (a,b) => (a * b).asInstanceOf[SingleState])
@@ -358,7 +355,7 @@ class InnovationFactorsFactory[F<:FactorsFactory,
               scores(parent) = parentBeliefs(parent) + edgeParams.summed(parent,child)
             parent += 1
           }
-          newChild(child) = if(viterbi) scores.max else Numerics.logSum(scores)
+          newChild(child) = if(viterbi) scores.max else numerics.logSum(scores)
         }
         val result = child.foldLeft(new SingleState(newChild))( (a,b) => (a * b).asInstanceOf[SingleState])
         result
@@ -385,7 +382,7 @@ class InnovationFactorsFactory[F<:FactorsFactory,
       })
 
       val summed = new ArrayCache(wordIndex.size,wordIndex.size) ({ (p,c) =>
-        if(viterbi) Numerics.logSum(withoutInnovation(p,c) + nonInnovation,withInnovation(p, c) + logProbInnovation)
+        if(viterbi) numerics.logSum(withoutInnovation(p,c) + nonInnovation,withInnovation(p, c) + logProbInnovation)
         else math.max(withoutInnovation(p,c) + nonInnovation,withInnovation(p, c) + logProbInnovation)
       })
 
@@ -438,7 +435,7 @@ class GlobalRateObjective[T](branchLengths: Map[T,Double], innovationCounts: Map
       val branchLength = encodedBranchLengths(lang)
       if(!branchLength.isInfinite) {
         assert(encodedYes(lang) <= encodedTotal(lang), encodedYes(lang) + " " + encodedTotal(lang))
-        val pYes = Numerics.sigmoid(branchLength * x(0))
+        val pYes = sigmoid(branchLength * x(0))
         ll -= (math.log(pYes) * encodedYes(lang) + math.log(1-pYes) * (encodedTotal(lang) - encodedYes(lang)))
         val yesGradPart = encodedYes(lang)
         val noGradPart = -(encodedTotal(lang) - encodedYes(lang)) * pYes
@@ -452,7 +449,7 @@ class GlobalRateObjective[T](branchLengths: Map[T,Double], innovationCounts: Map
   }
 
   def extractProbs(x: DenseVector[Double]): Map[T, Double] = {
-    branchLengths.mapValues(l => Numerics.sigmoid(l* x(0)))
+    branchLengths.mapValues(l => sigmoid(l* x(0)))
   }
 
 }
@@ -472,7 +469,7 @@ class InnovationObjective[T](innovationCounts: Map[T,(Double,Double)]) extends D
     while(lang < encodedYes.size) {
       assert(encodedYes(lang) <= encodedTotal(lang), encodedYes(lang) + " " + encodedTotal(lang))
       if(lang != globalFeature) {
-        val pYes = Numerics.sigmoid(x(lang) + x(globalFeature))
+        val pYes = sigmoid(x(lang) + x(globalFeature))
         ll -= (math.log(pYes) * encodedYes(lang) + math.log(1-pYes) * (encodedTotal(lang) - encodedYes(lang)))
         val yesGradPart = encodedYes(lang) * (1 - pYes)
         val noGradPart = -(encodedTotal(lang) - encodedYes(lang)) * pYes
@@ -487,7 +484,7 @@ class InnovationObjective[T](innovationCounts: Map[T,(Double,Double)]) extends D
   }
 
   def extractProbs(x: DenseVector[Double]): Map[T, Double] = {
-    val rawArray =Array.tabulate(innovationCounts.size) { lang =>  Numerics.sigmoid(x(lang) + x(globalFeature))}
+    val rawArray =Array.tabulate(innovationCounts.size) { lang =>  sigmoid(x(lang) + x(globalFeature))}
     enc.decode(rawArray).map { case (k,v) => (k.get,v)}
   }
 

@@ -1,16 +1,11 @@
 package dlwh.editdistance
 
 import dlwh.cognates._
-import scalala.tensor.dense.DenseVector
-import scalala.tensor.Vector
-import scalanlp.util._
-import scalala.library.Numerics
+import breeze.linalg._
+import breeze.util._
+import breeze.numerics._
 import collection.mutable.ArrayBuffer
-import scalanlp.config.Configuration
-import java.io.File
-import scalanlp.optimize._
-import scalala.library.Library._
-import phylo.Tree
+import breeze.optimize._
 
 
 /**
@@ -54,7 +49,7 @@ class EditDistanceObjectiveFunction[Language,F:ClassManifest](pe: AlignmentPairE
   def computeLogProbs(lang: Language,from:Int, featureWeights: DenseVector[Double]): (Double, Array[Array[Array[Double]]]) = {
     val featuresArray = featuresForPair(lang)
     val insertionScore = score(insertionFeatures(lang)(from),featureWeights)
-    val logProbInsertion = math.log(Numerics.sigmoid(insertionScore))
+    val logProbInsertion = math.log(sigmoid(insertionScore))
 
     val unnormalized = Array.tabulate(pe.charIndex.size,nStates,pe.charIndex.size) { (p,to,c) =>
       val pair = pe.encode(p,c)
@@ -65,7 +60,7 @@ class EditDistanceObjectiveFunction[Language,F:ClassManifest](pe: AlignmentPairE
         myScore
       } else Double.NegativeInfinity
     }
-    val partitions = unnormalized.map(tocMatrix => Numerics.logSum(tocMatrix.map(a => Numerics.logSum(a,a.length))))
+    val partitions = unnormalized.map(tocMatrix => logSum(tocMatrix.map(a => logSum(a,a.length))))
     val normalized = Array.tabulate(nStates,pe.charIndex.size,pe.charIndex.size) { (to,p,c)=>
       unnormalized(p)(to)(c) - partitions(p)
     }
@@ -117,8 +112,8 @@ class EditDistanceObjectiveFunction[Language,F:ClassManifest](pe: AlignmentPairE
         val (logProbInsertion:Double,alignmentLogProbs: Array[Array[Array[Double]]]) = computeLogProbs(lang,from,featureWeights)
         //      println(lang -> pe.decode(new DenseVector(alignmentLogProbs)))
         //      println("ecounts" -> pe.decode(ecounts))
-        var insertionCounts = 0.
-        var nonInsertionCounts = 0.
+        var insertionCounts = 0.0
+        var nonInsertionCounts = 0.0
         var p = 0
         while(p < pe.charIndex.size) {
           var to = 0
@@ -205,8 +200,7 @@ object EditDistanceObjectiveFunction {
     val pe = new AlignmentPairEncoder(index)
     val obj = new EditDistanceObjectiveFunction(pe,nicer,featuresFor _, insertionFeaturesFor _ )
 
-    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 50, regularization = 2).minimizer(obj)
-    val params = opt.minimize(new CachedDiffFunction(obj), obj.initialWeightVector)
+    val params = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 50, regularization = 2).minimize(obj, obj.initialWeightVector)
 //    println(obj.featureEncoder.decode(params))
     val theMap = expectedCounts.map { case ((parent,child),_) =>
       val matrix = obj.costMatrixFor(child,0,params)
@@ -218,30 +212,3 @@ object EditDistanceObjectiveFunction {
     costsFor _
   }
 }
-
-object RunEditDistanceObjectiveFunction {
-  import EditDistanceObjectiveFunction._
-
-  def main(args: Array[String]) {
-    val config = Configuration.fromPropertiesFiles(args.map(new File(_)))
-    val languages = config.readIn[String]("dataset.languages").split(",")
-    val withGloss = config.readIn[Boolean]("dataset.hasGloss",false)
-    val deathScore = math.log(config.readIn[Double]("initDeathProb"))
-
-    val dataset_name = config.readIn[String]("dataset.name")
-    val dataset = new ResourceDataset(dataset_name,languages, withGloss)
-    val basetree: Tree[String] = dataset.tree
-    val tree = basetree.subtreeAt(config.readIn[String]("subtree",basetree.label))
-    val file = config.readIn[File]("oldcounts")
-    val oldCounts: Map[(Language,Language),Vector[Double]] = readObject(file)
-    val nicer = oldCounts.map { case (k,v) => k._2 -> v}
-    val index: Index[Char] = readObject(new File("index.ser"))
-    val pe = new AlignmentPairEncoder(index)
-    val obj = new EditDistanceObjectiveFunction(pe,nicer,featuresFor _, insertionFeaturesFor _ )
-
-    val opt = FirstOrderMinimizer.OptParams(useStochastic = false, maxIterations = 50).minimizer(obj)
-    val params = opt.minimize(obj, obj.initialWeightVector)
-    println(obj.featureEncoder.decode(params))
-  }
-}
-

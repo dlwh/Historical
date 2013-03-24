@@ -1,9 +1,7 @@
 package dlwh.cognates
 
-import scalanlp.config.Configuration
-import scalanlp.util.Index
-import scalanlp.fst.Alphabet
-import phylo.Tree
+import breeze.config.Configuration
+import breeze.util.Index
 
 /**
  * 
@@ -33,7 +31,7 @@ object Dataset {
       val tree = t
       val languages = l
       val cognates = c
-      val base = full getOrElse this
+      val base:Dataset = full getOrElse this
     }
   }
 
